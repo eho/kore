@@ -42,6 +42,28 @@ export type NoteRow = {
   ZHEXDATA: string;
 };
 
+export type AttachmentRow = {
+  Z_PK: number;
+  ZIDENTIFIER: string;
+  ZFILENAME: string | null;
+  ZTYPEUTI: string | null;
+  ZMEDIA: number | null;
+  ZGENERATION1: string | null;
+  ZFALLBACKPDFGENERATION: string | null;
+  ZFALLBACKIMAGEGENERATION: string | null;
+  ZSIZEHEIGHT: number | null;
+  ZSIZEWIDTH: number | null;
+  ZHANDWRITINGSUMMARY: string | null;
+  ZCREATIONDATE: number | null;
+  ZMODIFICATIONDATE: number | null;
+  ZNOTE: number | null;
+  ZALTTEXT: string | null;
+  ZTOKENCONTENTIDENTIFIER: string | null;
+  ZTITLE: string | null;
+  ZURLSTRING: string | null;
+  ZHEXDATA: string | null;
+};
+
 // ─── Account / Folder Resolved Types ─────────────────────────────────────────
 
 export type ANAccount = {

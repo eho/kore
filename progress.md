@@ -88,3 +88,24 @@
   - End-to-end `convertTableToMarkdown`: 2×3, 3×2, 1×1 tables, missing ICTable root, missing cellData, and callback verification.
 - All 72 tests pass (`bun test`). Typecheck passes (`tsc --noEmit`).
 
+## US-006: Attachment Extraction ✅
+**Date:** 2026-03-05
+
+**Completed:**
+- Created `an-export/src/attachments.ts` — full attachment resolution module with:
+  - `createAttachmentResolver()`: factory that creates a `resolveAttachment` callback for `converter.ts`.
+  - Dispatches on `typeUti` for all attachment types: Hashtag/Mention → plain text, InternalLink → `[[Title]]`, Table → CRDT decode + Markdown table, UrlCard → `[**Title**](url)`, Scan → CRDT decode + scan pages, ModifiedScan → FallbackPDFs, Drawing → FallbackImages, general media → Media/.
+  - `buildAttachmentSourcePath()`: constructs on-disk source paths for each type.
+  - `copyAttachmentFile()`: copies binary to `<dest>/attachments/` with unique naming and returns Markdown image/link syntax.
+  - `getAttachmentBinary()`: reads from account path first, falls back to global Apple Notes path.
+  - Handwriting OCR summary support via `withHandwriting()`.
+- Created `an-export/src/scan-converter.ts` — CRDT scan document → Markdown image links:
+  - Iterates CRDT objects, extracts scan page UUIDs.
+  - Resolves as preview JPEG first, falls back to raw media.
+- Added `AttachmentRow` type to `an-export/src/types.ts` with all columns needed by attachment queries.
+- Created `an-export/tests/us-006.test.ts` — 23 unit tests covering:
+  - `buildAttachmentSourcePath`: 8 tests for all path patterns (ModifiedScan, Scan, Drawing with/without generation, DrawingLegacy, default media with/without generation).
+  - `getAttachmentBinary`: 2 tests (account path read, missing file returns null).
+  - `copyAttachmentFile`: 4 tests (image copy + link, non-image link, missing file, unique filename generation).
+  - `createAttachmentResolver`: 9 tests (hashtag, mention, internal link with/without resolution, URL card with/without title, unknown type, general media end-to-end, missing ZALTTEXT).
+- All 95 tests pass (`bun test`). Typecheck passes (`tsc --noEmit`).
