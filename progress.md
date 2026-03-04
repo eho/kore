@@ -24,3 +24,15 @@
 - Created `tests/us-002.test.ts` — 7 unit tests: entity key building, missing entity validation, query helpers, DB not found error, and full copy+open flow using real temp SQLite databases.
 - All 7 tests pass. Typecheck passes.
 - Committed: `feat: database access layer with safe copy, entity lookup, and query helpers (US-002)`
+
+## US-003: Protobuf Schema and Decoder ✅
+**Date:** 2026-03-04
+
+**Completed:**
+- Ported `descriptor.ts` from obsidian-importer containing all 28 message types.
+- Created `an-export/src/decoder.ts` with:
+  - `decodeNoteData()` for extracting `ANDocument` from GZIP-compressed note data.
+  - `decodeMergeableData()` for extracting `ANMergableDataProto` for tables/scans.
+- Created `an-export/tests/us-003.test.ts` with unit tests mocking gzip-compressed hex payloads.
+- Unit tests and typecheck pass successfully.
+- Committed: `feat: protobuf schema and decoder with gzip decompression (US-003)`
