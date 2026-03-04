@@ -1,0 +1,21 @@
+{
+  "name": "an-export",
+  "module": "src/index.ts",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "start": "bun run src/cli.ts",
+    "export": "bun run src/cli.ts export",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "protobufjs": "^8.0.0"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "@types/node": "^25.3.3"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  }
+}
