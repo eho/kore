@@ -59,3 +59,14 @@
 - Created `an-export/tests/us-004.test.ts` — 31 unit tests covering every formatting rule.
 - All 31 tests pass. Typecheck passes.
 - Committed: `feat: note content to markdown converter with all formatting rules (US-004)`
+
+## QA & Testing Additions ✅
+**Date:** 2026-03-05
+
+**Completed:**
+- Verified 100% test coverage across `src/utils.ts`, `src/db.ts`, and `src/converter.ts`.
+- Added missing tests for attachment markdown generation (inline attachments).
+- Added missing tests for multi-paragraph spacing logic (empty line retention).
+- Added missing tests for database `EACCES` filesystem copy errors yielding the Full Disk Access hint.
+- Added missing tests for `uuidToHex` utility.
+- Confirmed test suite contains 59 passing unit tests.

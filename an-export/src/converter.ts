@@ -105,7 +105,14 @@ export async function convertNoteToMarkdown(
       if (run.attachmentInfo && text === '\ufffc') {
         if (resolveAttachment) {
           const attachmentMd = await resolveAttachment(run.attachmentInfo);
-          if (attachmentMd) lines.push(attachmentMd);
+          if (attachmentMd) {
+            // Append if previous line is not empty and not just starting, or else push new line
+            if (lines.length > 0 && lines[lines.length - 1] !== '') {
+              lines[lines.length - 1] += attachmentMd;
+            } else {
+              lines.push(attachmentMd);
+            }
+          }
         }
         continue;
       }
@@ -181,7 +188,12 @@ export async function convertNoteToMarkdown(
         }
       }
 
-      lines.push(md);
+      if (lines.length > 0 && !isNewlineBoundary) {
+        // Append to the current line if it's not a new paragraph
+        lines[lines.length - 1] += md;
+      } else {
+        lines.push(md);
+      }
     }
   }
 

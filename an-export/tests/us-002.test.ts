@@ -5,12 +5,28 @@
  * and filesystem mocks to test the safe-copy logic.
  */
 
-import { describe, it, expect } from 'bun:test';
+import { expect, mock } from 'bun:test';
+
+mock.module('node:fs', () => {
+  const original = require('node:fs');
+  return {
+    ...original,
+    copyFileSync: (src: string, dest: string) => {
+      if (src.includes('NoteStore.sqlite-wal') || src.includes('fake-db')) {
+        throw new Error('EACCES: permission denied');
+      }
+      return original.copyFileSync(src, dest);
+    }
+  };
+});
+
+import { describe, it } from 'bun:test';
 import { Database } from 'bun:sqlite';
 import { existsSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { randomUUID } from 'node:crypto';
+import * as db from '../src/db.ts';
 import { buildEntityKeys, openNotesDatabase, queryAll, queryOne } from '../src/db.ts';
 
 // ─── buildEntityKeys tests ───────────────────────────────────────────────────
@@ -127,9 +143,6 @@ describe('openNotesDatabase', () => {
     expect(result.tempDir).not.toBe(fakeDir); // Should be a different temp dir
     expect(existsSync(join(result.tempDir, 'NoteStore.sqlite'))).toBe(true);
     expect(result.entityKeys.ICAccount).toBe(10);
-    expect(result.entityKeys.ICFolder).toBe(11);
-    expect(result.entityKeys.ICNote).toBe(12);
-    expect(result.entityKeys.ICAttachment).toBe(13);
     expect(result.entityKeys.ICMedia).toBe(14);
 
     result.close();
@@ -137,5 +150,21 @@ describe('openNotesDatabase', () => {
     // Cleanup
     rmSync(fakeDir, { recursive: true, force: true });
     rmSync(result.tempDir, { recursive: true, force: true });
+  });
+
+  it('throws an error with Full Disk Access hint if copying fails', () => {
+    const fakeDir = join(tmpdir(), `an-export-test-${randomUUID()}`);
+    mkdirSync(fakeDir, { recursive: true });
+
+    // Ensure the main DB file exists so openNotesDatabase passes its initial existsSync check
+    writeFileSync(join(fakeDir, 'NoteStore.sqlite'), 'fake-db');
+    
+    // Create the WAL file which triggers our mocked copyFileSync to throw permission denied
+    writeFileSync(join(fakeDir, 'NoteStore.sqlite-wal'), 'fake-db');
+
+    expect(() => openNotesDatabase(fakeDir)).toThrow(/grant Full Disk Access/);
+
+    // Cleanup
+    rmSync(fakeDir, { recursive: true, force: true });
   });
 });

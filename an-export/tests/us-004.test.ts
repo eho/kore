@@ -120,6 +120,31 @@ describe('inline formatting', () => {
   });
 });
 
+// ── Inline Attachments ───────────────────────────────────────────────────────
+
+describe('inline attachments', () => {
+  it('resolves attachments using the callback', async () => {
+    const note = makeNote('Title\nHere is an image: \ufffc\n', [
+      run(6), // "Title\n"
+      run(18), // "Here is an image: "
+      run(1, { attachmentInfo: { attachmentIdentifier: '123', typeUti: 'public.png' } }), // "\ufffc"
+      run(1), // "\n"
+    ]);
+
+    const md = await convertNoteToMarkdown(note, {
+      resolveAttachment: async (info) => {
+        if (info.attachmentIdentifier === '123') {
+          return '![image](attachments/123.png)';
+        }
+        return '';
+      },
+    });
+
+    expect(md).toContain('Here is an image:');
+    expect(md).toContain('![image](attachments/123.png)');
+  });
+});
+
 // ── Headings ─────────────────────────────────────────────────────────────────
 
 describe('headings', () => {
@@ -228,6 +253,21 @@ describe('indentation', () => {
     ]);
     const md = await convertNoteToMarkdown(note);
     expect(md).toContain('\t\t- Nested item');
+  });
+});
+
+// ── Paragraphs ───────────────────────────────────────────────────────────────
+
+describe('paragraphs', () => {
+  it('maintains empty lines between paragraphs', async () => {
+    const note = makeNote('Title\nPara 1\n\nPara 2\n', [
+      run(6),
+      run(7), // "Para 1\n"
+      run(1), // "\n"
+      run(7), // "Para 2\n"
+    ]);
+    const md = await convertNoteToMarkdown(note);
+    expect(md).toContain('Para 1\n\nPara 2');
   });
 });
 

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'bun:test';
-import { decodeTime, sanitizeFileName, splitExt, colorToHex, CORETIME_OFFSET } from '../src/utils.ts';
+import { decodeTime, sanitizeFileName, splitExt, colorToHex, uuidToHex, CORETIME_OFFSET } from '../src/utils.ts';
 
 describe('decodeTime', () => {
   it('returns a positive number for a valid CoreData timestamp', () => {
@@ -63,6 +63,13 @@ describe('colorToHex', () => {
 
   it('converts all ones to #ffffff', () => {
     expect(colorToHex(1, 1, 1)).toBe('#ffffff');
+  });
+});
+
+describe('uuidToHex', () => {
+  it('converts a Uint8Array UUID to a hex string', () => {
+    const uuid = new Uint8Array([0xde, 0xad, 0xbe, 0xef, 0x12, 0x34, 0x56, 0x78]);
+    expect(uuidToHex(uuid)).toBe('deadbeef12345678');
   });
 });
 
