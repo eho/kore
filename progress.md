@@ -36,3 +36,26 @@
 - Created `an-export/tests/us-003.test.ts` with unit tests mocking gzip-compressed hex payloads.
 - Unit tests and typecheck pass successfully.
 - Committed: `feat: protobuf schema and decoder with gzip decompression (US-003)`
+
+## US-004: Note Content to Markdown Converter ✅
+**Date:** 2026-03-05
+
+**Completed:**
+- Created `an-export/src/converter.ts` — core note-to-Markdown converter with:
+  - Walk `attributeRun[]`, slice `noteText` by cumulative length.
+  - Inline formatting: bold (`**`), italic (`*`), bold-italic (`***`), strikethrough (`~~`), underline (`<u>`), superscript (`<sup>`), subscript (`<sub>`).
+  - Headings: Title→`#`, Heading→`##`, Subheading→`###`.
+  - Lists: dotted/dashed→`- `, numbered→auto-incrementing `N. `, checkbox→`- [ ]`/`- [x]`.
+  - Indentation via tab-indent from `indentAmount`.
+  - Blockquotes (prefix `> `).
+  - Monospaced/code blocks (wrapped in fenced ` ``` `).
+  - External links → `[text](url)`.
+  - Internal Apple Notes links → `[[Note Title]]` with `resolveNoteLink` callback.
+  - Color → `<span style="color:#hex">`.
+  - Alignment → `<p style="text-align:center">`.
+  - First line omission (title → filename).
+  - Markdown escaping for square brackets.
+  - Attachment placeholder support via `resolveAttachment` callback.
+- Created `an-export/tests/us-004.test.ts` — 31 unit tests covering every formatting rule.
+- All 31 tests pass. Typecheck passes.
+- Committed: `feat: note content to markdown converter with all formatting rules (US-004)`
