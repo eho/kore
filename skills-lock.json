@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "skills": {
+    "prd": {
+      "source": "eho/agent-skills",
+      "sourceType": "github",
+      "computedHash": "23717dab24de386e3e31f627ea910f957cfcf562bbd13df7a3c49da895fb0b0b"
+    },
+    "public-repo-explorer": {
+      "source": "eho/agent-skills",
+      "sourceType": "github",
+      "computedHash": "d8779b8d84cb59b683133b5f4674e94d767640deb4b046518ab87c23d7ecba33"
+    }
+  }
+}
