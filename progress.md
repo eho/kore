@@ -70,3 +70,21 @@
 - Added missing tests for database `EACCES` filesystem copy errors yielding the Full Disk Access hint.
 - Added missing tests for `uuidToHex` utility.
 - Confirmed test suite contains 59 passing unit tests.
+
+## US-005: Table Conversion ✅
+**Date:** 2026-03-05
+
+**Completed:**
+- Created `an-export/src/table-converter.ts` — functional CRDT table→Markdown converter with:
+  - `convertTableToMarkdown()`: main entry point accepting a decoded `ANMergableDataProto` and cell converter callback.
+  - `findLocations()`: extracts row/column UUID→position mappings from CRDT `OrderedSet` structures.
+  - `getTargetUuid()`: dereferences CRDT object entries through indirection to resolve UUIDs.
+  - `formatTable()`: converts a 2D string array to a Markdown table with `|` separators and `--` header row.
+  - Uses a callback pattern for cell conversion to avoid circular dependency with `converter.ts`.
+- Created `an-export/tests/us-005.test.ts` — 13 unit tests covering:
+  - `formatTable`: 2×3, 3×2, 1×1, and empty table formatting.
+  - `getTargetUuid`: UUID dereferencing with different indices.
+  - `findLocations`: UUID→position mapping from ordered sets.
+  - End-to-end `convertTableToMarkdown`: 2×3, 3×2, 1×1 tables, missing ICTable root, missing cellData, and callback verification.
+- All 72 tests pass (`bun test`). Typecheck passes (`tsc --noEmit`).
+
