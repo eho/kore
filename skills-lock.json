@@ -10,6 +10,11 @@
       "source": "eho/agent-skills",
       "sourceType": "github",
       "computedHash": "03845a2ef5a0a5badcbd00bd0fb1f9c0c98dd61afea6a12257e39c20db2680a6"
+    },
+    "user-story-implementer": {
+      "source": "eho/agent-skills",
+      "sourceType": "github",
+      "computedHash": "74acba59bffe68d1175a89e00bb7ff3470407f29e289dc8f007379b4f745d78d"
     }
   }
 }
