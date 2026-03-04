@@ -108,4 +108,6 @@
   - `getAttachmentBinary`: 2 tests (account path read, missing file returns null).
   - `copyAttachmentFile`: 4 tests (image copy + link, non-image link, missing file, unique filename generation).
   - `createAttachmentResolver`: 9 tests (hashtag, mention, internal link with/without resolution, URL card with/without title, unknown type, general media end-to-end, missing ZALTTEXT).
-- All 95 tests pass (`bun test`). Typecheck passes (`tsc --noEmit`).
+- Created `an-export/tests/us-006-attachments-extra.test.ts` — 15 unit tests covering attachment edge cases (missing data in DB yielding fallbacks).
+- Created `an-export/tests/us-006-scan.test.ts` — 6 unit tests covering `convertScanToMarkdown` with 100% coverage (previews, raw media fallbacks, and missing rows).
+- All 116 tests pass (`bun test`). Functional test coverage is 100% for attachments and converters. Typecheck passes (`tsc --noEmit`).
