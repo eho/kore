@@ -128,3 +128,26 @@
   - `resolveFolders`: simple top-level, nested hierarchy, default folder mapping, smart folder skipping, trash folder skipping/inclusion, multi-account prefixing, directory creation, name sanitization, null title fallback.
   - `buildFolderPath`: default folder (single & multi-account), nested parent chain, broken parent chain.
 - All 134 tests pass (`bun test`). Typecheck passes for new code.
+
+## US-008: Sync Manifest & Incremental Sync ✅
+**Date:** 2026-03-05
+
+**Completed:**
+- Created `an-export/src/sync.ts` — sync manifest & incremental sync module with:
+  - `createEmptyManifest()`: creates a fresh version-1 manifest.
+  - `loadManifest()`: loads existing manifest from disk, returns empty manifest if not found, validates version.
+  - `saveManifest()`: writes manifest JSON to the export root with updated `exportedAt` timestamp.
+  - `computeNoteSyncDecisions()`: compares DB notes against manifest to classify each as new/updated/unchanged/deleted.
+  - `computeAttachmentSyncDecisions()`: same logic for attachments.
+  - `buildNoteManifestEntry()` / `buildAttachmentManifestEntry()`: construct manifest entries with relative paths and decoded mtimes.
+  - `applyDeletions()`: deletes exported files for removed notes/attachments, removes entries from manifest, handles already-deleted files gracefully.
+- Created `an-export/tests/us-008.test.ts` — 24 unit tests covering:
+  - `createEmptyManifest`: version, empty notes/attachments.
+  - `loadManifest`: missing file, existing file, unsupported version error.
+  - `saveManifest`: write + overwrite.
+  - `computeNoteSyncDecisions`: new, updated, unchanged, deleted, mixed scenario, empty inputs.
+  - `computeAttachmentSyncDecisions`: new, updated, unchanged, deleted.
+  - `buildNoteManifestEntry`: relative paths from export dest, file at root.
+  - `buildAttachmentManifestEntry`: relative attachment path.
+  - `applyDeletions`: file removal + manifest cleanup, already-deleted files, skip non-deleted, attachment deletion, multiple deletions.
+- All 159 tests pass (`bun test`). Typecheck passes for new code.
