@@ -749,11 +749,11 @@ describe('database-to-folder integration', () => {
 
     // Work folder should be a subdirectory
     const workFolder = folderMap.get(201)!;
-    expect(workFolder.outputPath).toContain('Work');
+    expect(workFolder.outputPath).toContain(join('notes', 'Work'));
 
     // Default folder maps to export root
     const defaultFolder = folderMap.get(200)!;
-    expect(defaultFolder.outputPath).toBe(join(exportDest, '.'));
+    expect(defaultFolder.outputPath).toBe(join(exportDest, 'notes'));
 
     notesDb.close();
   });
@@ -871,7 +871,7 @@ describe('CLI Script Execution', () => {
     expect(exportRes.stdout).toContain('Done.');
     
     // Verify file created
-    expect(existsSync(join(exportDest, 'CLI Note.md'))).toBe(true);
+    expect(existsSync(join(exportDest, 'notes', 'CLI Note.md'))).toBe(true);
     expect(existsSync(join(exportDest, MANIFEST_FILENAME))).toBe(true);
 
     // Run SYNC

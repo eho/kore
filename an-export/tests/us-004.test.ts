@@ -42,6 +42,15 @@ describe('first line omission', () => {
     expect(md).toContain('My Title');
     expect(md).toContain('Body');
   });
+
+  it('keeps the first line if it contains only an attachment marker', async () => {
+    const note = makeNote('\ufffc\n', [
+      run(1, { attachmentInfo: { attachmentIdentifier: '123', typeUti: 'public.jpeg' } }),
+      run(1),
+    ]);
+    const md = await convertNoteToMarkdown(note, { omitFirstLine: true, resolveAttachment: async () => '![](image.jpg)' });
+    expect(md).toContain('![](image.jpg)');
+  });
 });
 
 // ── Bold / Italic / BoldItalic ───────────────────────────────────────────────

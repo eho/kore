@@ -206,10 +206,36 @@ describe('US-006: Attachment Extraction', () => {
         accountDir,
         exportDest,
         'photo.jpg',
+        undefined,
+        exportDest
       );
 
       expect(result).toBe('![](attachments/photo.jpg)');
       expect(existsSync(join(exportDest, 'attachments', 'photo.jpg'))).toBe(true);
+    });
+
+    test('computes relative path correctly when outputDir is nested', async () => {
+      const accountDir = join(tempDir, 'account');
+      const mediaDir = join(accountDir, 'Media', 'uuid2');
+      mkdirSync(mediaDir, { recursive: true });
+      writeFileSync(join(mediaDir, 'photo2.jpg'), 'fake-jpeg-data');
+
+      const exportDest = join(tempDir, 'export');
+      const nestedOutputDir = join(exportDest, 'notes', 'Subfolder');
+      mkdirSync(nestedOutputDir, { recursive: true });
+
+      const result = await copyAttachmentFile(
+        join('Media', 'uuid2', 'photo2.jpg'),
+        accountDir,
+        exportDest,
+        'photo2.jpg',
+        undefined,
+        nestedOutputDir
+      );
+
+      // The exportDest/attachments folder is two levels up from exportDest/notes/Subfolder
+      expect(result).toBe('![](../../attachments/photo2.jpg)');
+      expect(existsSync(join(exportDest, 'attachments', 'photo2.jpg'))).toBe(true);
     });
 
     test('returns file link for non-image files', async () => {
@@ -226,6 +252,8 @@ describe('US-006: Attachment Extraction', () => {
         accountDir,
         exportDest,
         'Scan.pdf',
+        undefined,
+        exportDest
       );
 
       expect(result).toBe('[Scan.pdf](attachments/Scan.pdf)');
@@ -240,6 +268,8 @@ describe('US-006: Attachment Extraction', () => {
         join(tempDir, 'nonexistent-account'),
         exportDest,
         'file.jpg',
+        undefined,
+        exportDest
       );
 
       expect(result).toBeNull();
@@ -262,9 +292,11 @@ describe('US-006: Attachment Extraction', () => {
         accountDir,
         exportDest,
         'photo.jpg',
+        undefined,
+        exportDest
       );
 
-      expect(result).toBe('![](attachments/photo 1.jpg)');
+      expect(result).toBe('![](attachments/photo%201.jpg)');
       expect(existsSync(join(attachDir, 'photo 1.jpg'))).toBe(true);
     });
   });
@@ -286,6 +318,7 @@ describe('US-006: Attachment Extraction', () => {
         entityKeys,
         accountPath: tempDir,
         exportDest: tempDir,
+        outputDir: tempDir,
       });
 
       const result = await resolve({
@@ -306,6 +339,7 @@ describe('US-006: Attachment Extraction', () => {
         entityKeys,
         accountPath: tempDir,
         exportDest: tempDir,
+        outputDir: tempDir,
       });
 
       const result = await resolve({
@@ -326,6 +360,7 @@ describe('US-006: Attachment Extraction', () => {
         entityKeys,
         accountPath: tempDir,
         exportDest: tempDir,
+        outputDir: tempDir,
         resolveNoteLink: (uuid) =>
           uuid === 'target-note-uuid' ? 'My Important Note' : undefined,
       });
@@ -348,6 +383,7 @@ describe('US-006: Attachment Extraction', () => {
         entityKeys,
         accountPath: tempDir,
         exportDest: tempDir,
+        outputDir: tempDir,
       });
 
       const result = await resolve({
@@ -368,6 +404,7 @@ describe('US-006: Attachment Extraction', () => {
         entityKeys,
         accountPath: tempDir,
         exportDest: tempDir,
+        outputDir: tempDir,
       });
 
       const result = await resolve({
@@ -388,6 +425,7 @@ describe('US-006: Attachment Extraction', () => {
         entityKeys,
         accountPath: tempDir,
         exportDest: tempDir,
+        outputDir: tempDir,
       });
 
       const result = await resolve({
@@ -408,6 +446,7 @@ describe('US-006: Attachment Extraction', () => {
         entityKeys,
         accountPath: tempDir,
         exportDest: tempDir,
+        outputDir: tempDir,
       });
 
       const result = await resolve({
@@ -444,6 +483,7 @@ describe('US-006: Attachment Extraction', () => {
         entityKeys,
         accountPath: accountDir,
         exportDest,
+        outputDir: exportDest,
       });
 
       const result = await resolve({
@@ -466,6 +506,7 @@ describe('US-006: Attachment Extraction', () => {
         entityKeys,
         accountPath: tempDir,
         exportDest: tempDir,
+        outputDir: tempDir,
       });
 
       const result = await resolve({

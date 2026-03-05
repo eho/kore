@@ -152,7 +152,7 @@ describe('resolveFolders', () => {
     // Work folder should have an outputPath ending with /Work
     const workFolder = folders.get(201);
     expect(workFolder).toBeDefined();
-    expect(workFolder!.outputPath).toBe(join(exportDir, 'Work'));
+    expect(workFolder!.outputPath).toBe(join(exportDir, 'notes', 'Work'));
     expect(existsSync(workFolder!.outputPath)).toBe(true);
 
     db.close();
@@ -181,7 +181,7 @@ describe('resolveFolders', () => {
 
     const projectsFolder = folders.get(202);
     expect(projectsFolder).toBeDefined();
-    expect(projectsFolder!.outputPath).toBe(join(exportDir, 'Work', 'Projects'));
+    expect(projectsFolder!.outputPath).toBe(join(exportDir, 'notes', 'Work', 'Projects'));
     expect(existsSync(projectsFolder!.outputPath)).toBe(true);
 
     db.close();
@@ -202,7 +202,7 @@ describe('resolveFolders', () => {
     const defaultFolder = folders.get(200);
     expect(defaultFolder).toBeDefined();
     // Default folder maps to export root
-    expect(defaultFolder!.outputPath).toBe(join(exportDir, '.'));
+    expect(defaultFolder!.outputPath).toBe(join(exportDir, 'notes'));
 
     db.close();
   });
@@ -267,7 +267,7 @@ describe('resolveFolders', () => {
 
     expect(folders.has(301)).toBe(true);
     const trashFolder = folders.get(301)!;
-    expect(trashFolder.outputPath).toBe(join(exportDir, 'Recently Deleted'));
+    expect(trashFolder.outputPath).toBe(join(exportDir, 'notes', 'Recently Deleted'));
 
     db.close();
   });
@@ -307,12 +307,12 @@ describe('resolveFolders', () => {
     // iCloud's Work folder should be prefixed with account name
     const workFolder = folders.get(201);
     expect(workFolder).toBeDefined();
-    expect(workFolder!.outputPath).toBe(join(exportDir, 'iCloud', 'Work'));
+    expect(workFolder!.outputPath).toBe(join(exportDir, 'notes', 'iCloud', 'Work'));
 
     // Gmail's Personal folder should be prefixed with account name
     const personalFolder = folders.get(211);
     expect(personalFolder).toBeDefined();
-    expect(personalFolder!.outputPath).toBe(join(exportDir, 'Gmail', 'Personal'));
+    expect(personalFolder!.outputPath).toBe(join(exportDir, 'notes', 'Gmail', 'Personal'));
 
     db.close();
   });
@@ -335,8 +335,8 @@ describe('resolveFolders', () => {
     const accounts: ANAccount[] = [{ name: 'iCloud', uuid: 'ACC-1', path: '/tmp/acc' }];
     resolveFolders(db, TEST_ENTITY_KEYS, accounts, exportDir);
 
-    expect(existsSync(join(exportDir, 'Deep'))).toBe(true);
-    expect(existsSync(join(exportDir, 'Deep', 'Nested'))).toBe(true);
+    expect(existsSync(join(exportDir, 'notes', 'Deep'))).toBe(true);
+    expect(existsSync(join(exportDir, 'notes', 'Deep', 'Nested'))).toBe(true);
 
     db.close();
   });
@@ -359,7 +359,7 @@ describe('resolveFolders', () => {
     const folder = folders.get(201);
     expect(folder).toBeDefined();
     // Special chars replaced with dashes by sanitizeFileName
-    expect(folder!.outputPath).toBe(join(exportDir, 'My- Cool-Folder-Name'));
+    expect(folder!.outputPath).toBe(join(exportDir, 'notes', 'My- Cool-Folder-Name'));
 
     db.close();
   });
@@ -381,7 +381,7 @@ describe('resolveFolders', () => {
 
     const folder = folders.get(201);
     expect(folder).toBeDefined();
-    expect(folder!.outputPath).toBe(join(exportDir, 'Untitled Folder'));
+    expect(folder!.outputPath).toBe(join(exportDir, 'notes', 'Untitled Folder'));
 
     db.close();
   });

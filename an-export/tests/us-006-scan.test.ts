@@ -80,9 +80,9 @@ describe('Scan Converter', () => {
 
     const exportDest = join(tempDir, 'export');
     
-    const result = await convertScanToMarkdown(proto, db, entityKeys, accountDir, exportDest);
+    const result = await convertScanToMarkdown(proto, db, entityKeys, accountDir, exportDest, undefined, exportDest);
     
-    expect(result).toBe('\n![](attachments/Scan Page.jpg)\n');
+    expect(result).toBe('\n![](attachments/Scan%20Page.jpg)\n');
     expect(existsSync(join(exportDest, 'attachments', 'Scan Page.jpg'))).toBe(true);
   });
 
@@ -108,7 +108,7 @@ describe('Scan Converter', () => {
 
     const exportDest = join(tempDir, 'export');
     
-    const result = await convertScanToMarkdown(proto, db, entityKeys, accountDir, exportDest);
+    const result = await convertScanToMarkdown(proto, db, entityKeys, accountDir, exportDest, undefined, exportDest);
     
     expect(result).toBe('\n![](attachments/raw-scan.jpg)\n');
     expect(existsSync(join(exportDest, 'attachments', 'raw-scan.jpg'))).toBe(true);
@@ -116,7 +116,7 @@ describe('Scan Converter', () => {
 
   test('returns cannot decode if DB row missing', async () => {
     const proto = buildMockScanProto(['missing-page']);
-    const result = await convertScanToMarkdown(proto, db, entityKeys, tempDir, tempDir);
+    const result = await convertScanToMarkdown(proto, db, entityKeys, tempDir, tempDir, undefined, tempDir);
     expect(result).toBe('\n**(cannot decode scan page)**\n');
   });
 
@@ -131,7 +131,7 @@ describe('Scan Converter', () => {
     );
     const proto = buildMockScanProto(['page1']);
     // Do NOT create the preview or media file
-    const result = await convertScanToMarkdown(proto, db, entityKeys, tempDir, tempDir);
+    const result = await convertScanToMarkdown(proto, db, entityKeys, tempDir, tempDir, undefined, tempDir);
     expect(result).toBe('\n**(cannot decode scan page)**\n');
   });
 
@@ -143,7 +143,7 @@ describe('Scan Converter', () => {
 
     const proto = buildMockScanProto(['page1']);
     // Notice we don't create any files in the temp directory.
-    const result = await convertScanToMarkdown(proto, db, entityKeys, tempDir, tempDir);
+    const result = await convertScanToMarkdown(proto, db, entityKeys, tempDir, tempDir, undefined, tempDir);
     
     expect(result).toBe('\n**(cannot decode scan page)**\n');
   });
@@ -159,7 +159,7 @@ describe('Scan Converter', () => {
         }
       }
     };
-    const result = await convertScanToMarkdown(proto, db, entityKeys, tempDir, tempDir);
+    const result = await convertScanToMarkdown(proto, db, entityKeys, tempDir, tempDir, undefined, tempDir);
     expect(result).toBe('');
   });
 });

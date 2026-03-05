@@ -30,8 +30,17 @@ export function decodeNoteData(hexData: string): ANDocument {
       unzipped = buf; // Try raw if no compression headers found
     }
   } catch (err: any) {
-    if (err.message && err.message.includes('unexpected end of file')) {
-      return { note: { noteText: '', attributeRun: [] } } as unknown as ANDocument;
+    if (err.message) {
+      const msg = err.message.toLowerCase();
+      if (
+        msg.includes('unexpected end of file') ||
+        msg.includes('unknown compression method') ||
+        msg.includes('invalid distance too far back') ||
+        msg.includes('incorrect header check') || 
+        msg.includes('invalid block type')
+      ) {
+        return { note: { noteText: '', attributeRun: [] } } as unknown as ANDocument;
+      }
     }
     throw err;
   }
