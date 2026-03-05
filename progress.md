@@ -111,3 +111,20 @@
 - Created `an-export/tests/us-006-attachments-extra.test.ts` — 15 unit tests covering attachment edge cases (missing data in DB yielding fallbacks).
 - Created `an-export/tests/us-006-scan.test.ts` — 6 unit tests covering `convertScanToMarkdown` with 100% coverage (previews, raw media fallbacks, and missing rows).
 - All 116 tests pass (`bun test`). Functional test coverage is 100% for attachments and converters. Typecheck passes (`tsc --noEmit`).
+
+## US-007: Folder & Account Resolution ✅
+**Date:** 2026-03-05
+
+**Completed:**
+- Created `an-export/src/folders.ts` — folder & account resolution module with:
+  - `resolveAccounts()`: queries `ICAccount` entities from DB, returns `ANAccount[]` with name, uuid, and on-disk data directory path.
+  - `resolveFolders()`: queries all `ICFolder` entities, filters out Smart Folders (`ZFOLDERTYPE = 3`) and Trash (`ZFOLDERTYPE = 1`) unless `includeTrashed` is set, recursively resolves `ZPARENT` chain to build full directory paths, creates output directories on disk.
+  - `buildFolderPath()`: recursive helper that walks the parent chain, handles Default Folder mapping to export root (no subfolder), and multi-account prefixing with account name.
+  - Default "Notes" folder (`ZIDENTIFIER` starts with `DefaultFolder`) maps to the export root.
+  - Multi-account: if >1 account, each account's tree is prefixed with the account name.
+  - Folder names sanitized via `sanitizeFileName()`, null titles fall back to "Untitled Folder".
+- Created `an-export/tests/us-007.test.ts` — 18 unit tests covering:
+  - `resolveAccounts`: single/multiple accounts, empty accounts, null ZNAME fallback.
+  - `resolveFolders`: simple top-level, nested hierarchy, default folder mapping, smart folder skipping, trash folder skipping/inclusion, multi-account prefixing, directory creation, name sanitization, null title fallback.
+  - `buildFolderPath`: default folder (single & multi-account), nested parent chain, broken parent chain.
+- All 134 tests pass (`bun test`). Typecheck passes for new code.
