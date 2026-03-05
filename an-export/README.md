@@ -64,10 +64,28 @@ Done. Exported: 199, Skipped: 1, Failed: 0
   bun run typecheck
   ```
 
-## Troubleshooting
+## Local Testing & macOS Permissions
 
-- **`EPERM: operation not permitted`**: You must manually grant your terminal (e.g. VS Code, iTerm, Terminal) **Full Disk Access** in `System Settings → Privacy & Security` before running this script, or macOS will block it from reading the Notes directory.
-- **`unable to open database file` during manual testing**: If you bypass restrictions by manually copying `NoteStore.sqlite` to your workspace, **you must copy all three files** (`NoteStore.sqlite`, `NoteStore.sqlite-wal`, and `NoteStore.sqlite-shm`). Apple Notes uses WAL journaling mode. Copying only the `.sqlite` file results in a corrupted, un-openable state for `bun:sqlite`.
+macOS strictly protects the Apple Notes database behind its Transparency, Consent, and Control (TCC) system. Because this is a pure CLI tool, it cannot natively prompt for access to the `group.com.apple.notes` directory.
+
+While you *can* grant your terminal (e.g., VS Code, iTerm) **Full Disk Access** in `System Settings → Privacy & Security` to run the tool directly against your live database, **this is generally not recommended** for security reasons.
+
+Instead, the safest way to test or run this CLI is to manually copy your Notes database to a local directory and run the exporter against that copy using the `--db-dir` flag.
+
+### How to test locally manually
+
+1. **Copy the database files:**
+   Because Apple Notes uses SQLite WAL (Write-Ahead Logging) mode, you **must copy all three database files** to prevent the database from appearing corrupted. Run this command to copy them to a local `test-db` folder:
+   ```bash
+   mkdir -p test-db
+   cp ~/Library/Group\ Containers/group.com.apple.notes/NoteStore.sqlite* ./test-db/
+   ```
+
+2. **Run the exporter:**
+   Use the `--db-dir` flag to point the CLI at your copied database folder:
+   ```bash
+   bun run src/cli.ts export --db-dir ./test-db --dest ./my-export
+   ```
 
 ## How It Works
 
