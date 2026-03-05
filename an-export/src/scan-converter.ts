@@ -42,7 +42,8 @@ export async function convertScanToMarkdown(
   entityKeys: EntityKeys,
   accountPath: string,
   exportDest: string,
-  dbDir?: string
+  dbDir: string | undefined,
+  outputDir: string
 ): Promise<string> {
   const objects = proto.mergableDataObject.mergeableDataObjectData.mergeableDataObjectEntry;
   const links: string[] = [];
@@ -80,7 +81,8 @@ export async function convertScanToMarkdown(
       accountPath,
       exportDest,
       `Scan Page.jpg`,
-      dbDir
+      dbDir,
+      outputDir
     );
 
     if (scanLink) {
@@ -111,7 +113,8 @@ export async function convertScanToMarkdown(
           accountPath,
           exportDest,
           mediaRow.ZFILENAME,
-          dbDir
+          dbDir,
+          outputDir
         );
 
         if (mediaLink) {

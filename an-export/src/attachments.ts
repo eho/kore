@@ -46,6 +46,8 @@ export type AttachmentResolverOptions = {
   includeHandwriting?: boolean;
   /** Optional override for the Apple Notes database directory */
   dbDir?: string;
+  /** Current directory where the note markdown is being written */
+  outputDir: string;
 };
 
 /**
@@ -131,7 +133,7 @@ async function resolveAttachment(
       );
       if (row?.ZHEXDATA) {
         const proto = decodeMergeableData(row.ZHEXDATA);
-        return convertScanToMarkdown(proto, db, entityKeys, accountPath, exportDest, opts.dbDir);
+        return convertScanToMarkdown(proto, db, entityKeys, accountPath, exportDest, opts.dbDir, opts.outputDir);
       }
       // If it's a scan but has no mergeable data, fall back to the ModifiedScan logic
       // Fall through to ModifiedScan
@@ -149,7 +151,7 @@ async function resolveAttachment(
       );
       if (!row) return '**(unknown attachment: modified scan)**';
       const sourcePath = buildAttachmentSourcePath(ANAttachmentUTI.ModifiedScan, row);
-      const link = await copyAttachmentFile(sourcePath, accountPath, exportDest, 'Scan.pdf', opts.dbDir);
+      const link = await copyAttachmentFile(sourcePath, accountPath, exportDest, 'Scan.pdf', opts.dbDir, opts.outputDir);
       return withHandwriting(link ?? '**(error reading attachment)**', row, includeHandwriting);
     }
 
@@ -168,7 +170,7 @@ async function resolveAttachment(
       if (!row) return '**(unknown attachment: drawing)**';
       const sourcePath = buildAttachmentSourcePath(ANAttachmentUTI.Drawing, row);
       const ext = row.ZFALLBACKIMAGEGENERATION ? 'png' : 'jpg';
-      const link = await copyAttachmentFile(sourcePath, accountPath, exportDest, `Drawing.${ext}`, opts.dbDir);
+      const link = await copyAttachmentFile(sourcePath, accountPath, exportDest, `Drawing.${ext}`, opts.dbDir, opts.outputDir);
       return withHandwriting(link ?? '**(error reading attachment)**', row, includeHandwriting);
     }
 
@@ -200,7 +202,8 @@ async function resolveAttachment(
         accountPath,
         exportDest,
         mediaRow.ZFILENAME,
-        opts.dbDir
+        opts.dbDir,
+        opts.outputDir
       );
       return link ?? '**(error reading attachment)**';
     }
@@ -279,7 +282,8 @@ export async function copyAttachmentFile(
   accountPath: string,
   exportDest: string,
   outFilename: string,
-  dbDir?: string,
+  dbDir: string | undefined,
+  outputDir: string
 ): Promise<string | null> {
   const binary = getAttachmentBinary(accountPath, sourcePath, dbDir);
   if (!binary) return null;
@@ -298,14 +302,20 @@ export async function copyAttachmentFile(
     return null;
   }
 
+  const { relative } = await import('node:path');
+  const relPath = relative(outputDir, destPath);
+
   const [, ext] = splitExt(uniqueName);
   const isImage = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp', 'tiff'].includes(
     ext.toLowerCase(),
   );
 
+  // Encode the URI to handle spaces safely, but replace %2F back to / to avoid breaking directory separators.
+  const encodedRelPath = encodeURI(relPath).replace(/%2F/g, '/');
+
   return isImage
-    ? `![](attachments/${uniqueName})`
-    : `[${uniqueName}](attachments/${uniqueName})`;
+    ? `![](${encodedRelPath})`
+    : `[${uniqueName}](${encodedRelPath})`;
 }
 
 /**

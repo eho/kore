@@ -144,6 +144,7 @@ async function exportSingleNote(
     resolveNoteLink,
     includeHandwriting: options.includeHandwriting,
     dbDir: options.dbDir,
+    outputDir,
   });
 
   // Build filename from title
