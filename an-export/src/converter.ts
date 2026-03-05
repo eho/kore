@@ -96,8 +96,8 @@ export async function convertNoteToMarkdown(
         }
       }
 
-      // Skip first line content if omitting
-      if (isFirstLine && omitFirstLine && !isNewlineBoundary) {
+      // Skip first line content if omitting, UNLESS it is an attachment
+      if (isFirstLine && omitFirstLine && !isNewlineBoundary && text !== '\ufffc') {
         continue;
       }
 
@@ -106,9 +106,11 @@ export async function convertNoteToMarkdown(
         if (resolveAttachment) {
           const attachmentMd = await resolveAttachment(run.attachmentInfo);
           if (attachmentMd) {
-            // Append if previous line is not empty and not just starting, or else push new line
+            // Push attachment as its own line or append to current line
             if (lines.length > 0 && lines[lines.length - 1] !== '') {
-              lines[lines.length - 1] += attachmentMd;
+              lines[lines.length - 1] += '\n' + attachmentMd;
+            } else if (lines.length > 0) {
+              lines[lines.length - 1] = attachmentMd;
             } else {
               lines.push(attachmentMd);
             }

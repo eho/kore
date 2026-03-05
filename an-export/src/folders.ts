@@ -98,8 +98,8 @@ export function resolveFolders(
     // Skip trash folders unless opted-in
     if (row.ZFOLDERTYPE === ANFolderType.Trash && !opts?.includeTrashed) continue;
 
-    // Build the relative path for this folder
-    const relativePath = buildFolderPath(row.Z_PK, folderMap, accountByPk, multiAccount);
+    // Build the relative path for this folder. We nest notes under a 'notes' subdirectory.
+    const relativePath = join('notes', buildFolderPath(row.Z_PK, folderMap, accountByPk, multiAccount));
     const outputPath = join(exportDest, relativePath);
 
     // Create the directory on disk

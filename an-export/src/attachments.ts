@@ -129,9 +129,12 @@ async function resolveAttachment(
         `SELECT hex(zmergeabledata1) as ZHEXDATA FROM ziccloudsyncingobject WHERE zidentifier = ?`,
         info.attachmentIdentifier,
       );
-      if (!row?.ZHEXDATA) return '**(empty scan)**';
-      const proto = decodeMergeableData(row.ZHEXDATA);
-      return convertScanToMarkdown(proto, db, entityKeys, accountPath, exportDest, opts.dbDir);
+      if (row?.ZHEXDATA) {
+        const proto = decodeMergeableData(row.ZHEXDATA);
+        return convertScanToMarkdown(proto, db, entityKeys, accountPath, exportDest, opts.dbDir);
+      }
+      // If it's a scan but has no mergeable data, fall back to the ModifiedScan logic
+      // Fall through to ModifiedScan
     }
 
     case ANAttachmentUTI.ModifiedScan: {

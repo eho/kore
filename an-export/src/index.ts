@@ -146,16 +146,21 @@ async function exportSingleNote(
     dbDir: options.dbDir,
   });
 
+  // Build filename from title
+  const title = noteRow.ZTITLE1 || 'Untitled';
+  const filename = `${sanitizeFileName(title)}.md`;
+
+  // Apple Notes strips URLs into just the title if they're the only thing on the first line.
+  // We should preserve the URL in the markdown body.
+  const isUrlTitle = title.startsWith('http://') || title.startsWith('https://');
+
   // Convert to Markdown
   const markdown = await convertNoteToMarkdown(doc.note, {
-    omitFirstLine: options.omitFirstLine ?? true,
+    omitFirstLine: isUrlTitle ? false : (options.omitFirstLine ?? true),
     resolveAttachment,
     resolveNoteLink,
   });
 
-  // Build filename from title
-  const title = noteRow.ZTITLE1 || 'Untitled';
-  const filename = `${sanitizeFileName(title)}.md`;
   const filePath = join(outputDir, filename);
 
   // Write the markdown file
