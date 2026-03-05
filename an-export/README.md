@@ -74,12 +74,13 @@ Instead, the safest way to test or run this CLI is to manually copy your Notes d
 
 ### How to test locally manually
 
-1. **Copy the database files:**
-   Because Apple Notes uses SQLite WAL (Write-Ahead Logging) mode, you **must copy all three database files** to prevent the database from appearing corrupted. Run this command to copy them to a local `test-db` folder:
+1. **Copy the database files via Finder:**
+   Because your terminal cannot natively read the directory via `cp` commands without Full Disk Access, you must use Finder. Open the directory by running this command:
    ```bash
-   mkdir -p test-db
-   cp ~/Library/Group\ Containers/group.com.apple.notes/NoteStore.sqlite* ./test-db/
+   open ~/Library/Group\ Containers/group.com.apple.notes/
    ```
+   * Manually select all three NoteStore files (`NoteStore.sqlite`, `NoteStore.sqlite-wal`, and `NoteStore.sqlite-shm`). *Apple Notes uses SQLite WAL (Write-Ahead Logging) mode, so copying only the main file will result in a corrupted database.*
+   * Copy them and paste them into a local `test-db` folder inside your workspace.
 
 2. **Run the exporter:**
    Use the `--db-dir` flag to point the CLI at your copied database folder:
