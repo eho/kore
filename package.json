@@ -1,5 +1,5 @@
 {
-  "name": "@personal-memory/root",
+  "name": "@memory-bank/root",
   "private": true,
   "scripts": {
     "test": "bun test --recursive",

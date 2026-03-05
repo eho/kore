@@ -1,5 +1,5 @@
 {
-  "name": "@personal-memory/an-export",
+  "name": "@memory-bank/an-export",
   "module": "src/index.ts",
   "type": "module",
   "private": true,

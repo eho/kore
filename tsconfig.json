@@ -11,7 +11,7 @@
     "noEmit": true,
     "baseUrl": ".",
     "paths": {
-      "@personal-memory/an-export": ["packages/an-export/src/index.ts"]
+      "@memory-bank/an-export": ["packages/an-export/src/index.ts"]
     }
   },
   "exclude": ["node_modules", "**/dist/**"]
