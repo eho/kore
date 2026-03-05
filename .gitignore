@@ -1,4 +1,25 @@
+# Dependencies
+node_modules
+.bun
+cache
+tmp
+
+# Output
+dist
+out
+build
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Project specific
 notes
 notes-export
+packages/an-export/node_modules # In case they are ever recreated
 
-.DS_Store
+# Workspace specific
+*.log
+.env
+.env.*
+!.env.example

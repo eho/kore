@@ -1,10 +1,12 @@
 {
 	"folders": [
 		{
+			"name": "ROOT",
 			"path": "."
 		},
 		{
-			"path": "../obsidian-importer"
+			"name": "an-export",
+			"path": "packages/an-export"
 		}
 	],
 	"settings": {}

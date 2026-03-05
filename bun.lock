@@ -3,7 +3,16 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "an-export",
+      "name": "@personal-memory/root",
+      "dependencies": {
+        "protobufjs": "^8.0.0",
+      },
+      "devDependencies": {
+        "@types/bun": "latest",
+      },
+    },
+    "packages/an-export": {
+      "name": "@personal-memory/an-export",
       "dependencies": {
         "protobufjs": "^8.0.0",
       },
@@ -17,6 +26,8 @@
     },
   },
   "packages": {
+    "@personal-memory/an-export": ["@personal-memory/an-export@workspace:packages/an-export"],
+
     "@protobufjs/aspromise": ["@protobufjs/aspromise@1.1.2", "", {}, "sha512-j+gKExEuLmKwvz3OgROXtrJ2UG2x8Ch2YZUxahh+s1F2HZ+wAceUNLkvy6zKCPVRkU++ZWQrdxsUeQXmcg4uoQ=="],
 
     "@protobufjs/base64": ["@protobufjs/base64@1.1.2", "", {}, "sha512-AZkcAA5vnN/v4PDqKyMR5lx7hZttPDgClv83E//FMNhR2TMcLUhfRUBHCmSl0oi9zMgDDqRUJkSxO3wm85+XLg=="],

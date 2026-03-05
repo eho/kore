@@ -177,3 +177,19 @@
   - Progress callback behavior: skip messages, export counts, deletion messages.
   - Module exports: `exportNotes`, `syncNotes`, `decodeTime`, `sanitizeFileName`.
 - All 183 tests pass (`bun test`). Typecheck passes for new code.
+
+## Monorepo Restructuring ✅
+**Date:** 2026-03-05
+
+**Completed:**
+- Refactored the project into a **Bun Monorepo** structure.
+- Created `packages/` and `apps/` directories.
+- Moved `an-export` into `packages/an-export/` and renamed it to `@personal-memory/an-export`.
+- Created a root `package.json` with Bun workspace configuration (`./packages/*`, `./apps/*`).
+- Created a root `tsconfig.json` with shared base settings and path aliases.
+- Created a root `README.md` explaining the Personal Memory Bank vision and monorepo structure.
+- Updated `packages/an-export/README.md` to align with the new workspace-based workflow.
+- Updated the root `.gitignore` to handle hoisted `node_modules` and workspace-specific exclusions.
+- Updated `personal-memory.code-workspace` for better multi-root navigation in VS Code.
+- Verified that `@personal-memory/an-export` tests pass when executed from the monorepo root.
+- Committed: `refactor: transition to bun monorepo structure`

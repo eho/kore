@@ -1,0 +1,18 @@
+{
+  "name": "@personal-memory/root",
+  "private": true,
+  "scripts": {
+    "test": "bun test --recursive",
+    "typecheck": "bun x tsc --noEmit --project tsconfig.json"
+  },
+  "workspaces": [
+    "./packages/*",
+    "./apps/*"
+  ],
+  "devDependencies": {
+    "@types/bun": "latest"
+  },
+  "dependencies": {
+    "protobufjs": "^8.0.0"
+  }
+}
