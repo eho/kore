@@ -14,14 +14,6 @@ import { ANFolderType } from './types.ts';
 import { queryAll } from './db.ts';
 import { sanitizeFileName } from './utils.ts';
 
-/**
- * The base Apple Notes data container path on macOS.
- */
-const NOTES_DATA_PATH = join(
-  homedir(),
-  'Library/Group Containers/group.com.apple.notes',
-);
-
 // ─── Public API ──────────────────────────────────────────────────────────────
 
 /**
@@ -32,6 +24,7 @@ const NOTES_DATA_PATH = join(
 export function resolveAccounts(
   db: Database,
   entityKeys: EntityKeys,
+  dbDir?: string,
 ): ANAccount[] {
   const rows = queryAll<AccountRow>(
     db,
@@ -39,10 +32,12 @@ export function resolveAccounts(
     entityKeys.ICAccount,
   );
 
+  const basePath = dbDir ?? join(homedir(), 'Library/Group Containers/group.com.apple.notes');
+
   return rows.map((row) => ({
     name: row.ZNAME ?? 'Unknown Account',
     uuid: row.ZIDENTIFIER,
-    path: join(NOTES_DATA_PATH, 'Accounts', row.ZIDENTIFIER),
+    path: join(basePath, 'Accounts', row.ZIDENTIFIER),
   }));
 }
 

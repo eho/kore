@@ -80,6 +80,7 @@ Instead, the safest way to test or run this CLI is to manually copy your Notes d
    open ~/Library/Group\ Containers/group.com.apple.notes/
    ```
    * Manually select all three NoteStore files (`NoteStore.sqlite`, `NoteStore.sqlite-wal`, and `NoteStore.sqlite-shm`). *Apple Notes uses SQLite WAL (Write-Ahead Logging) mode, so copying only the main file will result in a corrupted database.*
+   * *(Optional: If you want to test attachment extraction, you must also copy the `Media/`, `FallbackImages/`, `FallbackPDFs/`, and `Previews/` folders. Warning: These can be gigabytes in size).*
    * Copy them and paste them into a local `test-db` folder inside your workspace.
 
 2. **Run the exporter:**

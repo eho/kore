@@ -1,4 +1,4 @@
-import { gunzipSync } from 'node:zlib';
+import { gunzipSync, inflateSync } from 'node:zlib';
 import protobuf from 'protobufjs';
 import { descriptor } from './descriptor';
 import type { ANDocument, ANMergableDataProto } from './types';
@@ -15,7 +15,8 @@ const MergableDataProtoType = root.lookupType('ciofecaforensics.MergableDataProt
  */
 export function decodeNoteData(hexdata: string): ANDocument {
   const buffer = Buffer.from(hexdata, 'hex');
-  const decompressed = gunzipSync(buffer);
+  const isZlib = buffer[0] === 0x78;
+  const decompressed = isZlib ? inflateSync(buffer) : gunzipSync(buffer);
   const message = DocumentType.decode(decompressed);
   return DocumentType.toObject(message, {
     longs: Number,
@@ -30,7 +31,8 @@ export function decodeNoteData(hexdata: string): ANDocument {
  */
 export function decodeMergeableData(hexdata: string): ANMergableDataProto {
   const buffer = Buffer.from(hexdata, 'hex');
-  const decompressed = gunzipSync(buffer);
+  const isZlib = buffer[0] === 0x78;
+  const decompressed = isZlib ? inflateSync(buffer) : gunzipSync(buffer);
   const message = MergableDataProtoType.decode(decompressed);
   return MergableDataProtoType.toObject(message, {
     longs: Number,

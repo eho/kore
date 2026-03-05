@@ -33,6 +33,7 @@ import {
  * @param entityKeys - Entity type lookup map.
  * @param accountPath - Absolute path to the account's data directory.
  * @param exportDest - Absolute path to the export destination directory.
+ * @param dbDir - Optional override for the Apple Notes database directory.
  * @returns Markdown string with image links for each scan page.
  */
 export async function convertScanToMarkdown(
@@ -41,6 +42,7 @@ export async function convertScanToMarkdown(
   entityKeys: EntityKeys,
   accountPath: string,
   exportDest: string,
+  dbDir?: string
 ): Promise<string> {
   const objects = proto.mergableDataObject.mergeableDataObjectData.mergeableDataObjectEntry;
   const links: string[] = [];
@@ -78,6 +80,7 @@ export async function convertScanToMarkdown(
       accountPath,
       exportDest,
       `Scan Page.jpg`,
+      dbDir
     );
 
     if (scanLink) {
@@ -108,6 +111,7 @@ export async function convertScanToMarkdown(
           accountPath,
           exportDest,
           mediaRow.ZFILENAME,
+          dbDir
         );
 
         if (mediaLink) {

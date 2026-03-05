@@ -44,6 +44,8 @@ export type AttachmentResolverOptions = {
   resolveNoteLink?: (uuid: string) => string | undefined;
   /** Whether to include handwriting OCR summaries. */
   includeHandwriting?: boolean;
+  /** Optional override for the Apple Notes database directory */
+  dbDir?: string;
 };
 
 /**
@@ -129,7 +131,7 @@ async function resolveAttachment(
       );
       if (!row?.ZHEXDATA) return '**(empty scan)**';
       const proto = decodeMergeableData(row.ZHEXDATA);
-      return convertScanToMarkdown(proto, db, entityKeys, accountPath, exportDest);
+      return convertScanToMarkdown(proto, db, entityKeys, accountPath, exportDest, opts.dbDir);
     }
 
     case ANAttachmentUTI.ModifiedScan: {
@@ -144,7 +146,7 @@ async function resolveAttachment(
       );
       if (!row) return '**(unknown attachment: modified scan)**';
       const sourcePath = buildAttachmentSourcePath(ANAttachmentUTI.ModifiedScan, row);
-      const link = await copyAttachmentFile(sourcePath, accountPath, exportDest, 'Scan.pdf');
+      const link = await copyAttachmentFile(sourcePath, accountPath, exportDest, 'Scan.pdf', opts.dbDir);
       return withHandwriting(link ?? '**(error reading attachment)**', row, includeHandwriting);
     }
 
@@ -163,7 +165,7 @@ async function resolveAttachment(
       if (!row) return '**(unknown attachment: drawing)**';
       const sourcePath = buildAttachmentSourcePath(ANAttachmentUTI.Drawing, row);
       const ext = row.ZFALLBACKIMAGEGENERATION ? 'png' : 'jpg';
-      const link = await copyAttachmentFile(sourcePath, accountPath, exportDest, `Drawing.${ext}`);
+      const link = await copyAttachmentFile(sourcePath, accountPath, exportDest, `Drawing.${ext}`, opts.dbDir);
       return withHandwriting(link ?? '**(error reading attachment)**', row, includeHandwriting);
     }
 
@@ -195,6 +197,7 @@ async function resolveAttachment(
         accountPath,
         exportDest,
         mediaRow.ZFILENAME,
+        opts.dbDir
       );
       return link ?? '**(error reading attachment)**';
     }
@@ -273,8 +276,9 @@ export async function copyAttachmentFile(
   accountPath: string,
   exportDest: string,
   outFilename: string,
+  dbDir?: string,
 ): Promise<string | null> {
-  const binary = getAttachmentBinary(accountPath, sourcePath);
+  const binary = getAttachmentBinary(accountPath, sourcePath, dbDir);
   if (!binary) return null;
 
   // Ensure unique filename in attachments directory
@@ -307,6 +311,7 @@ export async function copyAttachmentFile(
 export function getAttachmentBinary(
   accountPath: string,
   sourcePath: string,
+  dbDir?: string,
 ): Buffer | null {
   const accountFullPath = join(accountPath, sourcePath);
   if (existsSync(accountFullPath)) {
@@ -317,7 +322,7 @@ export function getAttachmentBinary(
     }
   }
 
-  const globalPath = join(homedir(), NOTE_FOLDER_PATH, sourcePath);
+  const globalPath = dbDir ? join(dbDir, sourcePath) : join(homedir(), NOTE_FOLDER_PATH, sourcePath);
   if (existsSync(globalPath)) {
     try {
       return readFileSync(globalPath) as Buffer;

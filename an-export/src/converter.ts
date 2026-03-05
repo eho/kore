@@ -138,61 +138,68 @@ export async function convertNoteToMarkdown(
       // ── Build the formatted text ────────────────────────────────────
       let md = formatInlineText(text, run, resolveNoteLink);
 
-      // ── Paragraph-level formatting ──────────────────────────────────
-      const indent = style?.indentAmount ?? 0;
-      const indentPrefix = '\t'.repeat(indent);
+      const isStartOfLine = lines.length === 0 || lines[lines.length - 1] === '' || isNewlineBoundary;
 
-      // Headings
-      if (styleType === ANStyleType.Title) {
-        md = `# ${md}`;
-      } else if (styleType === ANStyleType.Heading) {
-        md = `## ${md}`;
-      } else if (styleType === ANStyleType.Subheading) {
-        md = `### ${md}`;
-      }
-
-      // Lists
-      if (
-        styleType === ANStyleType.DottedList ||
-        styleType === ANStyleType.DashedList
-      ) {
-        md = `${indentPrefix}- ${md}`;
-      } else if (styleType === ANStyleType.NumberedList) {
-        // Reset counter if indent changed
-        if (indent !== prevIndent) {
-          listCounters[indent] = 0;
-          prevIndent = indent;
-        }
-        listCounters[indent] = (listCounters[indent] ?? 0) + 1;
-        md = `${indentPrefix}${listCounters[indent]}. ${md}`;
-      } else if (styleType === ANStyleType.Checkbox) {
-        const checked = style?.checklist?.done ? 'x' : ' ';
-        md = `${indentPrefix}- [${checked}] ${md}`;
-      }
-
-      // Blockquote
-      if (style?.blockquote) {
-        md = `> ${md}`;
-      }
-
-      // Alignment (non-left)
-      if (style?.alignment) {
-        const alignMap: Record<number, string> = {
-          [ANAlignment.Centre]: 'center',
-          [ANAlignment.Right]: 'right',
-          [ANAlignment.Justify]: 'justify',
-        };
-        const align = alignMap[style.alignment];
-        if (align) {
-          md = `<p style="text-align:${align};margin:0">${md}</p>`;
-        }
-      }
-
-      if (lines.length > 0 && !isNewlineBoundary) {
+      if (!isStartOfLine) {
         // Append to the current line if it's not a new paragraph
         lines[lines.length - 1] += md;
       } else {
-        lines.push(md);
+        // ── Paragraph-level formatting (Only at the start of lines!) ──
+        const indent = style?.indentAmount ?? 0;
+        const indentPrefix = '\t'.repeat(indent);
+
+        // Headings
+        if (styleType === ANStyleType.Title) {
+          md = `# ${md}`;
+        } else if (styleType === ANStyleType.Heading) {
+          md = `## ${md}`;
+        } else if (styleType === ANStyleType.Subheading) {
+          md = `### ${md}`;
+        }
+
+        // Lists
+        if (
+          styleType === ANStyleType.DottedList ||
+          styleType === ANStyleType.DashedList
+        ) {
+          md = `${indentPrefix}- ${md}`;
+        } else if (styleType === ANStyleType.NumberedList) {
+          // Reset counter if indent changed
+          if (indent !== prevIndent) {
+            listCounters[indent] = 0;
+            prevIndent = indent;
+          }
+          listCounters[indent] = (listCounters[indent] ?? 0) + 1;
+          md = `${indentPrefix}${listCounters[indent]}. ${md}`;
+        } else if (styleType === ANStyleType.Checkbox) {
+          const checked = style?.checklist?.done ? 'x' : ' ';
+          md = `${indentPrefix}- [${checked}] ${md}`;
+        }
+
+        // Blockquote
+        if (style?.blockquote) {
+          md = `> ${md}`;
+        }
+
+        // Alignment (non-left)
+        if (style?.alignment) {
+          const alignMap: Record<number, string> = {
+            [ANAlignment.Centre]: 'center',
+            [ANAlignment.Right]: 'right',
+            [ANAlignment.Justify]: 'justify',
+          };
+          const align = alignMap[style.alignment];
+          if (align) {
+            md = `<p style="text-align:${align};margin:0">${md}</p>`;
+          }
+        }
+
+        // Push or overwrite empty line
+        if (lines.length > 0 && lines[lines.length - 1] === '') {
+          lines[lines.length - 1] = md;
+        } else {
+          lines.push(md);
+        }
       }
     }
   }

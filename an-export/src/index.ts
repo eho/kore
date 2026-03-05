@@ -143,6 +143,7 @@ async function exportSingleNote(
     exportDest,
     resolveNoteLink,
     includeHandwriting: options.includeHandwriting,
+    dbDir: options.dbDir,
   });
 
   // Convert to Markdown
@@ -181,7 +182,7 @@ async function runExportPipeline(
   const { db, entityKeys, close } = openNotesDatabase(options.dbDir);
 
   try {
-    const accounts = resolveAccounts(db, entityKeys);
+    const accounts = resolveAccounts(db, entityKeys, options.dbDir);
     const folderMap = resolveFolders(db, entityKeys, accounts, dest, {
       includeTrashed: options.includeTrashed,
     });
