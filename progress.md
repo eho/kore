@@ -151,3 +151,29 @@
   - `buildAttachmentManifestEntry`: relative attachment path.
   - `applyDeletions`: file removal + manifest cleanup, already-deleted files, skip non-deleted, attachment deletion, multiple deletions.
 - All 159 tests pass (`bun test`). Typecheck passes for new code.
+
+## US-009: CLI Implementation ✅
+**Date:** 2026-03-05
+
+**Completed:**
+- Replaced placeholder `exportNotes()`/`syncNotes()` in `an-export/src/index.ts` with real orchestration logic:
+  - Shared `runExportPipeline()` function handles both export (all notes) and sync (incremental) modes.
+  - Opens Apple Notes DB via `openNotesDatabase()`, resolves accounts and folders, queries all notes.
+  - For each note: decodes protobuf, resolves attachments (with account path fallback), converts to Markdown, writes `.md` file.
+  - Password-protected notes are skipped with a warning via `onProgress` callback.
+  - Saves sync manifest (`an-export-manifest.json`) on every run.
+  - Sync mode: loads existing manifest, computes sync decisions (new/updated/unchanged/deleted), only processes changed notes, applies deletions for removed notes.
+  - Pre-builds `accountByPk` Map for efficient account resolution per note.
+- Updated `an-export/src/cli.ts` with:
+  - `onProgress` callback passed to `exportNotes`/`syncNotes` for real-time progress output.
+  - Failed notes listing printed to stderr on completion.
+- Created `an-export/tests/us-009.test.ts` — 24 integration tests covering:
+  - CLI argument parsing: export/sync command detection, --dest parsing, missing/invalid commands.
+  - Export pipeline: real SQLite DB with schema → accounts → folders → notes query, manifest creation/saving.
+  - Password-protected note detection and skip logic.
+  - Sync decisions: new, updated, unchanged, deleted note classification.
+  - Full sync cycle: export → modify DB → sync → verify correct new/updated/deleted counts.
+  - Database-to-folder integration: nested hierarchy, default folder mapping, smart/trash folder filtering.
+  - Progress callback behavior: skip messages, export counts, deletion messages.
+  - Module exports: `exportNotes`, `syncNotes`, `decodeTime`, `sanitizeFileName`.
+- All 183 tests pass (`bun test`). Typecheck passes for new code.

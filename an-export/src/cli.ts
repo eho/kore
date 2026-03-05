@@ -25,15 +25,35 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
+  const onProgress = (message: string) => {
+    console.log(message);
+  };
+
   try {
     if (command === 'export') {
       console.log(`Exporting Apple Notes to: ${dest}`);
-      const result = await exportNotes({ dest });
-      console.log(`Done. Exported: ${result.exported}, Skipped: ${result.skipped}, Failed: ${result.failed.length}`);
+      const result = await exportNotes({ dest }, onProgress);
+      console.log(
+        `Done. Exported: ${result.exported}, Skipped: ${result.skipped}, Failed: ${result.failed.length}`,
+      );
+      if (result.failed.length > 0) {
+        console.error('Failed notes:');
+        for (const f of result.failed) {
+          console.error(`  - ${f}`);
+        }
+      }
     } else {
       console.log(`Syncing Apple Notes to: ${dest}`);
-      const result = await syncNotes({ dest });
-      console.log(`Done. Exported: ${result.exported}, Skipped: ${result.skipped}, Deleted: ${result.deleted}, Failed: ${result.failed.length}`);
+      const result = await syncNotes({ dest }, onProgress);
+      console.log(
+        `Done. Exported: ${result.exported}, Skipped: ${result.skipped}, Deleted: ${result.deleted}, Failed: ${result.failed.length}`,
+      );
+      if (result.failed.length > 0) {
+        console.error('Failed notes:');
+        for (const f of result.failed) {
+          console.error(`  - ${f}`);
+        }
+      }
     }
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
