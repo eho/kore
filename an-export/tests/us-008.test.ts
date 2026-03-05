@@ -38,6 +38,7 @@ function makeNoteRow(overrides: Partial<NoteRow> = {}): NoteRow {
     ZMODIFICATIONDATE1: 700000000,
     ZISPASSWORDPROTECTED: null,
     ZHEXDATA: 'deadbeef',
+    ZIDENTIFIER: 'mock-uuid-123',
     ...overrides,
   };
 }
@@ -304,6 +305,7 @@ describe('buildNoteManifestEntry', () => {
 
     expect(entry.path).toBe('Work/Meeting.md');
     expect(entry.mtime).toBe(decodeTime(700000000));
+    expect(entry.identifier).toBe('mock-uuid-123');
   });
 
   test('handles file at export root', () => {

@@ -209,7 +209,7 @@ export function buildNoteManifestEntry(
   return {
     path: relative(exportDest, filePath),
     mtime: decodeTime(noteRow.ZMODIFICATIONDATE1),
-    identifier: '', // Will be filled from ZIDENTIFIER if available on the row
+    identifier: noteRow.ZIDENTIFIER ?? '',
   };
 }
 

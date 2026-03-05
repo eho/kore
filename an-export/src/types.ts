@@ -40,6 +40,7 @@ export type NoteRow = {
   ZMODIFICATIONDATE1: number | null;
   ZISPASSWORDPROTECTED: number | null;
   ZHEXDATA: string;
+  ZIDENTIFIER: string | null;
 };
 
 export type AttachmentRow = {
