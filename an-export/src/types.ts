@@ -319,11 +319,27 @@ export type ExportOptions = {
   includeTrashed?: boolean;
   /** Whether to omit the first line (used as title / filename) from the note body */
   omitFirstLine?: boolean;
-  /** Whether to include handwriting OCR text for drawings */
+  /** Include handwriting summary text (fallback) */
   includeHandwriting?: boolean;
+  /** Optional override for the Apple Notes database directory (useful for testing) */
+  dbDir?: string;
 };
 
-export type SyncOptions = ExportOptions;
+/**
+ * Options for syncing Apple Notes.
+ */
+export interface SyncOptions {
+  /** The destination directory for Markdown files and attachments */
+  dest: string;
+  /** Whether to include the "Recently Deleted" notes */
+  includeTrashed?: boolean;
+  /** Whether to omit the first line (the title) from the markdown body */
+  omitFirstLine?: boolean;
+  /** Include handwriting summary text (fallback) */
+  includeHandwriting?: boolean;
+  /** Optional override for the Apple Notes database directory (useful for testing) */
+  dbDir?: string;
+};
 
 // ─── Progress Reporting ───────────────────────────────────────────────────────
 

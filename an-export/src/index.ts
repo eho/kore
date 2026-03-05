@@ -178,7 +178,7 @@ async function runExportPipeline(
   const { dest } = options;
   mkdirSync(dest, { recursive: true });
 
-  const { db, entityKeys, close } = openNotesDatabase();
+  const { db, entityKeys, close } = openNotesDatabase(options.dbDir);
 
   try {
     const accounts = resolveAccounts(db, entityKeys);

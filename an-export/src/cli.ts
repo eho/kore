@@ -13,6 +13,8 @@ const args = process.argv.slice(2);
 const command = args[0];
 const destIndex = args.indexOf('--dest');
 const dest = destIndex !== -1 ? args[destIndex + 1] : undefined;
+const dbDirIndex = args.indexOf('--db-dir');
+const dbDir = dbDirIndex !== -1 ? args[dbDirIndex + 1] : undefined;
 
 async function main(): Promise<void> {
   if (!command || (command !== 'export' && command !== 'sync')) {
@@ -32,7 +34,7 @@ async function main(): Promise<void> {
   try {
     if (command === 'export') {
       console.log(`Exporting Apple Notes to: ${dest}`);
-      const result = await exportNotes({ dest }, onProgress);
+      const result = await exportNotes({ dest, dbDir }, onProgress);
       console.log(
         `Done. Exported: ${result.exported}, Skipped: ${result.skipped}, Failed: ${result.failed.length}`,
       );
@@ -44,7 +46,7 @@ async function main(): Promise<void> {
       }
     } else {
       console.log(`Syncing Apple Notes to: ${dest}`);
-      const result = await syncNotes({ dest }, onProgress);
+      const result = await syncNotes({ dest, dbDir }, onProgress);
       console.log(
         `Done. Exported: ${result.exported}, Skipped: ${result.skipped}, Deleted: ${result.deleted}, Failed: ${result.failed.length}`,
       );

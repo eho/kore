@@ -9,11 +9,15 @@
 import { describe, test, expect, beforeEach, afterEach, mock, spyOn } from 'bun:test';
 import { mkdirSync, writeFileSync, readFileSync, existsSync, rmSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
+import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { randomUUID } from 'node:crypto';
 import { Database } from 'bun:sqlite';
 import type { SyncManifest, NoteRow, ExportResult } from '../src/types.ts';
 import { MANIFEST_FILENAME } from '../src/sync.ts';
+import { gzipSync } from 'node:zlib';
+import protobuf from 'protobufjs';
+import { descriptor } from '../src/descriptor.ts';
 
 // ─── Test DB Helpers ─────────────────────────────────────────────────────────
 
@@ -109,9 +113,7 @@ function createTestDatabase(opts: {
   for (const acc of opts.accounts ?? []) {
     db.run(
       `INSERT INTO ZICCLOUDSYNCINGOBJECT (Z_PK, Z_ENT, ZNAME, ZIDENTIFIER) VALUES (?, 1, ?, ?)`,
-      acc.zpk,
-      acc.name,
-      acc.identifier,
+      [acc.zpk, acc.name, acc.identifier],
     );
   }
 
@@ -119,12 +121,7 @@ function createTestDatabase(opts: {
   for (const fld of opts.folders ?? []) {
     db.run(
       `INSERT INTO ZICCLOUDSYNCINGOBJECT (Z_PK, Z_ENT, ZTITLE2, ZPARENT, ZIDENTIFIER, ZFOLDERTYPE, ZOWNER) VALUES (?, 2, ?, ?, ?, ?, ?)`,
-      fld.zpk,
-      fld.title,
-      fld.parent,
-      fld.identifier,
-      fld.folderType,
-      fld.owner,
+      [fld.zpk, fld.title, fld.parent, fld.identifier, fld.folderType, fld.owner],
     );
   }
 
@@ -132,18 +129,12 @@ function createTestDatabase(opts: {
   for (const note of opts.notes ?? []) {
     db.run(
       `INSERT INTO ZICCLOUDSYNCINGOBJECT (Z_PK, Z_ENT, ZTITLE1, ZFOLDER, ZCREATIONDATE1, ZMODIFICATIONDATE1, ZISPASSWORDPROTECTED, ZIDENTIFIER) VALUES (?, 3, ?, ?, ?, ?, ?, ?)`,
-      note.zpk,
-      note.title,
-      note.folder,
-      note.creationDate,
-      note.modificationDate,
-      note.passwordProtected,
-      note.identifier,
+      [note.zpk, note.title, note.folder, note.creationDate, note.modificationDate, note.passwordProtected, note.identifier],
     );
 
     // Convert hex string to buffer for ZDATA
     const dataBuffer = Buffer.from(note.hexData, 'hex');
-    db.run(`INSERT INTO ZICNOTEDATA (Z_PK, ZNOTE, ZDATA) VALUES (?, ?, ?)`, note.zpk, note.zpk, dataBuffer);
+    db.run(`INSERT INTO ZICNOTEDATA (Z_PK, ZNOTE, ZDATA) VALUES (?, ?, ?)`, [note.zpk, note.zpk, dataBuffer]);
   }
 
   return { dbDir, db };
@@ -818,5 +809,84 @@ describe('database-to-folder integration', () => {
     expect(folderMap.has(202)).toBe(false); // Smart filtered
 
     notesDb.close();
+  });
+});
+
+// ─── Actual CLI Execution Tests ──────────────────────────────────────────────
+
+describe('CLI Script Execution', () => {
+  test('CLI executes export and sync commands end-to-end', () => {
+    const exportDest = join(testDir, 'cli-export-output');
+    
+    // Generate valid protobuf hex data for a note
+    const root = protobuf.Root.fromJSON(descriptor);
+    const DocumentType = root.lookupType('ciofecaforensics.Document');
+    const msg = DocumentType.create({ version: 1, note: { noteText: 'CLI Note Text' } });
+    const validHexData = gzipSync(DocumentType.encode(msg).finish()).toString('hex');
+
+    // Create test DB
+    const { dbDir, db: testDb } = createTestDatabase({
+      accounts: [{ zpk: 100, name: 'iCloud', identifier: 'icloud-uuid' }],
+      folders: [
+        {
+          zpk: 200,
+          title: 'Notes',
+          parent: null,
+          identifier: 'DefaultFolder-icloud',
+          folderType: 0,
+          owner: 100,
+        },
+      ],
+      notes: [
+        {
+          zpk: 1,
+          title: 'CLI Note',
+          folder: 200,
+          creationDate: 700000000,
+          modificationDate: 700000000,
+          passwordProtected: null,
+          identifier: 'note-cli-1',
+          hexData: validHexData,
+        },
+      ],
+    });
+    testDb.close();
+
+    const cliPath = join(import.meta.dir, '..', 'src', 'cli.ts');
+
+    // Run EXPORT
+    const exportRes = spawnSync('bun', [
+      'run',
+      cliPath,
+      'export',
+      '--dest',
+      exportDest,
+      '--db-dir',
+      dbDir,
+    ], { encoding: 'utf-8' });
+
+    expect(exportRes.status).toBe(0);
+    expect(exportRes.stdout).toContain('Exporting Apple Notes to:');
+    expect(exportRes.stdout).toContain('Exported 1/1: CLI Note');
+    expect(exportRes.stdout).toContain('Done.');
+    
+    // Verify file created
+    expect(existsSync(join(exportDest, 'CLI Note.md'))).toBe(true);
+    expect(existsSync(join(exportDest, MANIFEST_FILENAME))).toBe(true);
+
+    // Run SYNC
+    const syncRes = spawnSync('bun', [
+      'run',
+      cliPath,
+      'sync',
+      '--dest',
+      exportDest,
+      '--db-dir',
+      dbDir,
+    ], { encoding: 'utf-8' });
+
+    expect(syncRes.status).toBe(0);
+    expect(syncRes.stdout).toContain('Syncing Apple Notes to:');
+    expect(syncRes.stdout).toContain('Done. Exported: 0, Skipped: 1');
   });
 });
