@@ -64,6 +64,11 @@ Done. Exported: 199, Skipped: 1, Failed: 0
   bun run typecheck
   ```
 
+## Troubleshooting
+
+- **`EPERM: operation not permitted`**: You must manually grant your terminal (e.g. VS Code, iTerm, Terminal) **Full Disk Access** in `System Settings → Privacy & Security` before running this script, or macOS will block it from reading the Notes directory.
+- **`unable to open database file` during manual testing**: If you bypass restrictions by manually copying `NoteStore.sqlite` to your workspace, **you must copy all three files** (`NoteStore.sqlite`, `NoteStore.sqlite-wal`, and `NoteStore.sqlite-shm`). Apple Notes uses WAL journaling mode. Copying only the `.sqlite` file results in a corrupted, un-openable state for `bun:sqlite`.
+
 ## How It Works
 
 For a deep dive into how `an-export` safely parses the SQLite schema, decodes CRDT/Protobuf note formats, dynamically links attachments, and handles incremental sync, please refer to the [Technical Design Document](docs/TECHNICAL_DESIGN.md).
