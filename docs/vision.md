@@ -44,3 +44,33 @@ To ensure this vision is technically actionable and grounded, the following cons
 * **Dual-Channel Interface (Pull vs. Push):** To realize both "Agentic Retrieval" and "Proactive Nudges," the system requires two distinct output channels:
     * **The Pull Channel (Reactive/Conversational):** The core memory engine will be exposed as a plugin or tool using the Model Context Protocol (MCP). This allows existing AI assistants (like Claude, Cursor, or ChatGPT) to seamlessly query the memory bank during your workflow without requiring a custom chat UI.
     * **The Push Channel (Proactive):** Because MCP is primarily a reactive client-server model, proactive location or time-based nudges will be handled by a separate notification worker. When a trigger fires (e.g., GPS proximity to a saved cafe), this worker pushes an alert directly to the user via an OS-level integration, lightweight companion app, or messaging bot (like Telegram).
+
+
+## 6. End-to-End User Interaction Scenarios
+
+To illustrate the system in action, here is how the architecture handles the journey from passive ingestion to proactive or agentic retrieval in everyday life.
+
+### Scenario A: The Proactive Location Nudge (The Push Channel)
+
+**The Ingestion:** Six months ago, while casually scrolling through X on the couch, you stumble across a highly recommended, hole-in-the-wall ramen shop in Tokyo. You hit "Bookmark" and immediately forget about it. Behind the scenes, the ingestion pipeline grabs the tweet, uses an LLM to extract the restaurant name and GPS coordinates, and saves it to your vector database with the tag `[Travel: Food: Tokyo]`.
+**The Trigger:** Fast forward to your holiday. You are walking around Shibuya, hungry, and haven't made a plan.
+**The Interaction:** As you walk within a 500-meter radius of the shop, your phone’s location services trigger the backend's notification worker. You receive a silent push notification via Telegram or a companion app:
+
+> *"📍 Proximity Alert: You are 5 minutes away from 'Mutekiya Ramen'. You bookmarked a review calling it a 'must-try' 6 months ago. [Tap to see the original post or get directions]."*
+
+### Scenario B: The Agentic Anniversary Planner (The Pull Channel)
+
+**The Ingestion:** Over the course of the year, you saved an article in Safari about "Sydney's Best Degustation Menus," and later jotted down a specific wine bar recommendation in an Apple Note.
+**The Trigger:** A week before your anniversary, you open your preferred AI assistant (e.g., Claude or Gemini) and type: *"I need to book a nice dinner in Sydney for my anniversary next week. Any ideas?"*
+**The Interaction:** You do not need to ask the AI to search your memory. The AI's routing agent recognizes the intent of the prompt, autonomously queries your memory backend via the Model Context Protocol (MCP), and seamlessly weaves the retrieved data into its response:
+
+> *"I can definitely help you plan that. I see from your saved notes that you previously bookmarked a degustation menu at 'Sixpenny', and saved an article highlighting a great wine bar in Surry Hills. Would you like me to check table availability for Sixpenny, or should we look at fresh options?"*
+
+### Scenario C: The Seamless Hobby Resumption (Contextual Pull)
+
+**The Ingestion:** You save a lengthy Reddit thread to Pocket about the "Optimal 30-Day Framework for Learning Japanese" but get busy at work and never actually start. The system ingests the text, tags it `[Hobby: Language: Japanese]`, and summarizes the core steps.
+**The Trigger:** Three months later, you finally have a free weekend. You sit down at your computer, open your AI chat, and type: *"I finally have time to start learning Japanese. Where should I begin?"*
+**The Interaction:** The AI retrieves your forgotten framework instantly:
+
+> *"Great! Instead of starting from scratch, let's use that Reddit framework you saved a few months ago. It recommended starting specifically with the 'Tofugu' guide for Hiragana before touching any vocabulary. Should I break down Week 1 of that plan for you right now?"*
+
