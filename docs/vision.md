@@ -1,4 +1,8 @@
-# Vision Document: The Context-Aware Personal Memory Engine
+# Vision Document: Kore 
+
+*Kore (n.)*
+1. **Greek roots:** Meaning "the core" or "the heart," tying into the mythological themes of the Cronus system, memory, and cycles.
+2. **Japanese (これ - "this"):** A literal pointer. In the context of an AI agent, Kore transforms the system from a vague "database" into an active participant providing specific, localized context, effectively saying, "Here, use *this* right now."
 
 ## 1. The Core Problem: "The Recall Disconnect"
 

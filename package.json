@@ -1,5 +1,5 @@
 {
-  "name": "@memory-bank/root",
+  "name": "@kore/root",
   "private": true,
   "scripts": {
     "test": "bun test --recursive",

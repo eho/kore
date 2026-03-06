@@ -184,12 +184,12 @@
 **Completed:**
 - Refactored the project into a **Bun Monorepo** structure.
 - Created `packages/` and `apps/` directories.
-- Moved `an-export` into `packages/an-export/` and renamed it to `@memory-bank/an-export`.
+- Moved `an-export` into `packages/an-export/` and renamed it to `@kore/an-export`.
 - Created a root `package.json` with Bun workspace configuration (`./packages/*`, `./apps/*`).
 - Created a root `tsconfig.json` with shared base settings and path aliases.
-- Created a root `README.md` explaining the Memory Bank vision and monorepo structure.
+- Created a root `README.md` explaining the Kore vision and monorepo structure.
 - Updated `packages/an-export/README.md` to align with the new workspace-based workflow.
 - Updated the root `.gitignore` to handle hoisted `node_modules` and workspace-specific exclusions.
-- Updated `memory-bank.code-workspace` for better multi-root navigation in VS Code.
-- Verified that `@memory-bank/an-export` tests pass when executed from the monorepo root.
+- Updated `kore.code-workspace` for better multi-root navigation in VS Code.
+- Verified that `@kore/an-export` tests pass when executed from the monorepo root.
 - Committed: `refactor: transition to bun monorepo structure`

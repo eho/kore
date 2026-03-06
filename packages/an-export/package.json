@@ -1,5 +1,5 @@
 {
-  "name": "@memory-bank/an-export",
+  "name": "@kore/an-export",
   "module": "src/index.ts",
   "type": "module",
   "private": true,

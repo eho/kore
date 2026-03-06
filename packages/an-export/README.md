@@ -1,6 +1,6 @@
-# Apple Notes Exporter (`@memory-bank/an-export`)
+# Apple Notes Exporter (`@kore/an-export`)
 
-A fast, robust, and non-destructive tool to export your Apple Notes to standard Markdown (`.md`) files. This is a core package within the `memory-bank` monorepo.
+A fast, robust, and non-destructive tool to export your Apple Notes to standard Markdown (`.md`) files. This is a core package within the `kore` monorepo.
 
 ## Features
 
@@ -19,12 +19,12 @@ A fast, robust, and non-destructive tool to export your Apple Notes to standard 
 
 ## Installation & Setup
 
-This package is part of the `memory-bank` monorepo.
+This package is part of the `kore` monorepo.
 
 1. **Clone the monorepo:**
    ```bash
-   git clone <your-repo-url>/memory-bank
-   cd memory-bank
+   git clone <your-repo-url>/kore
+   cd kore
    ```
 
 2. **Install all dependencies from the root:**
@@ -40,10 +40,10 @@ You can run the exporter from the root of the monorepo or from within this packa
 
 ```bash
 # Full Export
-bun run --filter @memory-bank/an-export start export --dest ~/Desktop/MyNotesExport
+bun run --filter @kore/an-export start export --dest ~/Desktop/MyNotesExport
 
 # Incremental Sync
-bun run --filter @memory-bank/an-export start sync --dest ~/Desktop/MyNotesExport
+bun run --filter @kore/an-export start sync --dest ~/Desktop/MyNotesExport
 ```
 
 ### Running from Package Directory
@@ -61,7 +61,7 @@ bun run start export --dest ~/Desktop/MyNotesExport
   ```
 - **Type Checking (from root):**
   ```bash
-  bun run --filter @memory-bank/an-export typecheck
+  bun run --filter @kore/an-export typecheck
   ```
 
 ## Local Testing & macOS Permissions
@@ -81,7 +81,7 @@ macOS strictly protects the Apple Notes database behind its Transparency, Consen
 2. **Run the exporter:**
    Use the `--db-dir` flag to point the CLI at your copied database folder:
    ```bash
-   bun run --filter @memory-bank/an-export start export --db-dir packages/an-export/test-db --dest ./my-export
+   bun run --filter @kore/an-export start export --db-dir packages/an-export/test-db --dest ./my-export
    ```
 
 ## How It Works

@@ -12,7 +12,7 @@
       },
     },
     "packages/an-export": {
-      "name": "@memory-bank/an-export",
+      "name": "@kore/an-export",
       "dependencies": {
         "protobufjs": "^8.0.0",
       },
@@ -26,7 +26,7 @@
     },
   },
   "packages": {
-    "@memory-bank/an-export": ["@memory-bank/an-export@workspace:packages/an-export"],
+    "@kore/an-export": ["@kore/an-export@workspace:packages/an-export"],
 
     "@protobufjs/aspromise": ["@protobufjs/aspromise@1.1.2", "", {}, "sha512-j+gKExEuLmKwvz3OgROXtrJ2UG2x8Ch2YZUxahh+s1F2HZ+wAceUNLkvy6zKCPVRkU++ZWQrdxsUeQXmcg4uoQ=="],
 
