@@ -52,19 +52,37 @@ The `always-on-memory-agent` runs a `ConsolidateAgent` on a timer (e.g., every 3
 
 Because it does this *in the background*, the connections are pre-computed. When the user queries the agent, the agent doesn't have to reason across 40 disparate notes; it reads the pre-computed "Insight" that linked them together weeks ago.
 
-## 4. Applying Consolidation to Kore
+## 4. Applying Consolidation to Kore via Plugins
 
-Kore can dramatically improve its spatial/graph weakness by adopting the "Consolidation" loop without abandoning its [.md](file:///Users/eho/dev/kore/docs/vision.md) + QMD architecture.
+Kore can dramatically improve its spatial/graph weakness by adopting the "Consolidation" loop. With Kore's new **Extensible Plugin Architecture**, this loop can be implemented elegantly without bloating the Core Processing Engine.
 
-**Proposed Kore Consolidation Workflow:**
-1.  **The Flag:** When the Bun ingestion worker creates a new [.md](file:///Users/eho/dev/kore/docs/vision.md) file, it adds a frontmatter tag: `consolidated: false`.
-2.  **The Background Worker (Downtime):** Nightly, or during idle periods, a Bun worker sweeps for all `consolidated: false` files.
-3.  **The Synthesis:** The worker queries QMD for documents semantically similar to the un-consolidated files. It passes the cluster of files to an LLM to generate new, cross-cutting insights.
-4.  **The Output:** Instead of modifying a relational database, the worker generates a **new** [.md](file:///Users/eho/dev/kore/docs/vision.md) file in a dedicated `/insights/` directory (e.g., `Insight: Evolving backend framework preferences.md`).
-5.  **The Update:** The worker marks the source files as `consolidated: true` and runs `qmd update` to index the new Insight file.
+### The Proposed Plugin Pipeline
+
+1.  **The Unconsolidated State:** When the core ingestion worker creates a new `.md` file, it adds a flag to the frontmatter: `consolidated: false`.
+2.  **The Background Sweep:** A specialized plugin (e.g., `kore-plugin-synthesis`) runs on a background cron schedule. It sweeps the file system for any un-consolidated files.
+
+From here, two different types of Consolidation Plugins could process the memory:
+
+#### Plugin Type A: The "Insight" Generator (File-System Native)
+This plugin acts exactly like the Always-On Memory Agent.
+*   **Action:** It takes the un-consolidated file and asks QMD for 5-10 semantically related historical files.
+*   **Synthesis:** It feeds the cluster to a reasoning LLM to find cross-cutting connections, contradictions, or evolving themes.
+*   **Output:** It generates a *new* `.md` file in a dedicated `~/kore-data/insights/` folder (e.g., `Insight: Evolving backend framework preferences.md`).
+*   **Update:** It marks the source files as `consolidated: true` and triggers a `qmd update`.
+*   **How the Agent uses it:** The AI agent simply queries QMD. Because the "Insight" file is pure Markdown, it gets indexed. When the agent asks a complex, multi-hop question, QMD effortlessly returns the pre-computed Insight file, solving the limitation of vector similarity.
+
+#### Plugin Type B: The Knowledge Graph Builder (MCP Native)
+For users who require strict relationship mapping (Entities and Nodes) rather than Markdown narratives.
+*   **Action:** The plugin extracts Names, Organizations, and Concepts from the un-consolidated file.
+*   **Output:** It builds nodes and edges in an isolated graph database (like Neo4j or a specific SQLite table) owned entirely by the plugin.
+*   **Update:** It marks the source files as `consolidated: true`.
+*   **How the Agent uses it:** Because this data is not in a `.md` file, QMD cannot natively index it. Therefore, this plugin must expose its own **Model Context Protocol (MCP) Tool**. 
+    *   The plugin registers a tool like `kore_graph_query(entity="React")`.
+    *   When the user asks Claude a question, Claude sees both QMD's tools (`qmd_deep_search`) and the plugin's tools (`kore_graph_query`). 
+    *   Claude can autonomously choose to invoke the Graph Tool to retrieve structured relationships, and then invoke QMD to pull the raw text of specific files connected to those relationships.
 
 ### Conclusion
 
 The `always-on-memory-agent` validates Kore's decision to extract atomic facts at ingestion, but it exposes a critical gap in Kore's backend: **passive similarity search (QMD) is not a replacement for active memory synthesis.** 
 
-By incorporating a background "Consolidation Loop" that generates interconnected "Insight" Markdown files, Kore can achieve Graph-like reasoning capabilities while maintaining the simplicity and interoperability of its pure File-System + QMD architecture.
+By incorporating a background "Consolidation Plugin" that generates interconnected "Insight" Markdown files (or MCP-accessible Graph databases), Kore can achieve high-order reasoning capabilities while maintaining the simplicity and interoperability of its pure File-System + QMD core architecture.
