@@ -64,7 +64,7 @@ Kore has two foundational pillars that map perfectly to the strengths (and weakn
 
 ## 4. The Proposed Solution: The "Hybrid File-System" Architecture
 
-Instead of choosing one framework, Kore will implement a fused architecture: **using MemU's extraction philosophies to feed QMD's indexing engine, supported by a lightweight Spatial DB.**
+Instead of choosing one framework, Kore will implement a fused architecture: **using MemU's extraction philosophies to feed QMD's pure indexing engine, supported by an Extensible Plugin System for features like Spatial Tracking.**
 
 ### The Workflow
 
@@ -80,12 +80,12 @@ When a scrap of data is saved (e.g., an Apple Note via `an-export`):
 1.  **Index:** The Bun worker triggers `qmd update`. QMD reads the new `.md` files and executes its local embedding and BM25 indexing.
 2.  **Retrieve:** AI Agents connect to Kore via QMD's standard MCP server. Because the files now contain MemU-style pre-extracted atomic facts in the Frontmatter, QMD's Hybrid Search returns hyper-relevant, token-efficient context.
 
-#### Phase 3: The Geographic Push (Spatialite)
-1.  **Store:** During Phase 1, the Bun worker simultaneously writes the extracted Latitude/Longitude and File Path to a local `Spatialite` (SQLite) database.
-2.  **Trigger:** As the user walks their city, their phone pings the Bun/Elysia backend. The backend executes a lightning-fast SQL proximity query (`ST_Distance`) against Spatialite. It avoids invoking QMD entirely. If a match hits, it issues a push notification.
+#### Phase 3: The Geographic Push (via Spatialite Plugin)
+1.  **Extract & Store:** During Phase 1, the `kore-plugin-spatialite` hooks into the LLM extraction pipeline to pull out Latitude/Longitude. When the core `.md` file is saved, the plugin hears the `memory.indexed` event and writes the coordinates to its own isolated `Spatialite` database.
+2.  **Trigger:** As the user walks their city, their phone pings the plugin's API route on the backend. The plugin executes a lightning-fast SQL proximity query (`ST_Distance`) against Spatialite. It avoids invoking QMD entirely. If a match hits, it issues a push notification.
 
 ### Why this is the optimal path:
-*   We eliminate the need to run Postgres + `pgvector`. The stack is purely `File System + SQLite`.
+*   We eliminate the need to run Postgres + `pgvector`. The core stack is purely `File System + QMD`.
 *   We get the unparalleled search capabilities and zero-setup MCP server of QMD.
 *   We get the token-efficiency and proactive extraction of MemU's atomic Memory Items.
-*   We isolate the geographic calculations to a highly-optimized Spatialite layer, ensuring battery-efficient, millisecond push triggers.
+*   Geographic calculations are isolated to an optional Plugin, ensuring the core engine remains focused, while battery-efficient, millisecond push triggers remain possible for those who install it.

@@ -8,15 +8,14 @@ By analyzing where this design breaks down, we can either build mitigations into
 
 ## 1. The "State Synchronization" Problem
 
-**The Weakness:** We are storing the *same* memory across two different query engines.
-1.  The Markdown file indexed by QMD.
-2.  The coordinates and fast-lookup metadata in Spatialite.
+**The Weakness:** Storing the *same* memory across two different query engines (e.g., the `.md` file for QMD and a standalone SQL database for locations).
 
 **The Failure Scenario:**
-If a user asks their AI Agent, *"I didn't actually like Mutekiya Ramen, can you delete that recommendation from my memory?"*, the MCP server `qmd_delete` (if implemented) will delete the `.md` file. However, QMD has no idea the Spatialite database exists. The restaurant's GPS coordinates will remain in Spatialite. Next year, the user will walk past Mutekiya and receive a push notification for a restaurant they explicitly asked to forget.
+If a user asks their AI Agent, *"I didn't actually like Mutekiya Ramen, can you delete that recommendation from my memory?"*, the agent deletes the `.md` file. However, QMD has no idea the Spatialite database exists. The restaurant's GPS coordinates will remain in Spatialite. Next year, the user will walk past Mutekiya and receive a push notification for a restaurant they explicitly asked to forget.
 
-**Mitigation Required:**
-The Kore API Gateway must be the single source of truth for all mutations (Create, Update, Delete). If an AI agent wants to modify a memory, it must call a Kore API endpoint, which then synchronously updates the `.md` file *and* the Spatialite DB, rather than the agent modifying the filesystem directly.
+**The Plugin Mitigation:**
+The Kore API Gateway must be the single source of truth for all mutations (Create, Update, Delete). If an AI agent wants to modify a memory, it must call a Kore API endpoint, which synchronously updates the `.md` file. 
+Crucially, the API Gateway broadcasts `memory.deleted` or `memory.updated` events. The `spatialite` plugin (or any other stateful plugin) listens to these events and instantly deletes its corresponding SQL row, ensuring perfect state synchronization without bloating the Core engine.
 
 ---
 

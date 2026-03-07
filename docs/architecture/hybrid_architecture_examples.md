@@ -22,17 +22,20 @@ Try the tonkotsu, it's their signature.
 Mentioned it's good for solo dining.
 ```
 
-### 2. The Extraction (MemU-Style Distillation)
-The Bun worker intercepts this raw text, recognizes the intent (a saved restaurant recommendation), and passes it to a local/cloud LLM via Vercel AI SDK for MemU-style distillation. 
+### 2. The Extraction (Core + Plugin Hooks)
+The Bun worker intercepts this raw text. The ingestion is split into two phases:
 
-The LLM extracts **Atomic Memory Items**:
-*   **Entity:** Mutekiya Ramen (Ikebukuro, Tokyo, Japan)
-*   **Coordinates:** Lat: `35.7289`, Long: `139.7115`
-*   **Categories:** `[Travel, Food, Restaurant, Japan, Ramen]`
-*   **Key Facts:** "Signature dish is tonkotsu.", "Arrive at opening to avoid 1hr line.", "Good for solo dining."
+1.  **Core Extraction:** The core engine determines the base intent and categories:
+    *   **Categories:** `[Travel, Food, Restaurant, Japan, Ramen]`
+    *   **Key Facts:** "Signature dish is tonkotsu.", "Arrive at opening to avoid 1hr line.", "Good for solo dining."
+
+2.  **Plugin Hook (`kore-plugin-spatialite`):** The Spatial plugin inspects the text, sees geographical markers ("Tokyo", "Ikebukuro", "Mutekiya"), and runs a rapid LLM extraction to inject metadata:
+    *   **Entity:** Mutekiya Ramen (Ikebukuro, Tokyo, Japan)
+    *   **Coordinates:** Lat: `35.7289`, Long: `139.7115`
 
 ### 3. The Output (The Mount Point)
-The Bun worker takes the LLM's output and constructs a standardized Markdown file. It writes this file to the filesystem at `~/kore-data/places/mutekiya_ramen.md`. At the exact same time, it writes the coordinates and file path to the **Spatialite Database**.
+The Bun worker takes the aggregated data and constructs a standardized Markdown file. It writes this file to the filesystem at `~/kore-data/places/mutekiya_ramen.md`. 
+It then broadcasts the `memory.indexed` event. The `spatialite` plugin listens to this event and writes the coordinates and file path to its own isolated **Spatialite Database**.
 
 ```markdown
 ---

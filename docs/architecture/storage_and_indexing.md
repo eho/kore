@@ -28,16 +28,17 @@ Because QMD natively indexes Markdown files, the raw storage layer will simply b
 ### Layer B: QMD SQLite Cache (The Pull Index)
 QMD maintains its own internal SQLite database (`~/.cache/qmd/index.sqlite`) housing the BM25 tokens, vector embeddings, and LLM query caches. Kore does not need to manage this directly; we just interact with it via the QMD CLI or MCP.
 
-### Layer C: The Push/Location Database (SQLite / Spatialite)
+### Layer C: Extensible Plugin Storage (Optional)
 While QMD perfectly handles semantic searching for AI agents, it does not do real-time geographic proximity queries (e.g., "Alert me when I am 500m from this saved restaurant").
-*   For the **Push Channel**, Kore will maintain a secondary, lightweight SQLite database extended with **Spatialite** (or simple Haversine formula functions if preferred).
-*   During ingestion, the LLM metadata extraction worker will write the GPS coordinates to this location database.
-*   The iOS companion app will ping this SQLite DB with the user's current coordinates to trigger push notifications.
+Instead of bloating the core engine, Kore supports isolated plugin storage. 
+*   **The Spatialite Plugin:** For the **Push Channel**, users can install `kore-plugin-spatialite`. This plugin maintains a secondary, lightweight SQLite database.
+*   **Event Hooks:** When the core engine writes a `.md` file, it broadcasts a `memory.indexed` event. The spatial plugin listens, reads the YAML coordinates, and updates its own DB.
+*   **The Push API:** The iOS companion app hits a plugin-specific API route with GPS coordinates to trigger push notifications, completely bypassing the core QMD/File System retrieval logic.
 
 ---
 
 ## 3. Summary of the Architecture Update
 
-1.  **File System First:** All ingestion targets output flat `.md` files to a centralized data folder.
+1.  **File System First:** All ingestion targets output flat `.md` files to a centralized data folder. This is the absolute master source of truth.
 2.  **Pull Channel:** QMD runs as a background service (`qmd mcp --http --daemon`) and handles all agentic memory retrieval instantly via its MCP tools.
-3.  **Push Channel:** A lightweight SQLite/Spatialite table tracks purely the `[FilePath, Latitude, Longitude, EntityName]` for geofence triggering.
+3.  **Push / Metadata Channels:** Optional plugins (like Spatialite) hook into the ingestion pipeline to inject metadata, and listen to file system events to build specialized, secondary indexes for features like geofencing.
