@@ -71,10 +71,11 @@ This PRD outlines the requirements for the initial **MVP (Minimum Viable Product
 - [ ] Add `bun:sqlite` to `apps/core-api`.
 - [ ] Initialize a local SQLite database (`kore-queue.db`) with **WAL mode enabled** for safe concurrent read/write access.
 - [ ] Create a `tasks` table with the schema: `id TEXT PRIMARY KEY, payload TEXT, status TEXT, priority TEXT DEFAULT 'normal', retries INTEGER DEFAULT 0, created_at DATETIME, updated_at DATETIME, error_log TEXT`. Statuses must be: `queued`, `processing`, `completed`, `failed`.
-- [ ] Implement a lightweight Custom Queue Repository with methods: `enqueue(payload, priority?)`, `dequeueAndLock()`, `markCompleted(id)`, `markFailed(id, error_message)`. Use explicit SQLite transactions for safe locking in `dequeueAndLock()`.
+- [ ] Implement a lightweight Custom Queue Repository with methods: `enqueue(payload, priority?)`, `dequeueAndLock()`, `markCompleted(id)`, `markFailed(id, error_message)`, and `cleanupOldTasks(daysToKeep)`. Use explicit SQLite transactions for safe locking in `dequeueAndLock()`.
 - [ ] `dequeueAndLock()` must respect priority ordering: `high` > `normal` > `low`, then FIFO within the same priority.
 - [ ] Implement a retry fallback ensuring `retries` increments on failure, failing the task permanently (status = `failed`) after 3 attempts.
-- [ ] **[Logic/Backend]** Write unit tests for the queue: enqueueing, executing `dequeueAndLock` (simulating concurrent worker pulls safely), priority ordering, and testing the retry increment limit.
+- [ ] Implement a cleanup job triggered periodically (e.g. within the worker loop or via an interval) that calls `cleanupOldTasks(7)` to `DELETE FROM tasks WHERE status IN ('completed', 'failed') AND updated_at < datetime('now', '-7 days')`.
+- [ ] **[Logic/Backend]** Write unit tests for the queue: enqueueing, executing `dequeueAndLock` (simulating concurrent worker pulls safely), priority ordering, testing the retry increment limit, and verifying the `cleanupOldTasks` method accurately removes old records.
 
 ### US-004: Implement Local LLM Extraction Worker
 **Description:** As the extraction engine, I want to use a local Ollama model (via the `packages/llm-extractor` module) to turn unstructured raw text into the structured format without sending user data to the cloud.
