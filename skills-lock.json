@@ -4,7 +4,7 @@
     "prd": {
       "source": "eho/agent-skills",
       "sourceType": "github",
-      "computedHash": "31e54c9d6ad16b26ef0864ef5be4e84862d432610f9919f092b9a73f329a9cf1"
+      "computedHash": "b8192723c05e141aea6753635741f336213f046b9ec0f636447eaa808dcc6bd7"
     },
     "public-repo-explorer": {
       "source": "eho/agent-skills",
@@ -14,7 +14,12 @@
     "user-story-implementer": {
       "source": "eho/agent-skills",
       "sourceType": "github",
-      "computedHash": "80b63cdff4ceeb818aa10789252ebb4e36749acd5a6fd40230793e10c6e3f0dd"
+      "computedHash": "d4ae1c873ec5c0439f8ca5603841381ef43cfe62da3e7d2f9be56fdf8747575e"
+    },
+    "user-story-reviewer": {
+      "source": "eho/agent-skills",
+      "sourceType": "github",
+      "computedHash": "cc25f15259e7466f3232078e7cf33745a54673eaf9728899ce40dc9fcd4edb21"
     }
   }
 }
