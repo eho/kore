@@ -113,7 +113,7 @@ The worker saves `~/kore-data/tech/react_server_components_guide.md`.
 ---
 id: e5f6g7h8
 category: qmd://tech/web-dev/react
-type: article_bookmark
+type: media
 url: https://example.com/react-server-components-guide
 title: The Ultimate Guide to React Server Components
 date_saved: 2026-03-06

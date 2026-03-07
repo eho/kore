@@ -61,6 +61,6 @@ If we shift the Core Engine to Bun/TypeScript, the architecture immediately beco
 2.  **Validation:** All incoming raw data and LLM extraction goals will use **Zod** schemas. Use OpenAI's `response_format` with `zodResponseFormat` to guarantee the LLM outputs perfect MemU-style "Atomic Memory Items".
 3.  **Storage Engine:** `bun:sqlite` connecting to a `spatialite` database for the "Push" channel, while orchestrating `.md` file creation for the QMD "Pull" channel.
 4.  **Queues:** A simple worker pool within Bun fetching from an SQLite task table. This avoids needing a Redis container, keeping the stack maximally simple, local-first, and lightweight.
-5.  **LLM Pipeline:** Using **Vercel AI SDK** with `openai-node` provider (pointing to a fast, cheap model like `gpt-4o-mini` or Anthropic's `claude-3-haiku` for MVP extraction). The local QMD component handles the reranking and embedding natively.
+5.  **LLM Pipeline:** Using **Vercel AI SDK** with `createOpenAI()` provider pointed at a local **Ollama** instance (`http://localhost:11434/v1`) as the default for cost efficiency and privacy. The default model is `qwen2.5:7b`. Cloud providers (OpenAI, Anthropic) can be swapped in via configuration if needed. The local QMD component handles the reranking and embedding natively.
 
 This design unifies Kore under completely strict TypeScript, reducing cognitive overhead and simplifying long-term maintenance.

@@ -15,7 +15,7 @@ These are lightweight, specialized workers responsible for extracting raw data f
 ### 1.2. Core Processing Engine (The Brain)
 The central intelligence layer responsible for cleaning, understanding, and formatting incoming data.
 *   **API Gateway:** A REST API (ElysiaJS) receiving raw unstructured data from collectors.
-*   **Asynchronous Processing Pipeline (The Core Extractor):** Background workers (Bun native queue) that pick up raw data, pass it to an LLM via Vercel AI SDK to extract base structured metadata (Title, Summary, Base Categories).
+*   **Asynchronous Processing Pipeline (The Core Extractor):** Background workers (Bun native queue) that pick up raw data, pass it to a local Ollama LLM via Vercel AI SDK to extract base structured metadata (Title, Summary, Base Categories).
 *   **The Plugin Ingestion Hooks:** An extensible hook system where registered plugins (e.g., `kore-plugin-spatialite`) can run their own specialized extraction logic (using smaller, targeted LLMs or Zod schemas) to inject new "Memory Items" and metadata into the pipeline.
 *   **Formatting:** Saving the fully enriched note as a standardized Markdown file to the file system.
 
@@ -43,7 +43,7 @@ Following the established project constraints (Strict TypeScript, Bun, Docker-fi
 *   **Storage Services:** 
     *   **File System:** For raw markdown files.
     *   **QMD (`@tobilu/qmd`):** For agentic hybrid search (BM25 + Vector + Reranking) running cleanly within the Node/Bun ecosystem.
-*   **LLM Integration:** Vercel AI SDK or official SDKs pointing to Anthropic/OpenAI for base extraction. QMD handles local GGUF embedding via Node LLAMA CPP. Plugins can run their own specialized LLM calls.
+*   **LLM Integration:** **Vercel AI SDK** with `createOpenAI()` provider defaulting to a local **Ollama** instance (`http://localhost:11434/v1`, model `qwen2.5:7b`) for cost-efficient, privacy-first extraction. Cloud providers (OpenAI, Anthropic) can be configured as alternatives. QMD handles local GGUF embedding via Node LLAMA CPP. Plugins can run their own specialized LLM calls.
 *   **Infrastructure:** Docker Compose. A single Bun ecosystem image running the API, background workers, and QMD, minimizing container sprawl.
 
 ---
