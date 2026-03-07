@@ -32,6 +32,7 @@ QMD maintains its own internal SQLite database (`~/.cache/qmd/index.sqlite`) hou
 While QMD perfectly handles semantic searching for AI agents, it does not do real-time geographic proximity queries (e.g., "Alert me when I am 500m from this saved restaurant").
 Instead of bloating the core engine, Kore supports isolated plugin storage. 
 *   **The Spatialite Plugin:** For the **Push Channel**, users can install `kore-plugin-spatialite`. This plugin maintains a secondary, lightweight SQLite database.
+*   **The Synthesis Plugin:** For **Consolidation**, a plugin like `kore-plugin-synthesis` can run scheduled sweeps over un-consolidated `.md` files to generate higher-order insights, solving QMD's graph traversal weaknesses.
 *   **Event Hooks:** When the core engine writes a `.md` file, it broadcasts a `memory.indexed` event. The spatial plugin listens, reads the YAML coordinates, and updates its own DB.
 *   **The Push API:** The iOS companion app hits a plugin-specific API route with GPS coordinates to trigger push notifications, completely bypassing the core QMD/File System retrieval logic.
 

@@ -77,7 +77,7 @@ Following the established project constraints (Strict TypeScript, Bun, Docker-fi
 
 ## 4. Next Steps for Implementation
 
-1.  **Storage Foundation:** Set up the basic directory structure (`~/kore-data/`) and initialize a Spatialite DB via `bun:sqlite`.
+1.  **Storage Foundation:** Set up the basic directory structure (`~/kore-data/`). *(Note: Spatialite DB initialization is handled by the plugin, not core).*
 2.  **QMD Integration:** Verify QMD installation, configure collections pointing to `~/kore-data/`, and start the QMD MCP Server.
 3.  **Core API Foundation:** Boot up the Bun/ElysiaJS service with Zod schemas reflecting the ingestion API.
 4.  **LLM Pipeline Setup:** Integrate the Bun native background worker queue for semantic enrichment, spatial indexing, and `zodResponseFormat` extraction.

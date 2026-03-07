@@ -31,7 +31,7 @@ If we shift the Core Engine to Bun/TypeScript, the architecture immediately beco
 | **Data Validation** | Pydantic | **Zod`** or **TypeBox**. (Integrating seamlessly with Elysia to provide strictly typed APIs and LLM outputs). |
 | **LLM Orchestration** | LangChain / OpenAI SDK | **Vercel AI SDK**, **Zod Structured Outputs**, or native `openai-node`. |
 | **Database Driver** | asyncpg / sqlite3 | **`bun:sqlite`**. Bun has the fastest native SQLite driver available. We can easily load the `mod_spatialite` extension at runtime for geographic queries. |
-| **Background Queue** | Celery / RQ / ARQ | **BullMQ** (Redis) or custom **SQLite-backed queue** (zero-dependency). |
+| **Background Queue** | Celery / RQ / ARQ | **SQLite-backed queue** (Using `bun:sqlite` directly). BullMQ introduces a Redis dependency which breaks the "Local First" zero-dependency philosophy. |
 
 ---
 
@@ -60,6 +60,7 @@ If we shift the Core Engine to Bun/TypeScript, the architecture immediately beco
 1.  **Framework:** The Core Engine will be an **ElysiaJS** server running on Bun.
 2.  **Validation:** All incoming raw data and LLM extraction goals will use **Zod** schemas. Use OpenAI's `response_format` with `zodResponseFormat` to guarantee the LLM outputs perfect MemU-style "Atomic Memory Items".
 3.  **Storage Engine:** `bun:sqlite` connecting to a `spatialite` database for the "Push" channel, while orchestrating `.md` file creation for the QMD "Pull" channel.
-4.  **Queues:** A simple worker pool within Bun fetching from an SQLite task table (to avoid needing a Redis container, keeping the stack maximally simple and "local first"). 
+4.  **Queues:** A simple worker pool within Bun fetching from an SQLite task table. This avoids needing a Redis container, keeping the stack maximally simple, local-first, and lightweight.
+5.  **LLM Pipeline:** Using **Vercel AI SDK** with `openai-node` provider (pointing to a fast, cheap model like `gpt-4o-mini` or Anthropic's `claude-3-haiku` for MVP extraction). The local QMD component handles the reranking and embedding natively.
 
 This design unifies Kore under completely strict TypeScript, reducing cognitive overhead and simplifying long-term maintenance.

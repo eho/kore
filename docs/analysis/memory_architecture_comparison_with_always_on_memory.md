@@ -11,7 +11,7 @@ This document analyzes the design of the `always-on-memory-agent` (built with Go
 
 ### Kore (Hybrid File-System)
 *   **Philosophy:** "Memory as a File System for 24/7 Proactive Agents" combined with "Uncompromising local search for Agentic workflows."
-*   **Storage:** Flat [.md](file:///Users/eho/dev/kore/docs/vision.md) files (with YAML frontmatter) indexed by QMD (Vector Embeddings + BM25), paired with a Spatialite database for geographic coordinates.
+*   **Storage:** Flat `.md` files (with YAML frontmatter) indexed by QMD (Vector Embeddings + BM25), paired with a Spatialite database for geographic coordinates.
 *   **Intelligence:** Distills raw text to atomic "Memory Items" at ingestion (MemU style). Uses local GGUF models (via QMD) for RRF and reranking during retrieval.
 
 ---
@@ -21,7 +21,7 @@ This document analyzes the design of the `always-on-memory-agent` (built with Go
 ### A. Ingestion & Extraction
 Both systems recognize that raw data is messy and token-heavy. They both enforce an **Extraction Phase** at ingestion.
 *   **Always-On Agent:** Uses Gemini to extract a `summary`, `entities` (people, companies), `topics`, and an `importance` score from any multiformat file.
-*   **Kore:** Uses a Bun/TypeScript LLM worker to distill raw text into structured `Memory Items` and `Categories`, injecting them into the [.md](file:///Users/eho/dev/kore/docs/vision.md) frontmatter, while also explicitly extracting GPS coordinates for the Spatialite sidecar.
+*   **Kore:** Uses a Bun/TypeScript LLM worker to distill raw text into structured `Memory Items` and `Categories`, injecting them into the `.md` frontmatter, while also explicitly extracting GPS coordinates for the Spatialite sidecar.
 *   *Verdict:* Functionally identical intents, but Kore's approach is specialized for localized, proactive spatial triggers.
 
 ### B. Retrieval (The "Pull" Channel)
@@ -41,7 +41,7 @@ Both systems recognize that raw data is messy and token-heavy. They both enforce
 The most significant divergence between the two systems is the `always-on-memory-agent`'s **Consolidate** feature, which perfectly addresses one of Kore's documented architectural weaknesses.
 
 ### Kore's Weakness: "Concept Drift & Cross-Referencing Failure"
-As documented in [architecture_weaknesses.md](file:///Users/eho/dev/kore/docs/architecture_weaknesses.md), QMD indexes flat files and does not build a Knowledge Graph. If you ask Kore to synthesize a hypothesis across 40 tangentially related notes saved over five years, QMD relies entirely on vector similarity. If the embedding distance isn't perfectly aligned, QMD misses the connections. 
+As documented in [architecture_weaknesses.md](./architecture_weaknesses.md), QMD indexes flat files and does not build a Knowledge Graph. If you ask Kore to synthesize a hypothesis across 40 tangentially related notes saved over five years, QMD relies entirely on vector similarity. If the embedding distance isn't perfectly aligned, QMD misses the connections. 
 
 ### The Always-On Agent's Solution: The Sleep Cycle
 The `always-on-memory-agent` runs a `ConsolidateAgent` on a timer (e.g., every 30 minutes). Like a human brain during sleep, it:
