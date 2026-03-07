@@ -13,6 +13,9 @@
 		},
 		{
 			"path": "../qmd"
+		},
+		{
+			"path": "../generative-ai"
 		}
 	],
 	"settings": {}
