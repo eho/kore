@@ -81,3 +81,15 @@
 - 12 unit tests in `apps/core-api/src/memory.test.ts` covering: DELETE removes file (200), DELETE unknown id (404), DELETE removes from index, DELETE emits memory.deleted event, PUT updates file (200 with new content verified), PUT unknown id (404), PUT invalid payload (400 VALIDATION_ERROR), PUT emits memory.updated event, PUT updates index with new path on type/title change, MemoryIndex.build() scans .md files from disk, EventDispatcher dispatches to plugins, EventDispatcher handles plugin errors gracefully.
 - All 280 tests pass across 18 files (0 failures).
 - **Review Sign-off:** Reviewed US-006. In-memory `MemoryIndex` avoids O(n) scans per request during CRUD. `DELETE` and `PUT` strictly conform strictly to schemas and dispatch events via `EventDispatcher` accurately. Unit tests successfully exercise all cases perfectly.
+
+## US-007: Implement `packages/llm-extractor` Module — COMPLETED
+- Replaced stub implementation in `packages/llm-extractor/index.ts` with full Vercel AI SDK integration.
+- Installed `ai` (Vercel AI SDK) and `@ai-sdk/openai` as dependencies in `packages/llm-extractor/package.json`.
+- Configured provider using `createOpenAI()` pointed at `$OLLAMA_BASE_URL` (default `http://localhost:11434/v1`). Model read from `$OLLAMA_MODEL` (default `qwen2.5:7b`).
+- Exported `extract(rawText, source)` function using `generateText()` with `Output.object({ schema: MemoryExtractionSchema })` for structured JSON output enforcement.
+- System prompt includes all 7 allowed QMD top-level semantic roots (`qmd://tech/`, `qmd://travel/`, `qmd://health/`, `qmd://finance/`, `qmd://media/`, `qmd://personal/`, `qmd://admin/`) per `data_schema.md` §4.
+- System prompt includes one few-shot example (Mutekiya Ramen) demonstrating expected JSON output shape.
+- Implemented `fallbackParse(text)` function: when `generateText()` with structured output fails, a secondary plain-text `generateText()` call is made, and the response is parsed by extracting JSON via regex and validating against `MemoryExtractionSchema`.
+- Exported `fallbackParse` for direct testing.
+- 19 unit tests in `packages/llm-extractor/index.test.ts` covering: fallbackParse with clean JSON, embedded JSON in text, no JSON found, malformed JSON, missing required fields, invalid enum, empty distilled_items, tags exceeding max, invalid qmd_category prefix, non-kebab-case tags; extract with mocked generateObject (successful extraction, schema validation, invalid enum, non-kebab-case tags, missing qmd:// prefix); fallback parse success/failure scenarios.
+- All 299 tests pass across 19 files (0 failures).

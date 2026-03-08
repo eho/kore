@@ -4,6 +4,8 @@
   "private": true,
   "main": "index.ts",
   "dependencies": {
-    "@kore/shared-types": "workspace:*"
+    "@ai-sdk/openai": "^3.0.41",
+    "@kore/shared-types": "workspace:*",
+    "ai": "^6.0.116"
   }
 }
