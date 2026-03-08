@@ -28,3 +28,14 @@
 - App factory pattern (`createApp(deps)`) enables dependency injection for testing.
 - 16 unit tests covering: health endpoint, qmd_status values, auth rejection (no/wrong token), raw ingest (valid/invalid/priority default), task status (found/not found), structured ingest (file creation, collision handling, type routing, invalid payload, invalid category), data directory creation.
 - **Review Sign-off:** Reviewed US-002. All endpoints functionally correct with 100% test passing. Directory auto-creation via `app.ts/index.ts` verified.
+
+## US-003: Implement SQLite Background Queue — COMPLETED
+- Expanded `QueueRepository` in `apps/core-api/src/queue.ts` with full queue worker support.
+- Implemented `dequeueAndLock()` using explicit SQLite transactions for atomic select+update. Respects priority ordering (`high` > `normal` > `low`), then FIFO within same priority via `created_at ASC`.
+- Implemented `markCompleted(id)` setting status to `completed` with updated timestamp.
+- Implemented `markFailed(id, errorMessage)` with retry logic: increments `retries`, re-queues if under `MAX_RETRIES` (3), permanently sets `failed` status after 3 attempts. Error message stored in `error_log`.
+- Implemented `cleanupOldTasks(daysToKeep)` deleting completed/failed tasks older than N days via `DELETE FROM tasks WHERE status IN ('completed', 'failed') AND updated_at < datetime(...)`.
+- Implemented `recoverStaleTasks()` resetting `processing` tasks with `updated_at` older than 10 minutes back to `queued` (stale task recovery on worker startup).
+- Exported `MAX_RETRIES` (3) and `STALE_TASK_MINUTES` (10) constants.
+- SQLite WAL mode and table schema unchanged from US-002 (already correct per PRD spec).
+- 24 unit tests in `apps/core-api/src/queue.test.ts` covering: enqueue (status, priority, payload serialization), dequeueAndLock (empty queue, status transition, no double-dequeue, priority ordering, FIFO within priority), markCompleted (status + timestamp update), markFailed (re-queue on first/second failure, permanent failure at MAX_RETRIES, failed tasks not re-dequeued), cleanupOldTasks (old completed/failed removed, recent kept, queued/processing untouched), recoverStaleTasks (stale reset, recent untouched, non-processing unaffected), getQueueLength (empty, counts only queued).
