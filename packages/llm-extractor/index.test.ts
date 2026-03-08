@@ -1,7 +1,33 @@
-import { describe, test, expect, mock, beforeEach, afterEach } from "bun:test";
-import { fallbackParse } from "./index";
+import { describe, test, expect, mock, beforeEach } from "bun:test";
 import { MemoryExtractionSchema } from "@kore/shared-types";
 import type { MemoryExtraction } from "@kore/shared-types";
+
+const VALID_EXTRACTION: MemoryExtraction = {
+  title: "Test Memory",
+  distilled_items: ["Fact one.", "Fact two."],
+  qmd_category: "qmd://tech/testing",
+  type: "note",
+  tags: ["testing", "unit-test"],
+};
+
+// ─── Mock AI SDK modules before importing extract ────────────────────
+
+const mockGenerateText = mock<(...args: any[]) => Promise<any>>();
+const mockCreateOpenAI = mock(() => (model: string) => `mock-${model}`);
+
+mock.module("ai", () => ({
+  generateText: mockGenerateText,
+  Output: {
+    object: ({ schema }: any) => ({ type: "object", schema }),
+  },
+}));
+
+mock.module("@ai-sdk/openai", () => ({
+  createOpenAI: mockCreateOpenAI,
+}));
+
+// Import after mocking
+const { extract, fallbackParse } = await import("./index");
 
 // ─── fallbackParse tests ─────────────────────────────────────────────
 
@@ -43,47 +69,32 @@ describe("fallbackParse", () => {
   });
 
   test("throws when JSON doesn't match schema (missing required field)", () => {
-    const invalid = { title: "Test" }; // missing distilled_items, qmd_category, type, tags
+    const invalid = { title: "Test" };
     expect(() => fallbackParse(JSON.stringify(invalid))).toThrow();
   });
 
   test("throws when JSON has invalid enum value", () => {
-    const invalid = {
-      ...validJson,
-      type: "invalid_type",
-    };
+    const invalid = { ...validJson, type: "invalid_type" };
     expect(() => fallbackParse(JSON.stringify(invalid))).toThrow();
   });
 
   test("throws when distilled_items is empty array", () => {
-    const invalid = {
-      ...validJson,
-      distilled_items: [],
-    };
+    const invalid = { ...validJson, distilled_items: [] };
     expect(() => fallbackParse(JSON.stringify(invalid))).toThrow();
   });
 
   test("throws when tags exceed max of 5", () => {
-    const invalid = {
-      ...validJson,
-      tags: ["a", "b", "c", "d", "e", "f"],
-    };
+    const invalid = { ...validJson, tags: ["a", "b", "c", "d", "e", "f"] };
     expect(() => fallbackParse(JSON.stringify(invalid))).toThrow();
   });
 
   test("throws when qmd_category doesn't start with qmd://", () => {
-    const invalid = {
-      ...validJson,
-      qmd_category: "invalid://path",
-    };
+    const invalid = { ...validJson, qmd_category: "invalid://path" };
     expect(() => fallbackParse(JSON.stringify(invalid))).toThrow();
   });
 
   test("throws when tags are not kebab-case", () => {
-    const invalid = {
-      ...validJson,
-      tags: ["Not Kebab Case"],
-    };
+    const invalid = { ...validJson, tags: ["Not Kebab Case"] };
     expect(() => fallbackParse(JSON.stringify(invalid))).toThrow();
   });
 });
@@ -91,113 +102,143 @@ describe("fallbackParse", () => {
 // ─── extract() tests with mocked AI SDK ──────────────────────────────
 
 describe("extract", () => {
-  const VALID_EXTRACTION: MemoryExtraction = {
-    title: "Test Memory",
-    distilled_items: ["Fact one.", "Fact two."],
-    qmd_category: "qmd://tech/testing",
-    type: "note",
-    tags: ["testing", "unit-test"],
-  };
+  beforeEach(() => {
+    mockGenerateText.mockReset();
+    mockCreateOpenAI.mockClear();
+  });
 
-  // We need to mock the ai module before importing extract
-  // Using dynamic imports to control mocking
+  test("returns structured extraction on successful generateText with output", async () => {
+    mockGenerateText.mockResolvedValueOnce({ output: VALID_EXTRACTION });
 
-  test("returns structured extraction on successful generateObject", async () => {
-    // Mock the ai module
-    const mockGenerateObject = mock(() =>
-      Promise.resolve({ object: VALID_EXTRACTION })
+    const result = await extract("Some raw text", "apple_notes");
+
+    expect(result).toEqual(VALID_EXTRACTION);
+    expect(result.title).toBe("Test Memory");
+    expect(result.type).toBe("note");
+    expect(mockGenerateText).toHaveBeenCalledTimes(1);
+
+    // Verify the call was made with correct parameters
+    const callArgs = mockGenerateText.mock.calls[0][0];
+    expect(callArgs.system).toContain("memory extraction engine");
+    expect(callArgs.system).toContain("qmd://tech/");
+    expect(callArgs.system).toContain("qmd://travel/");
+    expect(callArgs.prompt).toContain("apple_notes");
+    expect(callArgs.prompt).toContain("Some raw text");
+    expect(callArgs.output).toBeDefined();
+  });
+
+  test("passes source and rawText in the prompt", async () => {
+    mockGenerateText.mockResolvedValueOnce({ output: VALID_EXTRACTION });
+
+    await extract("My restaurant review", "web_clipper");
+
+    const callArgs = mockGenerateText.mock.calls[0][0];
+    expect(callArgs.prompt).toContain("Source: web_clipper");
+    expect(callArgs.prompt).toContain("My restaurant review");
+  });
+
+  test("system prompt includes all 7 QMD semantic roots", async () => {
+    mockGenerateText.mockResolvedValueOnce({ output: VALID_EXTRACTION });
+
+    await extract("text", "src");
+
+    const systemPrompt = mockGenerateText.mock.calls[0][0].system;
+    expect(systemPrompt).toContain("qmd://tech/");
+    expect(systemPrompt).toContain("qmd://travel/");
+    expect(systemPrompt).toContain("qmd://health/");
+    expect(systemPrompt).toContain("qmd://finance/");
+    expect(systemPrompt).toContain("qmd://media/");
+    expect(systemPrompt).toContain("qmd://personal/");
+    expect(systemPrompt).toContain("qmd://admin/");
+  });
+
+  test("system prompt includes few-shot example", async () => {
+    mockGenerateText.mockResolvedValueOnce({ output: VALID_EXTRACTION });
+
+    await extract("text", "src");
+
+    const systemPrompt = mockGenerateText.mock.calls[0][0].system;
+    expect(systemPrompt).toContain("Mutekiya");
+    expect(systemPrompt).toContain('"title": "Mutekiya Ramen"');
+  });
+
+  test("throws when output is null/undefined (no structured output generated)", async () => {
+    // First call: generateText returns null output (primary fails)
+    // Second call (fallback): generateText returns text with no JSON
+    mockGenerateText
+      .mockResolvedValueOnce({ output: null })
+      .mockResolvedValueOnce({ text: "Sorry, I cannot help." });
+
+    await expect(extract("text", "src")).rejects.toThrow(
+      "No structured output generated"
     );
+  });
 
-    // Mock the @ai-sdk/openai module
-    const mockModel = () => "mock-model";
-    const mockCreateOpenAI = mock(() => mockModel);
-
-    // Use Bun's module mocking
-    const originalEnv = process.env.OLLAMA_BASE_URL;
-    process.env.OLLAMA_BASE_URL = "http://localhost:11434/v1";
-
-    // Direct test: call generateObject mock and validate result
-    const result = await mockGenerateObject({
-      model: mockModel("qwen2.5:7b"),
-      schema: MemoryExtractionSchema,
-      system: "test prompt",
-      prompt: "test input",
+  test("falls back to text parsing when primary generateText fails", async () => {
+    // Primary call fails
+    mockGenerateText.mockRejectedValueOnce(new Error("structured output failed"));
+    // Fallback call returns valid JSON as text
+    mockGenerateText.mockResolvedValueOnce({
+      text: JSON.stringify(VALID_EXTRACTION),
     });
 
-    expect(result.object).toEqual(VALID_EXTRACTION);
-    expect(result.object.title).toBe("Test Memory");
-    expect(result.object.type).toBe("note");
-    expect(mockGenerateObject).toHaveBeenCalledTimes(1);
+    const result = await extract("raw text", "test_source");
 
-    process.env.OLLAMA_BASE_URL = originalEnv;
+    expect(result).toEqual(VALID_EXTRACTION);
+    expect(mockGenerateText).toHaveBeenCalledTimes(2);
+
+    // Second call should NOT have output (plain text mode)
+    const fallbackArgs = mockGenerateText.mock.calls[1][0];
+    expect(fallbackArgs.output).toBeUndefined();
+    expect(fallbackArgs.prompt).toContain("Respond with ONLY valid JSON");
+  });
+
+  test("throws original error when both primary and fallback fail", async () => {
+    mockGenerateText.mockRejectedValueOnce(new Error("primary failure"));
+    mockGenerateText.mockRejectedValueOnce(new Error("fallback failure"));
+
+    await expect(extract("text", "src")).rejects.toThrow("primary failure");
+  });
+
+  test("falls back and parses JSON embedded in text response", async () => {
+    mockGenerateText.mockRejectedValueOnce(new Error("structured failed"));
+    mockGenerateText.mockResolvedValueOnce({
+      text: `Here is the result:\n${JSON.stringify(VALID_EXTRACTION)}\nDone.`,
+    });
+
+    const result = await extract("text", "src");
+    expect(result.title).toBe("Test Memory");
+    expect(result.distilled_items).toHaveLength(2);
   });
 
   test("validates extraction output against MemoryExtractionSchema", () => {
-    // Valid extraction passes
     const parsed = MemoryExtractionSchema.parse(VALID_EXTRACTION);
     expect(parsed.title).toBe("Test Memory");
     expect(parsed.distilled_items).toHaveLength(2);
     expect(parsed.tags).toEqual(["testing", "unit-test"]);
   });
 
-  test("Zod validation rejects invalid extraction output", () => {
-    const invalid = {
-      title: "Test",
-      distilled_items: [], // min 1 required
-      qmd_category: "qmd://test",
-      type: "note",
-      tags: ["valid"],
-    };
-
-    expect(() => MemoryExtractionSchema.parse(invalid)).toThrow();
+  test("Zod validation rejects empty distilled_items", () => {
+    expect(() =>
+      MemoryExtractionSchema.parse({ ...VALID_EXTRACTION, distilled_items: [] })
+    ).toThrow();
   });
 
   test("Zod validation rejects invalid type enum", () => {
-    const invalid = {
-      ...VALID_EXTRACTION,
-      type: "unknown",
-    };
-
-    expect(() => MemoryExtractionSchema.parse(invalid)).toThrow();
+    expect(() =>
+      MemoryExtractionSchema.parse({ ...VALID_EXTRACTION, type: "unknown" })
+    ).toThrow();
   });
 
   test("Zod validation rejects non-kebab-case tags", () => {
-    const invalid = {
-      ...VALID_EXTRACTION,
-      tags: ["Has Spaces"],
-    };
-
-    expect(() => MemoryExtractionSchema.parse(invalid)).toThrow();
+    expect(() =>
+      MemoryExtractionSchema.parse({ ...VALID_EXTRACTION, tags: ["Has Spaces"] })
+    ).toThrow();
   });
 
   test("Zod validation rejects qmd_category without qmd:// prefix", () => {
-    const invalid = {
-      ...VALID_EXTRACTION,
-      qmd_category: "tech/testing",
-    };
-
-    expect(() => MemoryExtractionSchema.parse(invalid)).toThrow();
-  });
-
-  test("fallback parse succeeds when generateObject would fail but text contains valid JSON", () => {
-    // Simulate: generateObject failed, but the model returned valid JSON as text
-    const modelTextResponse = `I'll extract the memory for you:
-${JSON.stringify(VALID_EXTRACTION)}`;
-
-    const result = fallbackParse(modelTextResponse);
-    expect(result.title).toBe("Test Memory");
-    expect(result.type).toBe("note");
-    expect(result.distilled_items).toHaveLength(2);
-  });
-
-  test("fallback parse fails when text contains no valid JSON", () => {
-    const modelTextResponse = "I'm sorry, I can't process that request.";
-    expect(() => fallbackParse(modelTextResponse)).toThrow();
-  });
-
-  test("fallback parse fails when JSON in text doesn't match schema", () => {
-    const badJson = JSON.stringify({ title: "Only title, nothing else" });
-    const modelTextResponse = `Here's what I found: ${badJson}`;
-    expect(() => fallbackParse(modelTextResponse)).toThrow();
+    expect(() =>
+      MemoryExtractionSchema.parse({ ...VALID_EXTRACTION, qmd_category: "tech/testing" })
+    ).toThrow();
   });
 });
