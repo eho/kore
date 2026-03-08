@@ -39,3 +39,4 @@
 - Exported `MAX_RETRIES` (3) and `STALE_TASK_MINUTES` (10) constants.
 - SQLite WAL mode and table schema unchanged from US-002 (already correct per PRD spec).
 - 24 unit tests in `apps/core-api/src/queue.test.ts` covering: enqueue (status, priority, payload serialization), dequeueAndLock (empty queue, status transition, no double-dequeue, priority ordering, FIFO within priority), markCompleted (status + timestamp update), markFailed (re-queue on first/second failure, permanent failure at MAX_RETRIES, failed tasks not re-dequeued), cleanupOldTasks (old completed/failed removed, recent kept, queued/processing untouched), recoverStaleTasks (stale reset, recent untouched, non-processing unaffected), getQueueLength (empty, counts only queued).
+- **Review Sign-off:** Reviewed US-003. SQLite transactions are utilized properly for locking. Tests demonstrate that `dequeueAndLock` respects priorities, and retries limit properly at MAX_RETRIES. Perfect alignment with PRD.
