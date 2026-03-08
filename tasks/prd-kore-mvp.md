@@ -51,6 +51,7 @@ This PRD outlines the requirements for the initial **MVP (Minimum Viable Product
   })
   ```
 - [ ] The `/ingest/raw` endpoint must accept the payload, validate it against the Zod schema, enqueue it (mocked for this story), and return `202 Accepted` with a generated `task_id`.
+- [ ] Define `GET /api/v1/task/:id` that queries the queue DB and returns `{ id, status, created_at, updated_at, error_log? }`. Returns `404` if the task_id is not found. See `docs/architecture/api_design.md` §3.3.
 - [ ] Define `POST /api/v1/ingest/structured` to bypass LLM extraction. Payload Zod schema as defined in `docs/architecture/api_design.md` §3.2:
   ```typescript
   z.object({
@@ -61,7 +62,8 @@ This PRD outlines the requirements for the initial **MVP (Minimum Viable Product
     }),
   })
   ```
-  The endpoint must generate a UUIDv4 `id`, render the `.md` file to disk conforming to the canonical template in `docs/architecture/data_schema.md` §2, and return `200 OK` with `{ status: "indexed", file_path: "<absolute_path>" }`.
+  The endpoint must generate a UUIDv4 `id`, render the `.md` file to disk conforming to the canonical template in `docs/architecture/data_schema.md` §2, and return `200 OK` with `{ status: "indexed", file_path: "<absolute_path>" }`. File path follows the naming convention in `docs/architecture/data_schema.md` §1.1, slugifying the `title` field.
+- [ ] On startup, ensure `$KORE_DATA_PATH` and subdirectories for each `MemoryTypeEnum` value (`places/`, `media/`, `notes/`, `people/`) are created if they don't exist.
 - [ ] The API must reject requests missing a valid Bearer token provided via the `KORE_API_KEY` environment variable.
 - [ ] **[Logic/Backend]** Write unit tests exercising the Elysia endpoints, mocking the Bearer token checks and queue insertion.
 
@@ -74,13 +76,14 @@ This PRD outlines the requirements for the initial **MVP (Minimum Viable Product
 - [ ] Implement a lightweight Custom Queue Repository with methods: `enqueue(payload, priority?)`, `dequeueAndLock()`, `markCompleted(id)`, `markFailed(id, error_message)`, and `cleanupOldTasks(daysToKeep)`. Use explicit SQLite transactions for safe locking in `dequeueAndLock()`.
 - [ ] `dequeueAndLock()` must respect priority ordering: `high` > `normal` > `low`, then FIFO within the same priority.
 - [ ] Implement a retry fallback ensuring `retries` increments on failure, failing the task permanently (status = `failed`) after 3 attempts.
+- [ ] On worker startup, reset any tasks with status `processing` and `updated_at` older than 10 minutes back to `queued` (stale task recovery).
 - [ ] Implement a cleanup job triggered periodically (e.g. within the worker loop or via an interval) that calls `cleanupOldTasks(7)` to `DELETE FROM tasks WHERE status IN ('completed', 'failed') AND updated_at < datetime('now', '-7 days')`.
 - [ ] **[Logic/Backend]** Write unit tests for the queue: enqueueing, executing `dequeueAndLock` (simulating concurrent worker pulls safely), priority ordering, testing the retry increment limit, and verifying the `cleanupOldTasks` method accurately removes old records.
 
 ### US-004: Implement Local LLM Extraction Worker
 **Description:** As the extraction engine, I want to use a local Ollama model (via the `packages/llm-extractor` module) to turn unstructured raw text into the structured format without sending user data to the cloud.
 **Acceptance Criteria:**
-- [ ] Create a background worker loop inside `apps/core-api` that polls `dequeueAndLock()` from the Queue Repository every N seconds (configurable, default 5).
+- [ ] Create a background worker loop inside `apps/core-api` that polls `dequeueAndLock()` from the Queue Repository every N seconds (configurable, default 5). MVP uses a single worker; concurrency is not required.
 - [ ] Import and use the `extract()` function from `packages/llm-extractor` (see US-007) to perform LLM extraction. Do NOT inline LLM calls directly in `apps/core-api`.
 - [ ] Validate the LLM output against `MemoryExtractionSchema` from `packages/shared-types`. If validation fails, apply fallback parsing logic (see US-007 AC).
 - [ ] Write the finalized output to `$KORE_DATA_PATH/[type]/[slugified_title].md`. If the file already exists, append a short unique hash suffix (e.g., `mutekiya_ramen_a1b2.md`). File naming must follow `docs/architecture/data_schema.md` §1.1.
@@ -102,8 +105,19 @@ This PRD outlines the requirements for the initial **MVP (Minimum Viable Product
 ### US-006: Implement Memory Management Endpoints (CRUD)
 **Description:** As an agentic service interacting with Kore, I need standard REST endpoints to delete or update specific memories, ensuring the file system stays synced and plugin lifecycle events are dispatched.
 **Acceptance Criteria:**
-- [ ] Implement `DELETE /api/v1/memory/:id`: Finds the Markdown file by scanning for the matching `id` in frontmatter, deletes it from the `$KORE_DATA_PATH` directory, and returns `200 OK` with `{ status: "deleted", id: "<uuid>" }`.
-- [ ] Implement `PUT /api/v1/memory/:id`: Accepts an updated memory payload, safely overwrites the specific Markdown file on disk, and returns `200 OK`.
+- [ ] Implement `DELETE /api/v1/memory/:id`: Finds the Markdown file by looking up the `id` in the in-memory file index (see below), deletes it from the `$KORE_DATA_PATH` directory, and returns `200 OK` with `{ status: "deleted", id: "<uuid>" }`.
+- [ ] Maintain an in-memory `Map<id, filePath>` index built by scanning all `.md` files in `$KORE_DATA_PATH` on startup (parsing `id` from YAML frontmatter). Update this index on file write/delete operations. This index is used by both DELETE and PUT to resolve `id` → file path without O(n) scanning per request.
+- [ ] Implement `PUT /api/v1/memory/:id`: Accepts an updated memory payload matching the structured ingestion shape (see `docs/architecture/api_design.md` §4.2), safely overwrites the specific Markdown file on disk, and returns `200 OK`. Payload Zod schema:
+  ```typescript
+  z.object({
+    content: z.object({
+      title: z.string(),
+      markdown_body: z.string(),
+      frontmatter: BaseFrontmatterSchema.omit({ id: true }),
+    }),
+  })
+  ```
+  The `id` is taken from the route parameter, not the payload.
 - [ ] Both `DELETE` and `PUT` operations MUST emit `memory.deleted` / `memory.updated` events via the plugin event dispatcher (even if no plugins are registered in MVP). This ensures the event infrastructure is tested and ready for Phase 2 plugins.
 - [ ] Any file mutation correctly fires events and relies on the watcher so QMD can also re-index.
 - [ ] **[Logic/Backend]** Write unit tests mocking the file system to ensure `DELETE` removes a file, `PUT` successfully overwrites, and both emit the correct lifecycle events.
@@ -166,7 +180,7 @@ This PRD outlines the requirements for the initial **MVP (Minimum Viable Product
 
 ## 8. Open Questions
 - What is the most reliable prompt-engineering structure to ensure `qwen2.5:7b` outputs Zod-compliant JSON via Vercel AI SDK `generateObject()`?
-- Should configured `KORE_DATA_PATH` directories be auto-created on first startup, or should the user pre-create them?
+- ~~Should configured `KORE_DATA_PATH` directories be auto-created on first startup, or should the user pre-create them?~~ **Resolved:** Auto-created on startup (see US-002).
 
 ## 9. Checklist
 - [x] Asked clarifying questions with lettered options

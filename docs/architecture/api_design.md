@@ -88,6 +88,30 @@ Used by advanced scrapers that have already formatted the data to match the expl
 }
 ```
 
+### 3.3 Task Status
+
+**`GET /api/v1/task/:id`**
+Returns the current status of an ingestion task created by `POST /ingest/raw`.
+
+**Response (200 OK):**
+```typescript
+{
+  "id": "a93bc-118-28bd",
+  "status": "completed",        // enum: queued | processing | completed | failed
+  "created_at": "2026-03-07T12:00:00Z",
+  "updated_at": "2026-03-07T12:00:05Z",
+  "error_log": null              // populated on failure
+}
+```
+
+**Response (404 Not Found):**
+```typescript
+{
+  "error": "Task not found",
+  "code": "NOT_FOUND"
+}
+```
+
 ---
 
 ## 4. Memory Management Endpoints
@@ -113,6 +137,33 @@ Deletes the underlying `.md` file, updates the QMD index, and fires `onMemoryDel
 
 Used to mutate the body text or append new distracted facts to an existing memory. Overwrites the file and fires `onMemoryUpdated`.
 
+**Request Payload:**
+```typescript
+{
+  "content": {
+    "title": "Updated title",
+    "markdown_body": "Updated body text.",
+    "frontmatter": {
+        "category": "qmd://tech/programming",
+        "type": "note",
+        "date_saved": "2026-03-07T12:00:00Z",
+        "source": "manual_edit",
+        "tags": ["updated"]
+    }
+  }
+}
+```
+The `id` is taken from the route parameter `:id`, not the payload.
+
+**Response (200 OK):**
+```typescript
+{
+  "status": "updated",
+  "id": "uuid-here",
+  "file_path": "/home/user/kore-data/notes/updated_title.md"
+}
+```
+
 ---
 
 ## 5. Plugin Route Mounting
@@ -122,3 +173,27 @@ If a plugin `kore-plugin-spatialite` mounts a route, it is accessible on the roo
 
 **`POST /plugins/spatialite/ping`**
 *(Delegated to plugin entirely)*
+
+---
+
+## 6. Error Response Format
+
+All error responses from the API follow a standardized shape:
+
+```typescript
+{
+  "error": "<Human-readable error message>",
+  "code": "<ERROR_CODE>"
+}
+```
+
+**Standard Error Codes:**
+
+| HTTP Status | Code | Description |
+|---|---|---|
+| 400 | `VALIDATION_ERROR` | Request payload failed Zod validation |
+| 401 | `UNAUTHORIZED` | Missing or invalid Bearer token |
+| 404 | `NOT_FOUND` | Resource (memory or task) not found |
+| 500 | `INTERNAL_ERROR` | Unexpected server error |
+
+For `VALIDATION_ERROR`, the `error` field should include the Zod validation issue summary (e.g., `"tags: Array must contain at most 5 element(s)"`).
