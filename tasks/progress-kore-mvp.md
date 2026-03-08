@@ -54,3 +54,18 @@
 - Added `@kore/llm-extractor` as workspace dependency in `apps/core-api/package.json`.
 - 12 tests in `apps/core-api/src/worker.test.ts`: empty queue returns false, task processing writes .md file, canonical format verification (frontmatter fields + sections), original_url in frontmatter, extraction error marks failed with retry, permanent failure after MAX_RETRIES, schema validation failure (empty distilled_items), file collision handling (hash suffix), type directory routing (note → notes/), stale task recovery on startup, stop() halts polling, E2E integration test (POST /ingest/raw → pollOnce → .md file + task status via API).
 - **Review Sign-off:** Reviewed US-004. Worker properly implements dequeue+LLM extract+MD file generation loop. `llm-extractor` stub matches expectations, canonical file formats strictly enforced, and integration testing beautifully covers E2E flow.
+
+## US-005: Setup File Watcher & QMD Update Strategy — COMPLETED
+- Created stub `packages/qmd-client` package with `update()`, `collectionAdd()`, and `status()` function signatures (full implementation deferred to US-008).
+- Implemented `apps/core-api/src/watcher.ts` using `fs.watch` with `{ recursive: true }` targeting `$KORE_DATA_PATH`.
+- Watcher filters for `.md` file changes only, ignoring non-markdown files.
+- Debounce logic waits configurable duration (default 2s) after last write event before calling `qmdClient.update()`.
+- Debounce timer resets on each new change, coalescing rapid writes into a single update call.
+- Handles `updateFn` failures and exceptions gracefully (logs errors, does not crash).
+- `stop()` method clears the debounce timer and closes the `FSWatcher`.
+- Decoupling enforced: API server and LLM worker never call QMD directly — only the watcher does.
+- Updated `apps/core-api/src/index.ts` to start watcher alongside API server and worker.
+- Added `@kore/qmd-client` as workspace dependency in `apps/core-api/package.json`.
+- Created `apps/core-api/README.md` with setup instructions, environment config, and startup commands (`bun run start` runs API, Worker, and Watcher concurrently).
+- 8 unit tests in `apps/core-api/src/watcher.test.ts` covering: update on .md write, ignoring non-.md files, debouncing rapid changes into single call, debounce timer reset, stop() prevents callbacks, graceful failure handling (error result), graceful exception handling (throw), subdirectory change detection.
+- All 268 tests pass across 17 files (0 failures).

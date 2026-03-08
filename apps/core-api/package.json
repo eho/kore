@@ -9,6 +9,7 @@
   },
   "dependencies": {
     "@kore/llm-extractor": "workspace:*",
+    "@kore/qmd-client": "workspace:*",
     "@kore/shared-types": "workspace:*",
     "elysia": "^1.2.25",
     "@elysiajs/bearer": "^1.2.8",
