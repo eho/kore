@@ -16,6 +16,9 @@
     "paths": {
       "@kore/an-export": [
         "packages/an-export/src/index.ts"
+      ],
+      "@kore/shared-types": [
+        "packages/shared-types/index.ts"
       ]
     }
   },

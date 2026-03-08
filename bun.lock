@@ -11,6 +11,17 @@
         "@types/bun": "latest",
       },
     },
+    "apps/core-api": {
+      "name": "@kore/core-api",
+      "version": "1.0.0",
+      "dependencies": {
+        "@elysiajs/bearer": "^1.2.8",
+        "@elysiajs/cors": "^1.2.0",
+        "@kore/shared-types": "workspace:*",
+        "elysia": "^1.2.25",
+        "zod": "^3.24.2",
+      },
+    },
     "packages/an-export": {
       "name": "@kore/an-export",
       "dependencies": {
@@ -38,7 +49,13 @@
   "packages": {
     "@borewit/text-codec": ["@borewit/text-codec@0.2.1", "", {}, "sha512-k7vvKPbf7J2fZ5klGRD9AeKfUvojuZIQ3BT5u7Jfv+puwXkUBUT5PVyMDfJZpy30CBDXGMgw7fguK/lpOMBvgw=="],
 
+    "@elysiajs/bearer": ["@elysiajs/bearer@1.4.3", "", { "peerDependencies": { "elysia": ">= 1.4.3" } }, "sha512-UWJ94jGGOzSlD3CCspC11/vFGKwy6RI9QvaZVPzlSu1Wxp/pKmOhKA+R2ppfbluMHXfxcc2xgK3x4+uuCML7GA=="],
+
+    "@elysiajs/cors": ["@elysiajs/cors@1.4.1", "", { "peerDependencies": { "elysia": ">= 1.4.0" } }, "sha512-lQfad+F3r4mNwsxRKbXyJB8Jg43oAOXjRwn7sKUL6bcOW3KjUqUimTS+woNpO97efpzjtDE0tEjGk9DTw8lqTQ=="],
+
     "@kore/an-export": ["@kore/an-export@workspace:packages/an-export"],
+
+    "@kore/core-api": ["@kore/core-api@workspace:apps/core-api"],
 
     "@kore/shared-types": ["@kore/shared-types@workspace:packages/shared-types"],
 

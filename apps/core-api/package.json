@@ -1,0 +1,17 @@
+{
+  "name": "@kore/core-api",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "start": "bun run src/index.ts",
+    "dev": "bun --hot run src/index.ts",
+    "test": "bun test"
+  },
+  "dependencies": {
+    "@kore/shared-types": "workspace:*",
+    "elysia": "^1.2.25",
+    "@elysiajs/bearer": "^1.2.8",
+    "@elysiajs/cors": "^1.2.0",
+    "zod": "^3.24.2"
+  }
+}

@@ -3,7 +3,7 @@
   "private": true,
   "scripts": {
     "test": "bun test --recursive",
-    "typecheck": "bun x tsc --noEmit --project tsconfig.json"
+    "typecheck": "bunx tsc --noEmit --project tsconfig.json"
   },
   "workspaces": [
     "./packages/*",
