@@ -93,3 +93,4 @@
 - Exported `fallbackParse` for direct testing.
 - 19 unit tests in `packages/llm-extractor/index.test.ts` covering: fallbackParse with clean JSON, embedded JSON in text, no JSON found, malformed JSON, missing required fields, invalid enum, empty distilled_items, tags exceeding max, invalid qmd_category prefix, non-kebab-case tags; extract with mocked generateObject (successful extraction, schema validation, invalid enum, non-kebab-case tags, missing qmd:// prefix); fallback parse success/failure scenarios.
 - All 299 tests pass across 19 files (0 failures).
+- **Review Sign-off:** Reviewed US-007. Implements Vercel AI SDK gracefully. Fallback text parsing is an excellent stability addition when Ollama returns malformed JSON. The system prompt incorporates the QMD schema structure (categories/tags) strictly. Tested thoroughly with 19 passing unit tests.
