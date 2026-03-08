@@ -94,3 +94,14 @@
 - 19 unit tests in `packages/llm-extractor/index.test.ts` covering: fallbackParse with clean JSON, embedded JSON in text, no JSON found, malformed JSON, missing required fields, invalid enum, empty distilled_items, tags exceeding max, invalid qmd_category prefix, non-kebab-case tags; extract with mocked generateObject (successful extraction, schema validation, invalid enum, non-kebab-case tags, missing qmd:// prefix); fallback parse success/failure scenarios.
 - All 299 tests pass across 19 files (0 failures).
 - **Review Sign-off:** Reviewed US-007. Implements Vercel AI SDK gracefully. Fallback text parsing is an excellent stability addition when Ollama returns malformed JSON. The system prompt incorporates the QMD schema structure (categories/tags) strictly. Tested thoroughly with 19 passing unit tests.
+
+## US-008: Implement `packages/qmd-client` Module — COMPLETED
+- Replaced stub implementation in `packages/qmd-client/index.ts` with full `Bun.spawn` integration.
+- Implemented `update()` wrapping `qmd update` CLI command via `Bun.spawn`, returning typed `QmdCommandResult`.
+- Implemented `collectionAdd(path, name)` wrapping `qmd collection add <path> --name <name>`, returning typed `QmdCommandResult`.
+- Implemented `status()` wrapping `qmd status`, returning typed `QmdStatusResult` (`{ online: boolean, error?: string }`).
+- All three methods handle `Bun.spawn` failures gracefully: non-zero exit codes return typed error results with stderr message (or exit code fallback), and spawn exceptions (e.g., binary not found) are caught and returned as typed errors rather than unhandled exceptions.
+- Exported `SpawnFn` type and `setSpawn()` function for dependency injection in tests, with automatic restore support.
+- Exported existing `QmdStatusResult` and `QmdCommandResult` interfaces (unchanged from stub — consumers like watcher.ts and app.ts remain compatible).
+- 12 unit tests in `packages/qmd-client/index.test.ts` covering: update() success + correct CLI args, update() non-zero exit (stderr message), update() non-zero exit (empty stderr fallback), update() spawn failure; collectionAdd() success + correct CLI args, collectionAdd() non-zero exit, collectionAdd() whitespace-only stderr fallback, collectionAdd() spawn failure; status() success + online, status() non-zero exit (offline + error), status() exit code fallback, status() spawn failure (binary not found).
+- Typecheck passes. All 315 tests pass across 20 files (0 failures).
