@@ -69,3 +69,4 @@
 - Created `apps/core-api/README.md` with setup instructions, environment config, and startup commands (`bun run start` runs API, Worker, and Watcher concurrently).
 - 8 unit tests in `apps/core-api/src/watcher.test.ts` covering: update on .md write, ignoring non-.md files, debouncing rapid changes into single call, debounce timer reset, stop() prevents callbacks, graceful failure handling (error result), graceful exception handling (throw), subdirectory change detection.
 - All 268 tests pass across 17 files (0 failures).
+- **Review Sign-off:** Reviewed US-005. The `watcher.ts` perfectly implements a 2s debounced `fs.watch` that calls the `qmd-client` stub. Cleanly decoupled from the API. Unit tests and README match PRD accurately.
