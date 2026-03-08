@@ -70,3 +70,13 @@
 - 8 unit tests in `apps/core-api/src/watcher.test.ts` covering: update on .md write, ignoring non-.md files, debouncing rapid changes into single call, debounce timer reset, stop() prevents callbacks, graceful failure handling (error result), graceful exception handling (throw), subdirectory change detection.
 - All 268 tests pass across 17 files (0 failures).
 - **Review Sign-off:** Reviewed US-005. The `watcher.ts` perfectly implements a 2s debounced `fs.watch` that calls the `qmd-client` stub. Cleanly decoupled from the API. Unit tests and README match PRD accurately.
+
+## US-006: Implement Memory Management Endpoints (CRUD) — COMPLETED
+- Created `apps/core-api/src/event-dispatcher.ts`: `EventDispatcher` class dispatching `memory.deleted`, `memory.updated`, and `memory.indexed` plugin lifecycle events. Plugin errors are caught and logged without crashing the core engine (plugin_system.md §4.3).
+- Created `apps/core-api/src/memory-index.ts`: `MemoryIndex` class maintaining an in-memory `Map<id, filePath>` index. Builds by scanning all `.md` files in `$KORE_DATA_PATH` subdirectories on startup, parsing `id` from YAML frontmatter. Provides `get()`, `set()`, `delete()` for O(1) lookups.
+- Implemented `DELETE /api/v1/memory/:id`: Looks up file via `MemoryIndex`, reads frontmatter for event payload, deletes the file from disk, removes from index, emits `memory.deleted` event, returns `200 OK` with `{ status: "deleted", id }`. Returns `404` if memory not found.
+- Implemented `PUT /api/v1/memory/:id`: Looks up existing file via `MemoryIndex`, validates payload against `StructuredIngestPayload` schema, renders updated canonical `.md` file, deletes old file if path changed (type/title change), updates index, emits `memory.updated` event, returns `200 OK` with `{ status: "updated", id, file_path }`. Returns `404` if not found, `400` on invalid payload.
+- Both endpoints use the `id` from the route parameter, not the payload.
+- Updated `apps/core-api/src/index.ts` to build `MemoryIndex` and create `EventDispatcher` on startup, injecting both into the app factory.
+- 12 unit tests in `apps/core-api/src/memory.test.ts` covering: DELETE removes file (200), DELETE unknown id (404), DELETE removes from index, DELETE emits memory.deleted event, PUT updates file (200 with new content verified), PUT unknown id (404), PUT invalid payload (400 VALIDATION_ERROR), PUT emits memory.updated event, PUT updates index with new path on type/title change, MemoryIndex.build() scans .md files from disk, EventDispatcher dispatches to plugins, EventDispatcher handles plugin errors gracefully.
+- All 280 tests pass across 18 files (0 failures).

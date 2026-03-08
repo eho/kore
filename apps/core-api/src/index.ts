@@ -3,6 +3,8 @@ import { QueueRepository } from "./queue";
 import { resolveDataPath } from "./config";
 import { startWorker } from "./worker";
 import { startWatcher } from "./watcher";
+import { MemoryIndex } from "./memory-index";
+import { EventDispatcher } from "./event-dispatcher";
 
 const dataPath = resolveDataPath();
 
@@ -10,7 +12,12 @@ const dataPath = resolveDataPath();
 await ensureDataDirectories(dataPath);
 
 const queue = new QueueRepository();
-const app = createApp({ dataPath, queue });
+const memoryIndex = new MemoryIndex();
+await memoryIndex.build(dataPath);
+console.log(`Memory index built: ${memoryIndex.size} files indexed`);
+
+const eventDispatcher = new EventDispatcher();
+const app = createApp({ dataPath, queue, memoryIndex, eventDispatcher });
 
 app.listen(3000);
 console.log(`Kore Core API running on http://localhost:3000`);

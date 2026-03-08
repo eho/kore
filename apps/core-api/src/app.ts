@@ -8,9 +8,11 @@ import type { BaseFrontmatter } from "@kore/shared-types";
 import { QueueRepository } from "./queue";
 import { slugify } from "./slugify";
 import { renderMarkdown } from "./markdown";
-import { mkdir } from "node:fs/promises";
+import { mkdir, unlink, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { resolveDataPath } from "./config";
+import { MemoryIndex } from "./memory-index";
+import { EventDispatcher } from "./event-dispatcher";
 
 // ─── Zod Schemas for request validation ─────────────────────────────
 
@@ -62,18 +64,36 @@ async function resolveFilePath(
   return filePath;
 }
 
+function parseFrontmatter(content: string): Record<string, any> {
+  const match = content.match(/^---\n([\s\S]*?)\n---/);
+  if (!match) return {};
+  const result: Record<string, any> = {};
+  for (const line of match[1].split("\n")) {
+    const colonIdx = line.indexOf(":");
+    if (colonIdx === -1) continue;
+    const key = line.slice(0, colonIdx).trim();
+    const value = line.slice(colonIdx + 1).trim();
+    result[key] = value;
+  }
+  return result;
+}
+
 // ─── App Factory ─────────────────────────────────────────────────────
 
 export interface AppDeps {
   queue?: QueueRepository;
   qmdStatus?: () => string;
   dataPath?: string;
+  memoryIndex?: MemoryIndex;
+  eventDispatcher?: EventDispatcher;
 }
 
 export function createApp(deps: AppDeps = {}) {
   const dataPath = deps.dataPath || resolveDataPath();
   const queue = deps.queue || new QueueRepository();
   const qmdStatus = deps.qmdStatus || (() => "unavailable");
+  const memoryIndex = deps.memoryIndex || new MemoryIndex();
+  const eventDispatcher = deps.eventDispatcher || new EventDispatcher();
   const apiKey = process.env.KORE_API_KEY;
 
   const app = new Elysia()
@@ -163,6 +183,94 @@ export function createApp(deps: AppDeps = {}) {
         status: "indexed",
         file_path: filePath,
       };
+    }, { body: t.Any() })
+    // ─── Delete Memory ────────────────────────────────────────────
+    .delete("/api/v1/memory/:id", async ({ params, set }) => {
+      const filePath = memoryIndex.get(params.id);
+      if (!filePath) {
+        set.status = 404;
+        return { error: "Memory not found", code: "NOT_FOUND" };
+      }
+
+      // Read frontmatter before deleting for the event payload
+      let frontmatter: Record<string, any> = {};
+      try {
+        const content = await readFile(filePath, "utf-8");
+        frontmatter = parseFrontmatter(content);
+      } catch {
+        // file may already be gone
+      }
+
+      try {
+        await unlink(filePath);
+      } catch {
+        set.status = 404;
+        return { error: "Memory not found", code: "NOT_FOUND" };
+      }
+
+      memoryIndex.delete(params.id);
+
+      await eventDispatcher.emit("memory.deleted", {
+        id: params.id,
+        filePath,
+        frontmatter,
+        timestamp: new Date().toISOString(),
+      });
+
+      return { status: "deleted", id: params.id };
+    })
+    // ─── Update Memory ────────────────────────────────────────────
+    .put("/api/v1/memory/:id", async ({ params, body, set }) => {
+      const existingPath = memoryIndex.get(params.id);
+      if (!existingPath) {
+        set.status = 404;
+        return { error: "Memory not found", code: "NOT_FOUND" };
+      }
+
+      const result = StructuredIngestPayload.safeParse(body);
+      if (!result.success) {
+        set.status = 400;
+        return {
+          error: result.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; "),
+          code: "VALIDATION_ERROR",
+        };
+      }
+
+      const { title, markdown_body, frontmatter } = result.data.content;
+      const fullFrontmatter: BaseFrontmatter = { id: params.id, ...frontmatter };
+
+      // Resolve new file path based on updated type/title
+      const newFilePath = await resolveFilePath(dataPath, frontmatter.type, title);
+
+      const md = renderMarkdown({
+        frontmatter: fullFrontmatter,
+        title,
+        distilledItems: undefined,
+        rawSource: markdown_body,
+      });
+
+      // Delete old file if path changed
+      if (existingPath !== newFilePath) {
+        try {
+          await unlink(existingPath);
+        } catch {
+          // old file may not exist
+        }
+      }
+
+      await Bun.write(newFilePath, md);
+
+      // Update index with new path
+      memoryIndex.set(params.id, newFilePath);
+
+      await eventDispatcher.emit("memory.updated", {
+        id: params.id,
+        filePath: newFilePath,
+        frontmatter: fullFrontmatter,
+        timestamp: new Date().toISOString(),
+      });
+
+      return { status: "updated", id: params.id, file_path: newFilePath };
     }, { body: t.Any() });
 
   return app;
