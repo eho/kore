@@ -9,6 +9,7 @@
 - Exported `KorePlugin` interface per `docs/architecture/plugin_system.md` §1.
 - Typecheck passes.
 - 19 unit tests covering: valid/invalid enum values, uuid validation, qmd:// prefix enforcement, datetime validation, tag count limits, kebab-case tag validation, distilled_items min/max, url validation.
+- **Review Sign-off:** Reviewed US-001. Requirements, type-checks, and tests perfectly align with PRD.
 
 ## US-002: Stand Up ElysiaJS API Server — COMPLETED
 - Initialized `apps/core-api` as a Bun application with `package.json` (deps: elysia, @elysiajs/bearer, @elysiajs/cors, zod, @kore/shared-types).
@@ -26,3 +27,4 @@
 - Created `slugify()` utility per `data_schema.md` §1.1 naming convention.
 - App factory pattern (`createApp(deps)`) enables dependency injection for testing.
 - 16 unit tests covering: health endpoint, qmd_status values, auth rejection (no/wrong token), raw ingest (valid/invalid/priority default), task status (found/not found), structured ingest (file creation, collision handling, type routing, invalid payload, invalid category), data directory creation.
+- **Review Sign-off:** Reviewed US-002. All endpoints functionally correct with 100% test passing. Directory auto-creation via `app.ts/index.ts` verified.
