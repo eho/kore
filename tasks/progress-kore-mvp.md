@@ -80,3 +80,4 @@
 - Updated `apps/core-api/src/index.ts` to build `MemoryIndex` and create `EventDispatcher` on startup, injecting both into the app factory.
 - 12 unit tests in `apps/core-api/src/memory.test.ts` covering: DELETE removes file (200), DELETE unknown id (404), DELETE removes from index, DELETE emits memory.deleted event, PUT updates file (200 with new content verified), PUT unknown id (404), PUT invalid payload (400 VALIDATION_ERROR), PUT emits memory.updated event, PUT updates index with new path on type/title change, MemoryIndex.build() scans .md files from disk, EventDispatcher dispatches to plugins, EventDispatcher handles plugin errors gracefully.
 - All 280 tests pass across 18 files (0 failures).
+- **Review Sign-off:** Reviewed US-006. In-memory `MemoryIndex` avoids O(n) scans per request during CRUD. `DELETE` and `PUT` strictly conform strictly to schemas and dispatch events via `EventDispatcher` accurately. Unit tests successfully exercise all cases perfectly.
