@@ -18,6 +18,7 @@
         "@elysiajs/bearer": "^1.2.8",
         "@elysiajs/cors": "^1.2.0",
         "@kore/llm-extractor": "workspace:*",
+        "@kore/qmd-client": "workspace:*",
         "@kore/shared-types": "workspace:*",
         "elysia": "^1.2.25",
         "zod": "^3.24.2",
@@ -43,6 +44,10 @@
         "@kore/shared-types": "workspace:*",
       },
     },
+    "packages/qmd-client": {
+      "name": "@kore/qmd-client",
+      "version": "1.0.0",
+    },
     "packages/shared-types": {
       "name": "@kore/shared-types",
       "version": "1.0.0",
@@ -66,6 +71,8 @@
     "@kore/core-api": ["@kore/core-api@workspace:apps/core-api"],
 
     "@kore/llm-extractor": ["@kore/llm-extractor@workspace:packages/llm-extractor"],
+
+    "@kore/qmd-client": ["@kore/qmd-client@workspace:packages/qmd-client"],
 
     "@kore/shared-types": ["@kore/shared-types@workspace:packages/shared-types"],
 
