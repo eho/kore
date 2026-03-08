@@ -116,13 +116,17 @@ describe("markCompleted", () => {
     expect(task!.status).toBe("completed");
   });
 
-  test("updates updated_at timestamp", () => {
+  test("updates updated_at timestamp", async () => {
     const id = queue.enqueue({ content: "x" });
-    const before = queue.getTask(id)!.updated_at;
     queue.dequeueAndLock();
+    const beforeComplete = queue.getTask(id)!.updated_at;
+    // Small delay to guarantee timestamp differs
+    await Bun.sleep(2);
     queue.markCompleted(id);
-    const after = queue.getTask(id)!.updated_at;
-    expect(after).not.toBe(before);
+    const afterComplete = queue.getTask(id)!.updated_at;
+    expect(new Date(afterComplete).getTime()).toBeGreaterThan(
+      new Date(beforeComplete).getTime()
+    );
   });
 });
 
