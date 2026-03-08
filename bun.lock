@@ -17,6 +17,7 @@
       "dependencies": {
         "@elysiajs/bearer": "^1.2.8",
         "@elysiajs/cors": "^1.2.0",
+        "@kore/llm-extractor": "workspace:*",
         "@kore/shared-types": "workspace:*",
         "elysia": "^1.2.25",
         "zod": "^3.24.2",
@@ -33,6 +34,13 @@
       },
       "peerDependencies": {
         "typescript": "^5",
+      },
+    },
+    "packages/llm-extractor": {
+      "name": "@kore/llm-extractor",
+      "version": "1.0.0",
+      "dependencies": {
+        "@kore/shared-types": "workspace:*",
       },
     },
     "packages/shared-types": {
@@ -56,6 +64,8 @@
     "@kore/an-export": ["@kore/an-export@workspace:packages/an-export"],
 
     "@kore/core-api": ["@kore/core-api@workspace:apps/core-api"],
+
+    "@kore/llm-extractor": ["@kore/llm-extractor@workspace:packages/llm-extractor"],
 
     "@kore/shared-types": ["@kore/shared-types@workspace:packages/shared-types"],
 

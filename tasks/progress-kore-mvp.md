@@ -40,3 +40,16 @@
 - SQLite WAL mode and table schema unchanged from US-002 (already correct per PRD spec).
 - 24 unit tests in `apps/core-api/src/queue.test.ts` covering: enqueue (status, priority, payload serialization), dequeueAndLock (empty queue, status transition, no double-dequeue, priority ordering, FIFO within priority), markCompleted (status + timestamp update), markFailed (re-queue on first/second failure, permanent failure at MAX_RETRIES, failed tasks not re-dequeued), cleanupOldTasks (old completed/failed removed, recent kept, queued/processing untouched), recoverStaleTasks (stale reset, recent untouched, non-processing unaffected), getQueueLength (empty, counts only queued).
 - **Review Sign-off:** Reviewed US-003. SQLite transactions are utilized properly for locking. Tests demonstrate that `dequeueAndLock` respects priorities, and retries limit properly at MAX_RETRIES. Perfect alignment with PRD.
+
+## US-004: Implement Local LLM Extraction Worker — COMPLETED
+- Created `apps/core-api/src/worker.ts` with background extraction worker loop.
+- Created stub `packages/llm-extractor` package with `extract(rawText, source)` function signature (full implementation deferred to US-007).
+- `startWorker(deps)` initializes with stale task recovery, then polls `dequeueAndLock()` at configurable interval (default 5s).
+- `pollOnce(deps)` dequeues a task, calls `extract()` from `@kore/llm-extractor` (injectable via `extractFn` for testing), validates output against `MemoryExtractionSchema`, and writes canonical `.md` file to disk.
+- File output written to `$KORE_DATA_PATH/[type]/[slugified_title].md` with collision-safe 4-char UUID hash suffix, conforming to canonical template (data_schema.md §2): YAML frontmatter, `# Title`, `## Distilled Memory Items`, `---`, `## Raw Source`.
+- Includes `original_url` in frontmatter `url` field when present in task payload.
+- On extraction/validation failure, calls `markFailed()` which leverages existing retry logic (re-queue up to MAX_RETRIES=3, then permanent failure).
+- Periodic cleanup job runs hourly calling `cleanupOldTasks(7)`.
+- Updated `apps/core-api/src/index.ts` to start worker alongside API server with shared `QueueRepository` instance.
+- Added `@kore/llm-extractor` as workspace dependency in `apps/core-api/package.json`.
+- 12 tests in `apps/core-api/src/worker.test.ts`: empty queue returns false, task processing writes .md file, canonical format verification (frontmatter fields + sections), original_url in frontmatter, extraction error marks failed with retry, permanent failure after MAX_RETRIES, schema validation failure (empty distilled_items), file collision handling (hash suffix), type directory routing (note → notes/), stale task recovery on startup, stop() halts polling, E2E integration test (POST /ingest/raw → pollOnce → .md file + task status via API).

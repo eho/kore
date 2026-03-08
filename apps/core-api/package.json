@@ -8,6 +8,7 @@
     "test": "bun test"
   },
   "dependencies": {
+    "@kore/llm-extractor": "workspace:*",
     "@kore/shared-types": "workspace:*",
     "elysia": "^1.2.25",
     "@elysiajs/bearer": "^1.2.8",

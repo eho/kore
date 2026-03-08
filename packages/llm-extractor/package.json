@@ -1,0 +1,9 @@
+{
+  "name": "@kore/llm-extractor",
+  "version": "1.0.0",
+  "private": true,
+  "main": "index.ts",
+  "dependencies": {
+    "@kore/shared-types": "workspace:*"
+  }
+}
