@@ -37,10 +37,12 @@ WORKDIR /app
 # Install Spatialite and QMD CLI dependencies
 RUN apt-get update && apt-get install -y \
     libsqlite3-mod-spatialite \
-    curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Ensure the container runs as a non-root user to avoid permission issues 
+# Install QMD CLI globally so it is available on $PATH
+RUN bun install -g @tobilu/qmd
+
+# Ensure the container runs as a non-root user to avoid permission issues
 # with bind mounts on the host (e.g. SQLite DB and Markdown files)
 RUN chown -R bun:bun /app
 USER bun
@@ -54,6 +56,3 @@ COPY --from=builder --chown=bun:bun /app/packages ./packages
 
 # Expose the API port
 EXPOSE 3000
-
-# Ensure QMD CLI falls back correctly if installed globally (optional depending on how qmd runs)
-# Using `bun run` through the workspaces handles execution seamlessly.
