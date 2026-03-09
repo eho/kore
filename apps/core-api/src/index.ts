@@ -1,6 +1,6 @@
 import { createApp, ensureDataDirectories } from "./app";
 import { QueueRepository } from "./queue";
-import { resolveDataPath } from "./config";
+import { resolveDataPath, resolveQueueDbPath } from "./config";
 import { startWorker } from "./worker";
 import { startWatcher } from "./watcher";
 import { MemoryIndex } from "./memory-index";
@@ -11,7 +11,7 @@ const dataPath = resolveDataPath();
 // Ensure data directories exist on startup
 await ensureDataDirectories(dataPath);
 
-const queue = new QueueRepository();
+const queue = new QueueRepository(resolveQueueDbPath());
 const memoryIndex = new MemoryIndex();
 await memoryIndex.build(dataPath);
 console.log(`Memory index built: ${memoryIndex.size} files indexed`);
