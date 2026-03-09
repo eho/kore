@@ -1,31 +1,45 @@
-# Kore Core API
+# Kore Core API (`@kore/core-api`)
 
-REST API server, background extraction worker, and file watcher for the Kore memory engine.
+REST API server, background extraction worker, and file watcher for the Kore memory engine. This single `bun run start` command starts all three processes concurrently.
 
 ## Prerequisites
 
 - [Bun](https://bun.sh) runtime
-- [Ollama](https://ollama.ai) running locally (for LLM extraction)
-- [QMD](https://github.com/tobilu/qmd) installed (for memory indexing)
+- [Ollama](https://ollama.ai) running locally with your model pulled (`ollama pull qwen2.5:7b`)
+- [QMD](https://github.com/tobilu/qmd) installed and on `$PATH`
 
 ## Setup
 
-1. Copy `.env.example` to `.env` at the project root and fill in the values:
+1. Copy `.env.example` to `.env` at the **project root** and fill in the values:
+
+   ```sh
+   cp .env.example .env
+   ```
+
    ```
    KORE_DATA_PATH=~/kore-data
-   KORE_API_KEY=your-secret-key
+   KORE_API_KEY=your-secret-key-here
    OLLAMA_BASE_URL=http://localhost:11434
    OLLAMA_MODEL=qwen2.5:7b
    ```
 
-2. Install dependencies from the workspace root:
+   `KORE_API_KEY` can be any string. All endpoints except `/health` require `Authorization: Bearer <key>`.
+
+2. Install all workspace dependencies from the monorepo root:
+
    ```sh
    bun install
    ```
 
+3. Register your data directory as a QMD collection (one-time setup):
+
+   ```sh
+   qmd collection add ~/kore-data --name kore-memory
+   ```
+
 ## Running
 
-Start the API server, extraction worker, and file watcher concurrently:
+Start the API, extraction worker, and file watcher together:
 
 ```sh
 bun run start
@@ -37,10 +51,113 @@ For development with hot reload:
 bun run dev
 ```
 
-This single command starts all three components:
-- **API Server** on `http://localhost:3000` — handles REST endpoints for ingestion and memory management
-- **Extraction Worker** — polls the SQLite queue every 5s, processes tasks via local LLM
-- **File Watcher** — watches `$KORE_DATA_PATH` for `.md` changes and triggers QMD re-indexing (debounced 2s)
+On startup you will see:
+
+```
+Memory index built: 0 files indexed
+Kore Core API running on http://localhost:3000
+Kore extraction worker started (polling every 5s)
+Kore file watcher started (watching for .md changes)
+```
+
+## Architecture
+
+Three processes run concurrently in a single Bun process, with clean separation:
+
+```
+┌──────────────┐    enqueue     ┌─────────────┐    write .md    ┌──────────────┐
+│  API Server  │ ─────────────► │   SQLite     │ ───────────────► │  Filesystem  │
+│  :3000       │                │   Queue DB   │ ◄── worker polls │  $KORE_DATA  │
+└──────────────┘                └─────────────┘                  └──────┬───────┘
+                                                                         │ fs.watch
+                                                                         ▼
+                                                                  ┌──────────────┐
+                                                                  │ File Watcher │
+                                                                  │ → qmd update │
+                                                                  └──────────────┘
+```
+
+- **API Server** — accepts ingestion requests and memory CRUD operations. Never calls QMD directly.
+- **Extraction Worker** — polls the SQLite queue every 5s, calls `@kore/llm-extractor`, writes `.md` files to disk.
+- **File Watcher** — watches `$KORE_DATA_PATH` recursively; when a `.md` file changes, waits 2s (debounce) then calls `qmd update` via `@kore/qmd-client`.
+
+## Data Storage
+
+**SQLite queue database:** `kore-queue.db` in the `apps/core-api/` directory (created automatically on first run).
+
+**Memory files:** Written to `$KORE_DATA_PATH` with a subdirectory per memory type:
+
+```
+~/kore-data/
+├── places/      # type: "place"
+├── media/       # type: "media"
+├── notes/       # type: "note"
+└── people/      # type: "person"
+```
+
+File naming: `<slugified-title>.md` — if a file with that name already exists, a 4-char hash suffix is appended (e.g. `mutekiya-ramen_a1b2.md`).
+
+## Worker Behavior
+
+- **Poll interval:** every 5 seconds
+- **Priority ordering:** `high` → `normal` → `low`, then FIFO within the same priority
+- **Retry logic:** on extraction failure, `retries` increments and the task returns to `queued`; after **3 attempts** the task is permanently marked `failed` with the error in `error_log`
+- **Stale task recovery:** on worker startup, any task stuck in `processing` with `updated_at` older than 10 minutes is reset to `queued`
+- **Cleanup:** every hour, `completed` and `failed` tasks older than 7 days are deleted
+
+## Watcher Behavior
+
+- Watches `$KORE_DATA_PATH` recursively using Node.js `fs.watch`
+- Fires only on `.md` file events (ignores other file types)
+- **Debounce:** waits 2 seconds after the last write event before calling `qmd update`
+- If QMD is unavailable, the error is logged but does not crash the watcher
+
+## API Endpoints
+
+All endpoints except `/health` require `Authorization: Bearer <KORE_API_KEY>`.
+
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| `GET` | `/api/v1/health` | No | Health check — returns server status, QMD status, and current queue length |
+| `POST` | `/api/v1/ingest/raw` | Yes | Queue raw text for async LLM extraction → returns `202` with `task_id` |
+| `GET` | `/api/v1/task/:id` | Yes | Check extraction task status (`queued`, `processing`, `completed`, `failed`) |
+| `POST` | `/api/v1/ingest/structured` | Yes | Directly write a fully-formed memory file, bypassing LLM → returns `200` with `file_path` |
+| `DELETE` | `/api/v1/memory/:id` | Yes | Delete a memory file by its frontmatter `id` |
+| `PUT` | `/api/v1/memory/:id` | Yes | Overwrite an existing memory file with updated content |
+
+### `POST /api/v1/ingest/raw` payload
+
+```json
+{
+  "source": "apple_notes",
+  "content": "Raw text content...",
+  "original_url": "https://example.com",  // optional
+  "priority": "normal"                     // "low" | "normal" | "high"
+}
+```
+
+### `POST /api/v1/ingest/structured` payload
+
+```json
+{
+  "content": {
+    "title": "Mutekiya Ramen",
+    "markdown_body": "Additional notes...",
+    "frontmatter": {
+      "type": "place",
+      "category": "qmd://travel/food/japan",
+      "date_saved": "2026-03-09T00:00:00.000Z",
+      "source": "manual",
+      "tags": ["ramen", "ikebukuro"],
+      "url": "https://example.com"  // optional
+    }
+  }
+}
+```
+
+### `PUT /api/v1/memory/:id` payload
+
+Same shape as `/ingest/structured`. The `id` is taken from the URL parameter, not the payload.
 
 ## Testing
 
@@ -48,13 +165,6 @@ This single command starts all three components:
 bun test
 ```
 
-## API Endpoints
+## Memory Index
 
-| Method | Path | Description |
-|--------|------|-------------|
-| `GET` | `/api/v1/health` | Health check (no auth required) |
-| `POST` | `/api/v1/ingest/raw` | Queue raw text for LLM extraction (202) |
-| `POST` | `/api/v1/ingest/structured` | Direct structured memory ingestion (200) |
-| `GET` | `/api/v1/task/:id` | Check extraction task status |
-
-All endpoints except `/health` require a Bearer token matching `KORE_API_KEY`.
+On startup, all `.md` files in `$KORE_DATA_PATH` are scanned and their `id` frontmatter fields are loaded into an in-memory `Map<id, filePath>`. This index is kept in sync on every write and delete operation, so `DELETE` and `PUT` resolve a memory's file path in O(1) without scanning the filesystem per request.
