@@ -146,6 +146,17 @@ bun add <package> --filter @kore/core-api
 
 ---
 
+## Docker Setup
+
+Kore includes a multi-stage `Dockerfile` located at the project root for building a containerized production-ready image.
+The image bundles the Core API, Notification Worker, QMD CLI, and OS-level dependencies (like `libsqlite3-mod-spatialite`).
+
+The image is based on `oven/bun:debian` and runs as the non-root `bun` user to avoid file permission issues on host-mounted volumes.
+
+Full Docker Compose orchestration will be implemented in subsequent tasks (US-002, US-003).
+
+---
+
 ## Package Documentation
 
 | Package | Description |

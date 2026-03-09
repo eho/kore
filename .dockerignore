@@ -1,0 +1,14 @@
+node_modules/
+.git/
+.env
+.claude/
+.cursor/
+.agent/
+.agents/
+.DS_Store
+tmp/
+notes/
+skills-lock.json
+kore.code-workspace
+apps/**/node_modules/
+packages/**/node_modules/

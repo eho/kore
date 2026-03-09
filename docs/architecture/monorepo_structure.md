@@ -17,7 +17,8 @@ kore/
 ├── plugins/            # Registered Kore plugins adhering to `plugin_system.md`
 ├── docs/               # Architecture, analysis, and API documentation
 ├── package.json        # Workspace root definition
-└── bunfig.toml         # Base Bun configuration
+├── bunfig.toml         # Base Bun configuration
+└── Dockerfile          # Multi-stage production build configuration for the monorepo
 ```
 
 ---
@@ -47,7 +48,17 @@ Plugins conform to the `KorePlugin` interface defined in `docs/architecture/plug
 
 ---
 
-## 3. Dependency Management
+---
+
+## 3. Docker Integration
+
+The monorepo uses a single, root-level multi-stage `Dockerfile`. 
+*   **Builder Stage:** It explicitly copies the root `package.json`, `bun.lock`, and the relevant subdirectories (`apps/`, `packages/`) to ensure the Bun workspaces feature correctly resolves inter-dependencies (e.g. `apps/core-api` referencing `packages/shared-types`).
+*   **Runner Stage:** It runs as the non-root `bun` user to prevent host-system permission issues when bind-mounting persistence directories (like the SQLite DB and `.md` files).
+
+---
+
+## 4. Dependency Management
 
 *   **Rule 1: Strict Boundaries:** Code within `apps/` CANNOT depend on other code within `apps/`. An app can only depend on `packages/` or `plugins/`.
 *   **Rule 2: Base Types:** All Zod schemas MUST be defined in `packages/shared-types/` and published locally so that if `an-export` and `core-api` drift, the TS compiler catches the mismatch.
