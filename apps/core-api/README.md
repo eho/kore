@@ -17,7 +17,7 @@ REST API server, background extraction worker, and file watcher for the Kore mem
    ```
 
    ```
-   KORE_DATA_PATH=~/kore-data
+   KORE_DATA_PATH=~/.kore/data
    KORE_API_KEY=your-secret-key-here
    OLLAMA_BASE_URL=http://localhost:11434
    OLLAMA_MODEL=qwen2.5:7b
@@ -34,7 +34,7 @@ REST API server, background extraction worker, and file watcher for the Kore mem
 3. Register your data directory as a QMD collection (one-time setup):
 
    ```sh
-   qmd collection add ~/kore-data --name kore-memory
+   qmd collection add ~/.kore/data --name kore-memory
    ```
 
 ## Running
@@ -88,7 +88,7 @@ Three processes run concurrently in a single Bun process, with clean separation:
 **Memory files:** Written to `$KORE_DATA_PATH` with a subdirectory per memory type:
 
 ```
-~/kore-data/
+~/.kore/data/
 ├── places/      # type: "place"
 ├── media/       # type: "media"
 ├── notes/       # type: "note"

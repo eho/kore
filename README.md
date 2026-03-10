@@ -94,7 +94,7 @@ cp .env.example .env
 Edit `.env`:
 
 ```
-KORE_DATA_PATH=~/kore-data
+KORE_DATA_PATH=~/.kore/data
 KORE_API_KEY=your-secret-key-here
 OLLAMA_BASE_URL=http://localhost:11434
 OLLAMA_MODEL=qwen2.5:7b
@@ -103,7 +103,7 @@ OLLAMA_MODEL=qwen2.5:7b
 ### 3. Register your data directory with QMD (one-time)
 
 ```sh
-qmd collection add ~/kore-data --name kore-memory
+qmd collection add ~/.kore/data --name kore-memory
 ```
 
 ### 4. Start the API
