@@ -1,5 +1,7 @@
 import { Database } from "bun:sqlite";
 import { randomUUID } from "crypto";
+import { mkdirSync } from "node:fs";
+import { dirname } from "node:path";
 
 export const MAX_RETRIES = 3;
 export const STALE_TASK_MINUTES = 10;
@@ -23,6 +25,7 @@ export class QueueRepository {
   private db: Database;
 
   constructor(dbPath: string = "kore-queue.db") {
+    mkdirSync(dirname(dbPath), { recursive: true });
     this.db = new Database(dbPath);
     this.db.exec("PRAGMA journal_mode = WAL;");
     this.db.exec(`
@@ -120,11 +123,11 @@ export class QueueRepository {
    * Delete completed/failed tasks older than the specified number of days.
    */
   cleanupOldTasks(daysToKeep: number): number {
-    const result = this.db.run(
+    this.db.run(
       `DELETE FROM tasks WHERE status IN ('completed', 'failed') AND updated_at < datetime('now', '-' || ? || ' days')`,
       [daysToKeep]
     );
-    return result.changes;
+    return (this.db.query("SELECT changes() as n").get() as { n: number }).n;
   }
 
   /**
@@ -132,11 +135,11 @@ export class QueueRepository {
    * older than STALE_TASK_MINUTES back to 'queued'.
    */
   recoverStaleTasks(): number {
-    const result = this.db.run(
+    this.db.run(
       `UPDATE tasks SET status = 'queued', updated_at = ? WHERE status = 'processing' AND updated_at < datetime('now', '-' || ? || ' minutes')`,
       [new Date().toISOString(), STALE_TASK_MINUTES]
     );
-    return result.changes;
+    return (this.db.query("SELECT changes() as n").get() as { n: number }).n;
   }
 
   getTask(id: string): TaskRecord | null {
