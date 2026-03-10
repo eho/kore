@@ -45,7 +45,10 @@ Output:
  * Create the Ollama-backed OpenAI-compatible provider.
  */
 function createProvider() {
-  const baseURL = process.env.OLLAMA_BASE_URL || "http://localhost:11434/v1";
+  let baseURL = process.env.OLLAMA_BASE_URL || "http://localhost:11434/v1";
+  if (!baseURL.endsWith("/v1")) {
+    baseURL = baseURL.replace(/\/$/, "") + "/v1";
+  }
   return createOpenAI({ baseURL, apiKey: "ollama" });
 }
 
@@ -75,8 +78,10 @@ export async function extract(
   rawText: string,
   source: string
 ): Promise<MemoryExtraction> {
-  const provider = createProvider();
+  const baseURL = process.env.OLLAMA_BASE_URL || "http://localhost:11434/v1";
   const model = process.env.OLLAMA_MODEL || "qwen2.5:7b";
+  console.log(`LLM extractor: calling ${baseURL} with model ${model}`);
+  const provider = createProvider();
 
   try {
     const { output } = await generateText({

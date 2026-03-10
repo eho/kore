@@ -105,10 +105,13 @@ export async function pollOnce(deps: WorkerDeps): Promise<boolean> {
 
   try {
     const payload = JSON.parse(task.payload);
+    console.log(`Worker: processing task ${task.id} (source: ${payload.source}, attempt ${task.retries + 1})`);
     await processTask(task.id, payload, deps);
+    console.log(`Worker: task ${task.id} completed`);
     return true;
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
+    console.error(`Worker: task ${task.id} failed (attempt ${task.retries + 1}): ${message}`);
     deps.queue.markFailed(task.id, message);
     return true;
   }

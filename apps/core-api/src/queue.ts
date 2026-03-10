@@ -28,6 +28,7 @@ export class QueueRepository {
     mkdirSync(dirname(dbPath), { recursive: true });
     this.db = new Database(dbPath);
     this.db.exec("PRAGMA journal_mode = WAL;");
+    this.db.exec("PRAGMA busy_timeout = 5000;");
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS tasks (
         id TEXT PRIMARY KEY,
@@ -58,29 +59,26 @@ export class QueueRepository {
    * to ensure safe concurrent access.
    */
   dequeueAndLock(): TaskRecord | null {
-    const txn = this.db.transaction(() => {
-      const row = this.db
-        .query(
-          `SELECT * FROM tasks WHERE status = 'queued'
-           ORDER BY
-             CASE priority WHEN 'high' THEN 0 WHEN 'normal' THEN 1 WHEN 'low' THEN 2 END,
-             created_at ASC
-           LIMIT 1`
-        )
-        .get() as TaskRecord | null;
+    const now = new Date().toISOString();
+    
+    // SQLite allows UPDATE ... RETURNING * which perfectly solves our
+    // concurrent dequeue issue without explicit transactions or lock upgrades.
+    const row = this.db.query(`
+      UPDATE tasks 
+      SET status = 'processing', updated_at = ? 
+      WHERE id = (
+        SELECT id FROM tasks 
+        WHERE status = 'queued'
+        ORDER BY
+          CASE priority WHEN 'high' THEN 0 WHEN 'normal' THEN 1 WHEN 'low' THEN 2 END,
+          created_at ASC
+        LIMIT 1
+      )
+      RETURNING *
+    `).get(now) as TaskRecord | null;
 
-      if (!row) return null;
-
-      const now = new Date().toISOString();
-      this.db.run(
-        `UPDATE tasks SET status = 'processing', updated_at = ? WHERE id = ?`,
-        [now, row.id]
-      );
-
-      return { ...row, status: "processing" as const, updated_at: now };
-    });
-
-    return txn();
+    if (!row) return null;
+    return row;
   }
 
   markCompleted(id: string): void {
