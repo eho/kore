@@ -8,3 +8,7 @@ export function resolveDataPath(): string {
   }
   return resolve(raw);
 }
+
+export function resolveQueueDbPath(): string {
+  return process.env.KORE_QUEUE_DB_PATH || "kore-queue.db";
+}

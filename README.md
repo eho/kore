@@ -148,12 +148,63 @@ bun add <package> --filter @kore/core-api
 
 ## Docker Setup
 
-Kore includes a multi-stage `Dockerfile` located at the project root for building a containerized production-ready image.
-The image bundles the Core API, Notification Worker, QMD CLI, and OS-level dependencies (like `libsqlite3-mod-spatialite`).
+Kore includes a multi-stage `Dockerfile` and a `docker-compose.yml` at the project root for containerized deployment.
 
-The image is based on `oven/bun:debian` and runs as the non-root `bun` user to avoid file permission issues on host-mounted volumes.
+### Prerequisites
 
-Full Docker Compose orchestration will be implemented in subsequent tasks (US-002, US-003).
+- Docker and Docker Compose installed
+- Ollama running on the host machine with a model pulled (e.g., `ollama pull qwen2.5:7b`)
+
+### Production Deployment
+
+1. Copy `.env.example` to `.env` and configure your values:
+
+```sh
+cp .env.example .env
+# Edit .env — set KORE_API_KEY and KORE_DATA_PATH at minimum
+```
+
+2. Start all services:
+
+```sh
+docker compose up -d
+```
+
+This launches two services:
+
+| Service | Description | Port |
+|---|---|---|
+| `core-api` | HTTP API server (Pull channel) | 3000 |
+| `notification-worker` | Background extraction worker + file watcher (Push channel) | — |
+
+Both containers share the same image (`oven/bun:debian`, non-root `bun` user) and use host bind mounts for persistence:
+
+- **`$KORE_DATA_PATH`** (default `~/.kore/data`) → `/app/data` — Markdown memory files
+- **`$KORE_DB_PATH`** (default `~/.kore/db`) → `/app/db` — Shared SQLite task queue
+- **`$QMD_CONFIG_PATH`** (default `~/.kore/qmd-config`) → `/home/bun/.config/qmd` — QMD configuration
+
+3. Verify the API is running:
+
+```sh
+curl http://localhost:3000/api/v1/health
+```
+
+### Ollama Connectivity
+
+The containers connect to the host's Ollama instance via `host.docker.internal`. This works automatically on macOS and Windows. On Linux, the `extra_hosts` directive in `docker-compose.yml` maps `host.docker.internal` to the host gateway.
+
+Override the Ollama URL in `.env` if needed:
+
+```sh
+OLLAMA_BASE_URL=http://host.docker.internal:11434
+```
+
+### Stopping Services
+
+```sh
+docker compose down        # stop containers, keep volumes
+docker compose down -v     # stop containers and remove volumes
+```
 
 ---
 
