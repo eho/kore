@@ -3,6 +3,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+    user: "${UID:-1000}:${GID:-1000}"
     ports:
       - "3000:3000"
     environment:
@@ -12,8 +13,9 @@ services:
       - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
       - OLLAMA_MODEL=${OLLAMA_MODEL:-qwen2.5:7b}
     volumes:
-      - ${KORE_DATA_PATH:-~/kore-data}:/app/data
-      - queue-db:/app/db
+      - ${KORE_DATA_PATH:-~/.kore/data}:/app/data
+      - ${KORE_DB_PATH:-~/.kore/db}:/app/db
+      - ${QMD_CONFIG_PATH:-~/.kore/qmd-config}:/home/bun/.config/qmd
     command: ["bun", "run", "apps/core-api/src/index.ts"]
     restart: unless-stopped
     extra_hosts:
@@ -23,6 +25,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+    user: "${UID:-1000}:${GID:-1000}"
     environment:
       - KORE_DATA_PATH=/app/data
       - KORE_QUEUE_DB_PATH=/app/db/kore-queue.db
@@ -30,12 +33,10 @@ services:
       - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
       - OLLAMA_MODEL=${OLLAMA_MODEL:-qwen2.5:7b}
     volumes:
-      - ${KORE_DATA_PATH:-~/kore-data}:/app/data
-      - queue-db:/app/db
+      - ${KORE_DATA_PATH:-~/.kore/data}:/app/data
+      - ${KORE_DB_PATH:-~/.kore/db}:/app/db
+      - ${QMD_CONFIG_PATH:-~/.kore/qmd-config}:/home/bun/.config/qmd
     command: ["bun", "run", "apps/core-api/src/worker-entry.ts"]
     restart: unless-stopped
     extra_hosts:
       - "host.docker.internal:host-gateway"
-
-volumes:
-  queue-db:

@@ -177,10 +177,11 @@ This launches two services:
 | `core-api` | HTTP API server (Pull channel) | 3000 |
 | `notification-worker` | Background extraction worker + file watcher (Push channel) | — |
 
-Both containers share the same image (`oven/bun:debian`, non-root `bun` user) and volumes:
+Both containers share the same image (`oven/bun:debian`, non-root `bun` user) and use host bind mounts for persistence:
 
-- **`$KORE_DATA_PATH`** → `/app/data` — Markdown memory files (bind mount to host)
-- **`queue-db`** → `/app/db` — Shared SQLite task queue (Docker named volume)
+- **`$KORE_DATA_PATH`** (default `~/.kore/data`) → `/app/data` — Markdown memory files
+- **`$KORE_DB_PATH`** (default `~/.kore/db`) → `/app/db` — Shared SQLite task queue
+- **`$QMD_CONFIG_PATH`** (default `~/.kore/qmd-config`) → `/home/bun/.config/qmd` — QMD configuration
 
 3. Verify the API is running:
 
