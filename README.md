@@ -57,7 +57,8 @@ This project is a **Bun monorepo**.
 ```
 kore/
 ├── apps/
-│   └── core-api/          # REST API server + extraction worker + file watcher
+│   ├── core-api/          # REST API server + extraction worker + file watcher
+│   └── cli/               # Command-line interface for Kore
 ├── packages/
 │   ├── shared-types/      # Zod schemas and TypeScript interfaces (single source of truth)
 │   ├── llm-extractor/     # Vercel AI SDK + Ollama integration
@@ -112,7 +113,22 @@ qmd collection add ~/.kore/data --name kore-memory
 bun run --filter @kore/core-api start
 ```
 
-The API is now running at `http://localhost:3000`. Send your first memory:
+The API is now running at `http://localhost:3000`.
+
+### 5. Install and use the CLI
+
+```sh
+# Install globally
+bun install -g ./apps/cli
+
+# Check connectivity
+kore health
+
+# Send your first memory (coming in US-002)
+kore ingest note.md
+```
+
+Or send a memory directly via curl:
 
 ```sh
 curl -X POST http://localhost:3000/api/v1/ingest/raw \
@@ -213,6 +229,7 @@ docker compose down -v     # stop containers and remove volumes
 | Package | Description |
 |---|---|
 | [`apps/core-api`](apps/core-api/README.md) | API server, worker, watcher — the main service to run |
+| [`apps/cli`](apps/cli/README.md) | Command-line interface — install globally with `bun install -g ./apps/cli` |
 | [`packages/shared-types`](packages/shared-types/README.md) | Zod schemas and TypeScript interfaces |
 | [`packages/llm-extractor`](packages/llm-extractor/README.md) | LLM extraction via Vercel AI SDK + Ollama |
 | [`packages/qmd-client`](packages/qmd-client/README.md) | Typed QMD CLI wrapper |
