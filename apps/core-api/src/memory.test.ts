@@ -412,6 +412,23 @@ describe("MemoryIndex", () => {
     await idx.build(tempDir);
     expect(idx.get(id)).toBe(filePath);
   });
+
+  test("get resolves by unique prefix (first 8 chars)", () => {
+    const idx = new MemoryIndex();
+    const id = "5f0d5689-1234-5678-abcd-000000000001";
+    const filePath = "/tmp/test.md";
+    idx.set(id, filePath);
+
+    expect(idx.get("5f0d5689")).toBe(filePath);
+  });
+
+  test("get returns undefined for ambiguous prefix", () => {
+    const idx = new MemoryIndex();
+    idx.set("5f0d5689-aaaa-0000-0000-000000000001", "/tmp/a.md");
+    idx.set("5f0d5689-bbbb-0000-0000-000000000002", "/tmp/b.md");
+
+    expect(idx.get("5f0d5689")).toBeUndefined();
+  });
 });
 
 // ─── EventDispatcher ──────────────────────────────────────────────────
