@@ -39,13 +39,21 @@ RUN apt-get update && apt-get install -y \
     libsqlite3-mod-spatialite \
     && rm -rf /var/lib/apt/lists/*
 
-# Install QMD CLI globally so it is available on $PATH
-RUN bun install -g @tobilu/qmd
+# Symlink bun to node since qmd expects node in its shebang
+RUN ln -s /usr/local/bin/bun /usr/local/bin/node
 
 # Ensure the container runs as a non-root user to avoid permission issues
 # with bind mounts on the host (e.g. SQLite DB and Markdown files)
 RUN chown -R bun:bun /app
 USER bun
+
+# Add bun's global bin directory to PATH for the bun user
+ENV BUN_INSTALL="/home/bun/.bun"
+ENV BUN_INSTALL_BIN="${BUN_INSTALL}/bin"
+ENV PATH="${BUN_INSTALL_BIN}:${PATH}"
+
+# Install QMD CLI globally as the bun user so it is accessible and in the PATH
+RUN bun install -g @tobilu/qmd
 
 # Copy built node_modules and source from builder stage
 COPY --from=builder --chown=bun:bun /app/node_modules ./node_modules

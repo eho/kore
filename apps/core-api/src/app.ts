@@ -82,7 +82,7 @@ function parseFrontmatter(content: string): Record<string, any> {
 
 export interface AppDeps {
   queue?: QueueRepository;
-  qmdStatus?: () => string;
+  qmdStatus?: () => string | Promise<string>;
   dataPath?: string;
   memoryIndex?: MemoryIndex;
   eventDispatcher?: EventDispatcher;
@@ -109,10 +109,10 @@ export function createApp(deps: AppDeps = {}) {
       }
     })
     // ─── Health ───────────────────────────────────────────────────
-    .get("/api/v1/health", () => ({
+    .get("/api/v1/health", async () => ({
       status: "ok",
       version: "1.0.0",
-      qmd_status: qmdStatus(),
+      qmd_status: await qmdStatus(),
       queue_length: queue.getQueueLength(),
     }))
     // ─── Ingest Raw ───────────────────────────────────────────────

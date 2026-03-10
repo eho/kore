@@ -5,6 +5,7 @@ import { startWorker } from "./worker";
 import { startWatcher } from "./watcher";
 import { MemoryIndex } from "./memory-index";
 import { EventDispatcher } from "./event-dispatcher";
+import * as qmdClient from "@kore/qmd-client";
 
 const dataPath = resolveDataPath();
 
@@ -16,8 +17,19 @@ const memoryIndex = new MemoryIndex();
 await memoryIndex.build(dataPath);
 console.log(`Memory index built: ${memoryIndex.size} files indexed`);
 
+const qmdStatus = async () => {
+  const result = await qmdClient.status();
+  return result.online ? "ok" : "unavailable";
+};
+
 const eventDispatcher = new EventDispatcher();
-const app = createApp({ dataPath, queue, memoryIndex, eventDispatcher });
+const app = createApp({
+  dataPath,
+  queue,
+  memoryIndex,
+  eventDispatcher,
+  qmdStatus,
+});
 
 app.listen(3000);
 console.log(`Kore Core API running on http://localhost:3000`);
