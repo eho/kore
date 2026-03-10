@@ -1,5 +1,5 @@
-import { test, expect, describe, mock, beforeEach } from "bun:test";
-import { spawnSync } from "bun";
+import { test, expect, describe, mock, beforeEach, afterAll } from "bun:test";
+import { spawnSync, serve } from "bun";
 
 const CLI = `${import.meta.dir}/../src/index.ts`;
 
@@ -110,6 +110,40 @@ describe("maskApiKey", () => {
 // ─── Health Command ──────────────────────────────────────────────────────────
 
 describe("health command", () => {
+  const server = serve({
+    port: 19998,
+    fetch(req) {
+      if (req.url.endsWith("/api/v1/health")) {
+        return new Response(JSON.stringify({
+          status: "ok",
+          version: "1.0",
+          qmd_status: "ok",
+          queue_length: 5
+        }), { headers: { "Content-Type": "application/json" } });
+      }
+      return new Response("Not found", { status: 404 });
+    }
+  });
+
+  afterAll(() => {
+    server.stop();
+  });
+
+  test("prints successful health status", () => {
+    const result = spawnSync(["bun", CLI, "health"], {
+      env: {
+        ...process.env,
+        KORE_API_URL: `http://localhost:${server.port}`,
+        KORE_API_KEY: "test-key",
+      },
+    });
+    expect(result.exitCode).toBe(0);
+    const out = result.stdout.toString();
+    expect(out).toContain("API Status:");
+    expect(out).toContain("ok");
+    expect(out).toContain("Queue Length: 5");
+  });
+
   test("prints error and exits 1 when API is unreachable", () => {
     const result = spawnSync(["bun", CLI, "health"], {
       env: {
