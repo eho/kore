@@ -8,7 +8,10 @@ The official command-line interface for Kore — a context-aware personal memory
 
 ```sh
 # From the monorepo root:
-bun install -g ./apps/cli
+cd apps/cli && bun link
+
+# To uninstall:
+bun unlink
 
 # Verify:
 kore --version
