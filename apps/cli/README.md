@@ -126,6 +126,78 @@ Options:
 
 ---
 
+### `kore list`
+
+List stored memories in a table view.
+
+```sh
+kore list
+kore list --type note         # filter by type (place, media, note, person)
+kore list --limit 50          # set max results (default 20, max 100)
+kore list --json              # output raw JSON array
+```
+
+Example output:
+
+```
+┌──────────┬───────┬────────────────────┬─────────────┬────────────┐
+│ ID       │ Type  │ Title              │ Source      │ Date Saved │
+├──────────┼───────┼────────────────────┼─────────────┼────────────┤
+│ aaaaaaaa │ note  │ My First Note      │ apple_notes │ 3/7/2026   │
+│ bbbbbbbb │ place │ Tokyo Ramen Shop   │ manual      │ 3/8/2026   │
+└──────────┴───────┴────────────────────┴─────────────┴────────────┘
+```
+
+Prints `No memories found.` if the result set is empty.
+
+Options:
+
+| Flag            | Description                                          |
+| --------------- | ---------------------------------------------------- |
+| `--type <type>` | Filter by type: `place`, `media`, `note`, `person`   |
+| `--limit <n>`   | Max number of results (default `20`, max `100`)      |
+| `--json`        | Output raw JSON array                                |
+
+---
+
+### `kore show`
+
+Show the full content of a stored memory.
+
+```sh
+kore show <id>
+kore show <id> --json   # output JSON representation
+```
+
+Prints the full raw Markdown content of the memory. Exits with code `1` if not found.
+
+---
+
+### `kore delete`
+
+Delete a stored memory.
+
+```sh
+kore delete <id>           # prompts for confirmation
+kore delete <id> --force   # skip confirmation
+```
+
+Example output:
+
+```
+✓ Deleted memory aaaaaaaa-1234-5678-abcd-000000000001.
+```
+
+Options:
+
+| Flag      | Description                |
+| --------- | -------------------------- |
+| `--force` | Skip confirmation prompt   |
+
+Exits with code `0` on success, `1` on failure or if not found.
+
+---
+
 ### `kore status`
 
 Check the status of an ingestion task.

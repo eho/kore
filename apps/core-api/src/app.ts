@@ -78,6 +78,74 @@ function parseFrontmatter(content: string): Record<string, any> {
   return result;
 }
 
+function parseTagsArray(raw: string): string[] {
+  // Tags are stored as: ["tag1", "tag2"]
+  try {
+    return JSON.parse(raw.replace(/'/g, '"'));
+  } catch {
+    return raw ? [raw] : [];
+  }
+}
+
+function extractTitleFromMarkdown(content: string): string {
+  const match = content.match(/^# (.+)$/m);
+  return match ? match[1].trim() : "";
+}
+
+async function parseMemoryFile(id: string, filePath: string): Promise<MemorySummary | null> {
+  try {
+    const content = await readFile(filePath, "utf-8");
+    const fm = parseFrontmatter(content);
+    if (!fm.id) return null;
+    return {
+      id: fm.id,
+      type: fm.type || "",
+      title: extractTitleFromMarkdown(content),
+      source: fm.source || "",
+      date_saved: fm.date_saved || "",
+      tags: parseTagsArray(fm.tags || ""),
+    };
+  } catch {
+    return null;
+  }
+}
+
+async function parseMemoryFileFull(id: string, filePath: string): Promise<MemoryFull | null> {
+  try {
+    const content = await readFile(filePath, "utf-8");
+    const fm = parseFrontmatter(content);
+    if (!fm.id) return null;
+    return {
+      id: fm.id,
+      type: fm.type || "",
+      category: fm.category || "",
+      date_saved: fm.date_saved || "",
+      source: fm.source || "",
+      tags: parseTagsArray(fm.tags || ""),
+      url: fm.url,
+      title: extractTitleFromMarkdown(content),
+      content,
+    };
+  } catch {
+    return null;
+  }
+}
+
+interface MemorySummary {
+  id: string;
+  type: string;
+  title: string;
+  source: string;
+  date_saved: string;
+  tags: string[];
+}
+
+interface MemoryFull extends MemorySummary {
+  category: string;
+  url?: string;
+  content: string;
+}
+
 // ─── App Factory ─────────────────────────────────────────────────────
 
 export interface AppDeps {
@@ -184,6 +252,38 @@ export function createApp(deps: AppDeps = {}) {
         file_path: filePath,
       };
     }, { body: t.Any() })
+    // ─── List Memories ────────────────────────────────────────────
+    .get("/api/v1/memories", async ({ query }) => {
+      const typeFilter = query.type as string | undefined;
+      const limit = Math.min(Number(query.limit) || 20, 100);
+
+      const results: MemorySummary[] = [];
+      for (const [id, filePath] of memoryIndex.entries()) {
+        const memory = await parseMemoryFile(id, filePath);
+        if (!memory) continue;
+        if (typeFilter && memory.type !== typeFilter) continue;
+        results.push(memory);
+        if (results.length >= limit) break;
+      }
+
+      return results;
+    })
+    // ─── Get Memory ───────────────────────────────────────────────
+    .get("/api/v1/memory/:id", async ({ params, set }) => {
+      const filePath = memoryIndex.get(params.id);
+      if (!filePath) {
+        set.status = 404;
+        return { error: "Memory not found", code: "NOT_FOUND" };
+      }
+
+      const memory = await parseMemoryFileFull(params.id, filePath);
+      if (!memory) {
+        set.status = 404;
+        return { error: "Memory not found", code: "NOT_FOUND" };
+      }
+
+      return memory;
+    })
     // ─── Delete Memory ────────────────────────────────────────────
     .delete("/api/v1/memory/:id", async ({ params, set }) => {
       const filePath = memoryIndex.get(params.id);

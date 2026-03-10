@@ -52,6 +52,11 @@ export class MemoryIndex {
     return this.index.size;
   }
 
+  /** Iterate over all [id, filePath] pairs. */
+  entries(): IterableIterator<[string, string]> {
+    return this.index.entries();
+  }
+
   private async parseIdFromFile(filePath: string): Promise<string | null> {
     try {
       const content = await readFile(filePath, "utf-8");
