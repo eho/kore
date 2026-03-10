@@ -708,4 +708,48 @@ describe("delete command", () => {
     expect(exitCode).toBe(1);
     expect(stderr).toContain("Cannot reach Kore API");
   });
+
+  test("confirmation prompt: 'y' confirms and deletes", async () => {
+    const proc = Bun.spawn(["bun", CLI, "delete", targetId], {
+      env: {
+        ...process.env,
+        KORE_API_URL: `http://127.0.0.1:19989`,
+        KORE_API_KEY: "test-key",
+      },
+      stdout: "pipe",
+      stderr: "pipe",
+      stdin: "pipe",
+    });
+
+    proc.stdin.write("y\n");
+    proc.stdin.end();
+
+    const exitCode = await proc.exited;
+    const out = await new Response(proc.stdout).text();
+
+    expect(exitCode).toBe(0);
+    expect(out).toContain(`✓ Deleted memory ${targetId}`);
+  });
+
+  test("confirmation prompt: 'n' aborts without deleting", async () => {
+    const proc = Bun.spawn(["bun", CLI, "delete", targetId], {
+      env: {
+        ...process.env,
+        KORE_API_URL: `http://127.0.0.1:19989`,
+        KORE_API_KEY: "test-key",
+      },
+      stdout: "pipe",
+      stderr: "pipe",
+      stdin: "pipe",
+    });
+
+    proc.stdin.write("n\n");
+    proc.stdin.end();
+
+    const exitCode = await proc.exited;
+    const out = await new Response(proc.stdout).text();
+
+    expect(exitCode).toBe(0);
+    expect(out).toContain("Aborted.");
+  });
 });
