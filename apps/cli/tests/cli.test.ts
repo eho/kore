@@ -369,6 +369,19 @@ describe("ingest command", () => {
     expect(stderr).toContain("LLM extraction failed");
   });
 
+  test("single file ingest with polling (wait mode) succeeds", async () => {
+    const filePath = join(tmpDir, "wait-test.md");
+    await writeFile(filePath, "Wait for me");
+
+    // ingestServer returns completed on the second poll
+    const proc = runCliWithPort(19996, "ingest", filePath);
+    const exitCode = await proc.exited;
+    const stdout = await new Response(proc.stdout).text();
+
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain("task-abc-123 completed");
+  });
+
   test("ingest with --source overrides source label", async () => {
     const filePath = join(tmpDir, "article.md");
     await writeFile(filePath, "Article content");
