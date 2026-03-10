@@ -129,41 +129,49 @@ describe("health command", () => {
     server.stop();
   });
 
-  test("prints successful health status", () => {
-    const result = spawnSync(["bun", CLI, "health"], {
+  test("prints successful health status", async () => {
+    const proc = Bun.spawn(["bun", CLI, "health"], {
       env: {
         ...process.env,
-        KORE_API_URL: `http://localhost:${server.port}`,
+        KORE_API_URL: `http://127.0.0.1:${server.port}`,
         KORE_API_KEY: "test-key",
       },
+      stdout: "pipe",
     });
-    expect(result.exitCode).toBe(0);
-    const out = result.stdout.toString();
+    const exitCode = await proc.exited;
+    expect(exitCode).toBe(0);
+    const out = await new Response(proc.stdout).text();
     expect(out).toContain("API Status:");
     expect(out).toContain("ok");
     expect(out).toContain("Queue Length: 5");
   });
 
-  test("prints error and exits 1 when API is unreachable", () => {
-    const result = spawnSync(["bun", CLI, "health"], {
+  test("prints error and exits 1 when API is unreachable", async () => {
+    const proc = Bun.spawn(["bun", CLI, "health"], {
       env: {
         ...process.env,
-        KORE_API_URL: "http://localhost:19999",
+        KORE_API_URL: "http://127.0.0.1:19999",
         KORE_API_KEY: "test-key",
       },
+      stderr: "pipe",
     });
-    expect(result.exitCode).toBe(1);
-    expect(result.stderr.toString()).toContain("Cannot reach Kore API");
+    const exitCode = await proc.exited;
+    expect(exitCode).toBe(1);
+    const out = await new Response(proc.stderr).text();
+    expect(out).toContain("Cannot reach Kore API");
   });
 
-  test("warns when KORE_API_KEY is not set", () => {
-    const result = spawnSync(["bun", CLI, "health"], {
+  test("warns when KORE_API_KEY is not set", async () => {
+    const proc = Bun.spawn(["bun", CLI, "health"], {
       env: {
         ...process.env,
-        KORE_API_URL: "http://localhost:19999",
+        KORE_API_URL: "http://127.0.0.1:19999",
         KORE_API_KEY: "",
       },
+      stderr: "pipe",
     });
-    expect(result.stderr.toString()).toContain("KORE_API_KEY not set");
+    await proc.exited;
+    const out = await new Response(proc.stderr).text();
+    expect(out).toContain("KORE_API_KEY not set");
   });
 });
