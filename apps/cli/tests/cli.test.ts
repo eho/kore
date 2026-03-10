@@ -480,3 +480,276 @@ describe("status command", () => {
     expect(stderr).toContain("Cannot reach Kore API");
   });
 });
+
+// ─── List Command ─────────────────────────────────────────────────────────────
+
+describe("list command", () => {
+  const memories = [
+    {
+      id: "aaaaaaaa-0000-0000-0000-000000000001",
+      type: "note",
+      title: "First Note",
+      source: "apple_notes",
+      date_saved: "2026-03-07T12:00:00Z",
+      tags: ["test"],
+    },
+    {
+      id: "aaaaaaaa-0000-0000-0000-000000000002",
+      type: "place",
+      title: "Tokyo Ramen",
+      source: "manual",
+      date_saved: "2026-03-08T12:00:00Z",
+      tags: ["food", "japan"],
+    },
+  ];
+
+  const listServer = serve({
+    port: 19992,
+    fetch(req) {
+      const url = new URL(req.url);
+      if (url.pathname === "/api/v1/memories") {
+        const type = url.searchParams.get("type");
+        const limit = Number(url.searchParams.get("limit") || "20");
+        let results = type ? memories.filter((m) => m.type === type) : memories;
+        results = results.slice(0, limit);
+        return new Response(JSON.stringify(results), {
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      return new Response("Not found", { status: 404 });
+    },
+  });
+
+  afterAll(() => {
+    listServer.stop();
+  });
+
+  test("prints table of memories", async () => {
+    const proc = runCliWithPort(19992, "list");
+    const exitCode = await proc.exited;
+    const out = await new Response(proc.stdout).text();
+
+    expect(exitCode).toBe(0);
+    expect(out).toContain("First Note");
+    expect(out).toContain("Tokyo Ramen");
+    expect(out).toContain("apple_notes");
+    // ID should be first 8 chars
+    expect(out).toContain("aaaaaaaa");
+  });
+
+  test("--json outputs raw array", async () => {
+    const proc = runCliWithPort(19992, "list", "--json");
+    const exitCode = await proc.exited;
+    const out = await new Response(proc.stdout).text();
+
+    expect(exitCode).toBe(0);
+    const data = JSON.parse(out);
+    expect(Array.isArray(data)).toBe(true);
+    expect(data.length).toBe(2);
+  });
+
+  test("--type filters results", async () => {
+    const proc = runCliWithPort(19992, "list", "--type", "place");
+    const exitCode = await proc.exited;
+    const out = await new Response(proc.stdout).text();
+
+    expect(exitCode).toBe(0);
+    expect(out).toContain("Tokyo Ramen");
+    expect(out).not.toContain("First Note");
+  });
+
+  test("empty results prints no memories message", async () => {
+    const emptyServer = serve({
+      port: 19991,
+      fetch() {
+        return new Response("[]", { headers: { "Content-Type": "application/json" } });
+      },
+    });
+
+    const proc = runCliWithPort(19991, "list");
+    const exitCode = await proc.exited;
+    const out = await new Response(proc.stdout).text();
+    emptyServer.stop();
+
+    expect(exitCode).toBe(0);
+    expect(out).toContain("No memories found.");
+  });
+
+  test("API connection failure exits 1", async () => {
+    const proc = runCliWithPort(19994, "list");
+    const exitCode = await proc.exited;
+    const stderr = await new Response(proc.stderr).text();
+
+    expect(exitCode).toBe(1);
+    expect(stderr).toContain("Cannot reach Kore API");
+  });
+});
+
+// ─── Show Command ─────────────────────────────────────────────────────────────
+
+describe("show command", () => {
+  const fullMemory = {
+    id: "bbbbbbbb-0000-0000-0000-000000000001",
+    type: "note",
+    category: "qmd://tech/programming",
+    date_saved: "2026-03-07T12:00:00Z",
+    source: "apple_notes",
+    tags: ["tech"],
+    title: "My Full Note",
+    content: "---\nid: bbbbbbbb-0000-0000-0000-000000000001\ntype: note\n---\n\n# My Full Note\n\nBody text here.\n",
+  };
+
+  const showServer = serve({
+    port: 19990,
+    fetch(req) {
+      const url = new URL(req.url);
+      if (url.pathname === `/api/v1/memory/${fullMemory.id}`) {
+        return new Response(JSON.stringify(fullMemory), {
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      if (url.pathname.startsWith("/api/v1/memory/")) {
+        return new Response(JSON.stringify({ error: "Memory not found", code: "NOT_FOUND" }), {
+          status: 404,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      return new Response("Not found", { status: 404 });
+    },
+  });
+
+  afterAll(() => {
+    showServer.stop();
+  });
+
+  test("prints raw markdown content", async () => {
+    const proc = runCliWithPort(19990, "show", fullMemory.id);
+    const exitCode = await proc.exited;
+    const out = await new Response(proc.stdout).text();
+
+    expect(exitCode).toBe(0);
+    expect(out).toContain("# My Full Note");
+    expect(out).toContain("Body text here.");
+  });
+
+  test("--json outputs JSON representation", async () => {
+    const proc = runCliWithPort(19990, "show", fullMemory.id, "--json");
+    const exitCode = await proc.exited;
+    const out = await new Response(proc.stdout).text();
+
+    expect(exitCode).toBe(0);
+    const data = JSON.parse(out);
+    expect(data.id).toBe(fullMemory.id);
+    expect(data.title).toBe("My Full Note");
+    expect(data.content).toBeDefined();
+  });
+
+  test("404 prints error message and exits 1", async () => {
+    const proc = runCliWithPort(19990, "show", "nonexistent-id");
+    const exitCode = await proc.exited;
+    const stderr = await new Response(proc.stderr).text();
+
+    expect(exitCode).toBe(1);
+    expect(stderr).toContain("Memory nonexistent-id not found");
+  });
+});
+
+// ─── Delete Command ───────────────────────────────────────────────────────────
+
+describe("delete command", () => {
+  const targetId = "cccccccc-0000-0000-0000-000000000001";
+
+  const deleteServer = serve({
+    port: 19989,
+    fetch(req) {
+      const url = new URL(req.url);
+      if (url.pathname === `/api/v1/memory/${targetId}` && req.method === "DELETE") {
+        return new Response(JSON.stringify({ status: "deleted", id: targetId }), {
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      if (url.pathname.startsWith("/api/v1/memory/") && req.method === "DELETE") {
+        return new Response(JSON.stringify({ error: "Memory not found", code: "NOT_FOUND" }), {
+          status: 404,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      return new Response("Not found", { status: 404 });
+    },
+  });
+
+  afterAll(() => {
+    deleteServer.stop();
+  });
+
+  test("--force deletes without confirmation and prints success", async () => {
+    const proc = runCliWithPort(19989, "delete", targetId, "--force");
+    const exitCode = await proc.exited;
+    const out = await new Response(proc.stdout).text();
+
+    expect(exitCode).toBe(0);
+    expect(out).toContain(`✓ Deleted memory ${targetId}`);
+  });
+
+  test("404 prints error and exits 1", async () => {
+    const proc = runCliWithPort(19989, "delete", "nonexistent-id", "--force");
+    const exitCode = await proc.exited;
+    const stderr = await new Response(proc.stderr).text();
+
+    expect(exitCode).toBe(1);
+    expect(stderr).toContain("Memory nonexistent-id not found");
+  });
+
+  test("API connection failure exits 1", async () => {
+    const proc = runCliWithPort(19994, "delete", targetId, "--force");
+    const exitCode = await proc.exited;
+    const stderr = await new Response(proc.stderr).text();
+
+    expect(exitCode).toBe(1);
+    expect(stderr).toContain("Cannot reach Kore API");
+  });
+
+  test("confirmation prompt: 'y' confirms and deletes", async () => {
+    const proc = Bun.spawn(["bun", CLI, "delete", targetId], {
+      env: {
+        ...process.env,
+        KORE_API_URL: `http://127.0.0.1:19989`,
+        KORE_API_KEY: "test-key",
+      },
+      stdout: "pipe",
+      stderr: "pipe",
+      stdin: "pipe",
+    });
+
+    proc.stdin.write("y\n");
+    proc.stdin.end();
+
+    const exitCode = await proc.exited;
+    const out = await new Response(proc.stdout).text();
+
+    expect(exitCode).toBe(0);
+    expect(out).toContain(`✓ Deleted memory ${targetId}`);
+  });
+
+  test("confirmation prompt: 'n' aborts without deleting", async () => {
+    const proc = Bun.spawn(["bun", CLI, "delete", targetId], {
+      env: {
+        ...process.env,
+        KORE_API_URL: `http://127.0.0.1:19989`,
+        KORE_API_KEY: "test-key",
+      },
+      stdout: "pipe",
+      stderr: "pipe",
+      stdin: "pipe",
+    });
+
+    proc.stdin.write("n\n");
+    proc.stdin.end();
+
+    const exitCode = await proc.exited;
+    const out = await new Response(proc.stdout).text();
+
+    expect(exitCode).toBe(0);
+    expect(out).toContain("Aborted.");
+  });
+});

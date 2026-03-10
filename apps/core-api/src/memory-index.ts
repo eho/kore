@@ -32,9 +32,19 @@ export class MemoryIndex {
     }
   }
 
-  /** Get file path by memory id. */
+  /** Get file path by exact id or unique prefix. Returns undefined if not found or ambiguous. */
   get(id: string): string | undefined {
-    return this.index.get(id);
+    const exact = this.index.get(id);
+    if (exact) return exact;
+    // Prefix match (e.g. first 8 chars from `kore list`)
+    let match: string | undefined;
+    for (const key of this.index.keys()) {
+      if (key.startsWith(id)) {
+        if (match !== undefined) return undefined; // ambiguous
+        match = this.index.get(key);
+      }
+    }
+    return match;
   }
 
   /** Add or update an entry in the index. */
@@ -50,6 +60,11 @@ export class MemoryIndex {
   /** Return the number of indexed memories. */
   get size(): number {
     return this.index.size;
+  }
+
+  /** Iterate over all [id, filePath] pairs. */
+  entries(): IterableIterator<[string, string]> {
+    return this.index.entries();
   }
 
   private async parseIdFromFile(filePath: string): Promise<string | null> {

@@ -87,6 +87,104 @@ afterAll(async () => {
   await rm(tempDir, { recursive: true, force: true });
 });
 
+// ─── GET /api/v1/memories ─────────────────────────────────────────────
+
+describe("GET /api/v1/memories", () => {
+  test("returns empty array when no memories indexed", async () => {
+    const app = makeApp();
+    const res = await req(app, "/api/v1/memories");
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body).toEqual([]);
+  });
+
+  test("returns list of memory summaries", async () => {
+    const id1 = randomUUID();
+    const id2 = randomUUID();
+    await createMemoryFile({ id: id1, title: "First Memory" });
+    await createMemoryFile({ id: id2, title: "Second Memory" });
+
+    const app = makeApp();
+    const res = await req(app, "/api/v1/memories");
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.length).toBeGreaterThanOrEqual(2);
+    const found = body.find((m: any) => m.id === id1);
+    expect(found).toBeDefined();
+    expect(found.type).toBe("note");
+    expect(found.title).toBe("First Memory");
+    expect(found.source).toBe("test");
+    expect(found.date_saved).toBeDefined();
+    expect(Array.isArray(found.tags)).toBe(true);
+  });
+
+  test("filters by type", async () => {
+    const noteId = randomUUID();
+    const placeId = randomUUID();
+    await createMemoryFile({ id: noteId, title: "A Note", type: "note" });
+    await createMemoryFile({ id: placeId, title: "A Place", type: "place" });
+
+    const app = makeApp();
+    const res = await req(app, "/api/v1/memories?type=place");
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    const ids = body.map((m: any) => m.id);
+    expect(ids).toContain(placeId);
+    expect(ids).not.toContain(noteId);
+  });
+
+  test("respects limit query param", async () => {
+    // Create 3 memories
+    for (let i = 0; i < 3; i++) {
+      await createMemoryFile({ id: randomUUID(), title: `Limit Test ${i}` });
+    }
+
+    const app = makeApp();
+    const res = await req(app, "/api/v1/memories?limit=2");
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.length).toBeLessThanOrEqual(2);
+  });
+
+  test("caps limit at 100", async () => {
+    const app = makeApp();
+    // Just ensure it doesn't error with a large limit
+    const res = await req(app, "/api/v1/memories?limit=999");
+    expect(res.status).toBe(200);
+  });
+});
+
+// ─── GET /api/v1/memory/:id ───────────────────────────────────────────
+
+describe("GET /api/v1/memory/:id", () => {
+  test("returns full memory details including content", async () => {
+    const id = randomUUID();
+    await createMemoryFile({ id, title: "Full Detail Test" });
+
+    const app = makeApp();
+    const res = await req(app, `/api/v1/memory/${id}`);
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.id).toBe(id);
+    expect(body.type).toBe("note");
+    expect(body.title).toBe("Full Detail Test");
+    expect(body.category).toBe("qmd://tech/programming");
+    expect(body.source).toBe("test");
+    expect(body.date_saved).toBeDefined();
+    expect(Array.isArray(body.tags)).toBe(true);
+    expect(body.content).toContain("---");
+    expect(body.content).toContain("# Full Detail Test");
+  });
+
+  test("returns 404 for unknown memory id", async () => {
+    const app = makeApp();
+    const res = await req(app, `/api/v1/memory/${randomUUID()}`);
+    expect(res.status).toBe(404);
+    const body = await res.json();
+    expect(body.code).toBe("NOT_FOUND");
+  });
+});
+
 // ─── DELETE /api/v1/memory/:id ────────────────────────────────────────
 
 describe("DELETE /api/v1/memory/:id", () => {
@@ -313,6 +411,23 @@ describe("MemoryIndex", () => {
 
     await idx.build(tempDir);
     expect(idx.get(id)).toBe(filePath);
+  });
+
+  test("get resolves by unique prefix (first 8 chars)", () => {
+    const idx = new MemoryIndex();
+    const id = "5f0d5689-1234-5678-abcd-000000000001";
+    const filePath = "/tmp/test.md";
+    idx.set(id, filePath);
+
+    expect(idx.get("5f0d5689")).toBe(filePath);
+  });
+
+  test("get returns undefined for ambiguous prefix", () => {
+    const idx = new MemoryIndex();
+    idx.set("5f0d5689-aaaa-0000-0000-000000000001", "/tmp/a.md");
+    idx.set("5f0d5689-bbbb-0000-0000-000000000002", "/tmp/b.md");
+
+    expect(idx.get("5f0d5689")).toBeUndefined();
   });
 });
 

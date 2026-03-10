@@ -5,6 +5,9 @@ import { healthCommand } from "./commands/health.ts";
 import { configCommand } from "./commands/config.ts";
 import { ingestCommand } from "./commands/ingest.ts";
 import { statusCommand } from "./commands/status.ts";
+import { listCommand } from "./commands/list.ts";
+import { showCommand } from "./commands/show.ts";
+import { deleteCommand } from "./commands/delete.ts";
 
 // Read version from package.json
 const pkg = await import("../package.json", { with: { type: "json" } });
@@ -65,6 +68,37 @@ program
   .option("--json", "Output raw JSON", false)
   .action(async (taskId, opts) => {
     await statusCommand(taskId, opts);
+  });
+
+// ─── list ────────────────────────────────────────────────────────────────────
+program
+  .command("list")
+  .description("List stored memories")
+  .option("--type <type>", "Filter by memory type (place, media, note, person)")
+  .option("--limit <n>", "Maximum number of results", "20")
+  .option("--json", "Output raw JSON", false)
+  .action(async (opts) => {
+    await listCommand({ type: opts.type, limit: Number(opts.limit), json: opts.json });
+  });
+
+// ─── show ────────────────────────────────────────────────────────────────────
+program
+  .command("show")
+  .description("Show a stored memory")
+  .argument("<id>", "Memory ID (or prefix)")
+  .option("--json", "Output raw JSON", false)
+  .action(async (id, opts) => {
+    await showCommand(id, opts);
+  });
+
+// ─── delete ──────────────────────────────────────────────────────────────────
+program
+  .command("delete")
+  .description("Delete a stored memory")
+  .argument("<id>", "Memory ID")
+  .option("--force", "Skip confirmation prompt", false)
+  .action(async (id, opts) => {
+    await deleteCommand(id, opts);
   });
 
 // Unknown commands: print error + help, exit 1
