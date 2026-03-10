@@ -11,15 +11,17 @@ Kore needs a command-line interface so users can interact with the memory system
 - Show real-time progress when waiting for ingestion tasks to complete.
 - Work against any running Kore API instance (local, Docker, remote).
 - Be installable globally (`bun install -g`) or runnable from the monorepo (`bun run`).
-- **New:** Support machine-readable (JSON) output across all commands for automation.
+- Support machine-readable (JSON) output across all commands for automation.
 
 ## User Stories
 
-### US-001: Scaffold CLI app with argument parsing
+### US-001: Scaffold CLI with health, config, and global install
 
-**Description:** As a developer, I need the CLI project scaffolded with a command parser so that subsequent stories can add subcommands incrementally.
+**Description:** As a developer, I need the CLI project scaffolded with a command parser, shared HTTP client, and foundational commands (`health`, `config`) so that the CLI is immediately installable and useful for verifying connectivity.
 
 **Acceptance Criteria:**
+
+#### Scaffolding
 - [ ] Create `apps/cli/` with `package.json` (`name: "@kore/cli"`, `bin: { "kore": "./src/index.ts" }`, `type: "module"`).
 - [ ] Add a `src/index.ts` entry point that parses subcommands and flags using `commander`.
 - [ ] Running `kore` with no arguments prints a usage summary listing all available commands.
@@ -29,31 +31,39 @@ Kore needs a command-line interface so users can interact with the memory system
 - [ ] The CLI reads `KORE_API_URL` (default `http://localhost:3000`) and `KORE_API_KEY` from environment variables. Bun auto-loads `.env` from the working directory.
 - [ ] Create a shared HTTP client module (`src/api.ts`) that wraps `fetch` with the base URL and `Authorization: Bearer <key>` header. All subsequent commands use this module.
 - [ ] If `KORE_API_KEY` is not set, the CLI prints a warning to stderr: `Warning: KORE_API_KEY not set. Authenticated endpoints will fail.`
-- [ ] Typecheck/lint passes.
-- [ ] **[Logic/Backend]** Write unit tests for argument parsing (unknown command exits 1, `--help` prints usage, `--version` prints version).
-- [ ] **[Documentation]** Add a `README.md` in `apps/cli/` documenting installation and basic usage.
 
----
-
-### US-002: Add `kore health` command
-
-**Description:** As a user, I want to check if the Kore API is reachable and healthy so I can verify my setup before ingesting data.
-
-**Acceptance Criteria:**
+#### `kore health` command
 - [ ] `kore health` sends `GET /api/v1/health` and prints the response in a human-readable format: API status, version, QMD status, and queue length.
 - [ ] Support `--json` flag to print raw JSON response to stdout.
 - [ ] If the API is unreachable (connection refused, timeout), print a clear error message to stderr: `Error: Cannot reach Kore API at <url>. Is the server running?` and exit with code 1.
 - [ ] Exit code 0 on success, 1 on failure.
+
+#### `kore config` command
+- [ ] `kore config` prints the current configuration: `KORE_API_URL`, whether `KORE_API_KEY` is set (masked, e.g., `kore_***...***key`), and the resolved `.env` file path (if one was loaded).
+- [ ] No API call is made — this is purely local.
+- [ ] Support `--json` flag.
+
+#### Global installation
+- [ ] `bun install -g .` from `apps/cli/` installs the `kore` binary globally.
+- [ ] `kore --version` works from any directory after global install.
+- [ ] The CLI works without the rest of the monorepo present (no workspace dependency imports — only `@kore/cli`'s own `node_modules`).
+- [ ] `apps/cli/package.json` lists all runtime dependencies explicitly (no reliance on hoisted workspace deps).
+- [ ] Add `apps/cli/` to the root `package.json` workspaces array.
+
+#### Quality
 - [ ] Typecheck/lint passes.
-- [ ] **[Logic/Backend]** Write unit tests: mock fetch to test both success and connection failure scenarios.
+- [ ] **[Logic/Backend]** Write unit tests for: argument parsing (unknown command exits 1, `--help` prints usage, `--version` prints version), health command (mock fetch for success and connection failure), and config display with key masking logic.
+- [ ] **[Documentation]** Add a `README.md` in `apps/cli/` documenting installation and basic usage. Update root `README.md` to document global CLI installation (`bun install -g ./apps/cli`) and add the CLI to the package documentation table.
 
 ---
 
-### US-003: Add `kore ingest` command
+### US-002: Ingest and status commands
 
-**Description:** As a user, I want to submit text content for extraction so that the LLM processes it into a structured memory.
+**Description:** As a user, I want to submit text content for extraction and check task progress so that the LLM processes it into a structured memory and I can monitor the result.
 
 **Acceptance Criteria:**
+
+#### `kore ingest` command
 - [ ] `kore ingest <file>` reads the file and sends its contents to `POST /api/v1/ingest/raw` with `source` set to the filename.
 - [ ] `kore ingest <file1> <file2> ...` and `kore ingest ./notes/*.md` (shell glob) ingests multiple files sequentially, printing status for each.
 - [ ] `echo "some text" | kore ingest` reads from stdin when no file argument is provided. The `source` defaults to `"stdin"`.
@@ -65,90 +75,56 @@ Kore needs a command-line interface so users can interact with the memory system
 - [ ] Support `--json` flag (with `--no-wait`) to output `{ "task_id": "...", "source": "..." }`.
 - [ ] For multi-file ingestion, each file is submitted and awaited sequentially. A summary line is printed at the end: `✓ 3/3 files ingested successfully` or `⚠ 2/3 files ingested, 1 failed`.
 - [ ] If the file does not exist, print an error and skip it (do not exit — continue with remaining files).
-- [ ] Typecheck/lint passes.
-- [ ] **[Logic/Backend]** Write unit tests: mock fetch to test single file ingest, stdin ingest, `--no-wait` output, multi-file summary, and task failure handling.
-- [ ] **[Documentation]** Update `apps/cli/README.md` with `ingest` usage and examples.
 
----
-
-### US-004: Add `kore status` command
-
-**Description:** As a user, I want to check the status of a previously submitted ingestion task.
-
-**Acceptance Criteria:**
+#### `kore status` command
 - [ ] `kore status <task-id>` sends `GET /api/v1/task/:id` and prints the task status, creation time, last update time, and error log (if any) in a human-readable format.
 - [ ] Support `--json` flag to print raw JSON task object.
 - [ ] If the task is not found (404), print `Error: Task <id> not found.` and exit with code 1.
 - [ ] Exit code 0 on success, 1 on failure.
+
+#### Quality
 - [ ] Typecheck/lint passes.
-- [ ] **[Logic/Backend]** Write unit tests: mock fetch for found task, not-found task, and API connection failure.
+- [ ] **[Logic/Backend]** Write unit tests: mock fetch to test single file ingest, stdin ingest, `--no-wait` output, multi-file summary, task failure handling, status found/not-found, and API connection failure.
+- [ ] **[Documentation]** Update `apps/cli/README.md` with `ingest` and `status` usage and examples.
 
 ---
 
-### US-005: Add `kore list` and `kore show` commands (requires new API endpoints)
+### US-003: Memory management — list, show, delete + API endpoints
 
-**Description:** As a user, I want to list my stored memories and view a specific one so I can browse what has been ingested.
+**Description:** As a user, I want to browse, view, and delete my stored memories so I can manage what has been ingested.
 
 **Acceptance Criteria:**
+
+#### New API endpoints (in `core-api`)
 - [ ] **New API endpoint** `GET /api/v1/memories` added to `core-api`.
     - **Query params:** `type` (optional), `limit` (default 20, max 100).
     - **Response:** `Array<{ id: string, type: string, title: string, source: string, date_saved: string, tags: string[] }>`.
 - [ ] **New API endpoint** `GET /api/v1/memory/:id` added to `core-api`.
     - **Response:** `{ id, type, category, date_saved, source, tags, url, title, content }`. `content` is the full raw Markdown.
+
+#### `kore list` command
 - [ ] `kore list` calls `GET /api/v1/memories` and prints a table using `cli-table3` with columns: `ID` (first 8 chars), `Type`, `Title`, `Source`, `Date Saved`.
 - [ ] `kore list --type <type>` filters by memory type.
 - [ ] `kore list --limit <n>` limits the number of results.
 - [ ] `kore list --json` prints the raw array of memory objects.
+- [ ] If no memories are found, `kore list` prints `No memories found.`.
+
+#### `kore show` command
 - [ ] `kore show <id>` calls `GET /api/v1/memory/:id` and prints the full Markdown content.
 - [ ] `kore show <id> --json` prints the JSON representation of the memory.
-- [ ] If no memories are found, `kore list` prints `No memories found.`.
 - [ ] If the memory is not found (404), `kore show` prints `Error: Memory <id> not found.` and exit with code 1.
-- [ ] Typecheck/lint passes.
-- [ ] **[Logic/Backend]** Write unit tests for both the new API endpoints (in `core-api`) and the CLI commands (mock fetch). Test filtering by type, limit, empty results, and 404 cases.
-- [ ] **[Documentation]** Update `apps/cli/README.md` with `list` and `show` usage.
 
----
-
-### US-006: Add `kore delete` command
-
-**Description:** As a user, I want to delete a memory I no longer need.
-
-**Acceptance Criteria:**
+#### `kore delete` command
 - [ ] `kore delete <id>` sends `DELETE /api/v1/memory/:id`.
 - [ ] On success, prints `✓ Deleted memory <id>.`.
 - [ ] If the memory is not found (404), print `Error: Memory <id> not found.` and exit with code 1.
 - [ ] `--force` flag skips confirmation. Without it, the CLI prompts: `Delete memory <id>? [y/N]` using `enquirer` or manual readline.
 - [ ] Exit code 0 on success, 1 on failure.
+
+#### Quality
 - [ ] Typecheck/lint passes.
-- [ ] **[Logic/Backend]** Write unit tests: mock fetch for success, not-found, and confirmation prompt behavior.
-
----
-
-### US-007: Add `kore config` command
-
-**Description:** As a user, I want to see what API endpoint and configuration the CLI is using so I can debug connection issues.
-
-**Acceptance Criteria:**
-- [ ] `kore config` prints the current configuration: `KORE_API_URL`, whether `KORE_API_KEY` is set (masked, e.g., `kore_***...***key`), and the resolved `.env` file path (if one was loaded).
-- [ ] No API call is made — this is purely local.
-- [ ] Support `--json` flag.
-- [ ] Typecheck/lint passes.
-- [ ] **[Logic/Backend]** Write unit tests for config display and key masking logic.
-
----
-
-### US-008: Global installation and bin setup
-
-**Description:** As a user, I want to install the CLI globally so I can run `kore` from any directory.
-
-**Acceptance Criteria:**
-- [ ] `bun install -g .` from `apps/cli/` installs the `kore` binary globally.
-- [ ] `kore --version` works from any directory after global install.
-- [ ] The CLI works without the rest of the monorepo present (no workspace dependency imports — only `@kore/cli`'s own `node_modules`).
-- [ ] `apps/cli/package.json` lists all runtime dependencies explicitly (no reliance on hoisted workspace deps).
-- [ ] Add `apps/cli/` to the root `package.json` workspaces array.
-- [ ] Typecheck/lint passes.
-- [ ] **[Documentation]** Update root `README.md` to document global CLI installation (`bun install -g ./apps/cli`) and add the CLI to the package documentation table.
+- [ ] **[Logic/Backend]** Write unit tests for both the new API endpoints (in `core-api`) and the CLI commands (mock fetch). Test filtering by type, limit, empty results, 404 cases, delete success/not-found, and confirmation prompt behavior.
+- [ ] **[Documentation]** Update `apps/cli/README.md` with `list`, `show`, and `delete` usage.
 
 ## Functional Requirements
 
