@@ -1,5 +1,8 @@
 import { test, expect, describe, mock, beforeEach, afterAll } from "bun:test";
 import { spawnSync, serve } from "bun";
+import { join } from "path";
+import { mkdtemp, writeFile, rm } from "fs/promises";
+import { tmpdir } from "os";
 
 const CLI = `${import.meta.dir}/../src/index.ts`;
 
@@ -8,6 +11,28 @@ function runCli(...args: string[]) {
     env: {
       ...process.env,
       KORE_API_URL: "http://localhost:3000",
+      KORE_API_KEY: "test-key",
+    },
+  });
+}
+
+function runCliWithPort(port: number, ...args: string[]) {
+  return Bun.spawn(["bun", CLI, ...args], {
+    env: {
+      ...process.env,
+      KORE_API_URL: `http://127.0.0.1:${port}`,
+      KORE_API_KEY: "test-key",
+    },
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+}
+
+function runCliWithPortSync(port: number, ...args: string[]) {
+  return spawnSync(["bun", CLI, ...args], {
+    env: {
+      ...process.env,
+      KORE_API_URL: `http://127.0.0.1:${port}`,
       KORE_API_KEY: "test-key",
     },
   });
@@ -173,5 +198,285 @@ describe("health command", () => {
     await proc.exited;
     const out = await new Response(proc.stderr).text();
     expect(out).toContain("KORE_API_KEY not set");
+  });
+});
+
+// ─── Ingest Command ─────────────────────────────────────────────────────────
+
+describe("ingest command", () => {
+  let tmpDir: string;
+  let taskPollCount: number;
+
+  const ingestServer = serve({
+    port: 19996,
+    fetch(req) {
+      const url = new URL(req.url);
+
+      // POST /api/v1/ingest/raw → return task_id
+      if (url.pathname === "/api/v1/ingest/raw" && req.method === "POST") {
+        return new Response(
+          JSON.stringify({ task_id: "task-abc-123" }),
+          { headers: { "Content-Type": "application/json" } }
+        );
+      }
+
+      // GET /api/v1/task/:id → return completed on second poll
+      if (url.pathname.startsWith("/api/v1/task/")) {
+        taskPollCount++;
+        const status = taskPollCount >= 2 ? "completed" : "processing";
+        return new Response(
+          JSON.stringify({
+            id: "task-abc-123",
+            status,
+            source: "test.md",
+            created_at: "2026-03-10T00:00:00Z",
+            updated_at: "2026-03-10T00:00:01Z",
+          }),
+          { headers: { "Content-Type": "application/json" } }
+        );
+      }
+
+      return new Response("Not found", { status: 404 });
+    },
+  });
+
+  // Server for task failure scenario
+  const failServer = serve({
+    port: 19995,
+    fetch(req) {
+      const url = new URL(req.url);
+
+      if (url.pathname === "/api/v1/ingest/raw" && req.method === "POST") {
+        return new Response(
+          JSON.stringify({ task_id: "task-fail-456" }),
+          { headers: { "Content-Type": "application/json" } }
+        );
+      }
+
+      if (url.pathname.startsWith("/api/v1/task/")) {
+        return new Response(
+          JSON.stringify({
+            id: "task-fail-456",
+            status: "failed",
+            error_log: "LLM extraction failed",
+            created_at: "2026-03-10T00:00:00Z",
+            updated_at: "2026-03-10T00:00:01Z",
+          }),
+          { headers: { "Content-Type": "application/json" } }
+        );
+      }
+
+      return new Response("Not found", { status: 404 });
+    },
+  });
+
+  beforeEach(async () => {
+    taskPollCount = 0;
+    tmpDir = await mkdtemp(join(tmpdir(), "kore-test-"));
+  });
+
+  afterAll(async () => {
+    ingestServer.stop();
+    failServer.stop();
+    if (tmpDir) await rm(tmpDir, { recursive: true, force: true });
+  });
+
+  test("single file ingest with --no-wait prints queued message", async () => {
+    const filePath = join(tmpDir, "test.md");
+    await writeFile(filePath, "Hello world");
+
+    const proc = runCliWithPort(19996, "ingest", filePath, "--no-wait");
+    const exitCode = await proc.exited;
+    const out = await new Response(proc.stdout).text();
+
+    expect(exitCode).toBe(0);
+    expect(out).toContain("Queued task task-abc-123");
+    expect(out).toContain("kore status task-abc-123");
+  });
+
+  test("single file ingest with --no-wait --json outputs JSON", async () => {
+    const filePath = join(tmpDir, "test.md");
+    await writeFile(filePath, "Hello world");
+
+    const proc = runCliWithPort(19996, "ingest", filePath, "--no-wait", "--json");
+    const exitCode = await proc.exited;
+    const out = await new Response(proc.stdout).text();
+
+    expect(exitCode).toBe(0);
+    const data = JSON.parse(out);
+    expect(data.task_id).toBe("task-abc-123");
+    expect(data.source).toBe(filePath);
+  });
+
+  test("stdin ingest with --no-wait reads piped input", async () => {
+    const proc = Bun.spawn(["bun", CLI, "ingest", "--no-wait"], {
+      env: {
+        ...process.env,
+        KORE_API_URL: `http://127.0.0.1:19996`,
+        KORE_API_KEY: "test-key",
+      },
+      stdin: new TextEncoder().encode("piped text content"),
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    const exitCode = await proc.exited;
+    const out = await new Response(proc.stdout).text();
+
+    expect(exitCode).toBe(0);
+    expect(out).toContain("Queued task task-abc-123");
+    expect(out).toContain('source: "stdin"');
+  });
+
+  test("file not found prints error and continues", async () => {
+    const goodFile = join(tmpDir, "good.md");
+    await writeFile(goodFile, "Good content");
+    const badFile = join(tmpDir, "nonexistent.md");
+
+    const proc = runCliWithPort(19996, "ingest", badFile, goodFile, "--no-wait");
+    const exitCode = await proc.exited;
+    const stderr = await new Response(proc.stderr).text();
+    const stdout = await new Response(proc.stdout).text();
+
+    expect(exitCode).toBe(1);
+    expect(stderr).toContain("File not found");
+    expect(stderr).toContain("1 failed");
+    expect(stdout).toContain("Queued task");
+  });
+
+  test("multi-file summary shows success count", async () => {
+    const file1 = join(tmpDir, "a.md");
+    const file2 = join(tmpDir, "b.md");
+    await writeFile(file1, "Content A");
+    await writeFile(file2, "Content B");
+
+    const proc = runCliWithPort(19996, "ingest", file1, file2, "--no-wait");
+    const exitCode = await proc.exited;
+    const stdout = await new Response(proc.stdout).text();
+
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain("2/2 files ingested successfully");
+  });
+
+  test("task failure exits with code 1", async () => {
+    const filePath = join(tmpDir, "fail.md");
+    await writeFile(filePath, "Will fail");
+
+    const proc = runCliWithPort(19995, "ingest", filePath);
+    const exitCode = await proc.exited;
+    const stderr = await new Response(proc.stderr).text();
+
+    expect(exitCode).toBe(1);
+    expect(stderr).toContain("LLM extraction failed");
+  });
+
+  test("single file ingest with polling (wait mode) succeeds", async () => {
+    const filePath = join(tmpDir, "wait-test.md");
+    await writeFile(filePath, "Wait for me");
+
+    // ingestServer returns completed on the second poll
+    const proc = runCliWithPort(19996, "ingest", filePath);
+    const exitCode = await proc.exited;
+    const stdout = await new Response(proc.stdout).text();
+
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain("task-abc-123 completed");
+  });
+
+  test("ingest with --source overrides source label", async () => {
+    const filePath = join(tmpDir, "article.md");
+    await writeFile(filePath, "Article content");
+
+    const proc = runCliWithPort(19996, "ingest", filePath, "--no-wait", "--source", "Hacker News");
+    const exitCode = await proc.exited;
+    const out = await new Response(proc.stdout).text();
+
+    expect(exitCode).toBe(0);
+    expect(out).toContain('source: "Hacker News"');
+  });
+
+  test("API connection failure prints error", async () => {
+    const filePath = join(tmpDir, "test.md");
+    await writeFile(filePath, "Content");
+
+    const proc = runCliWithPort(19994, "ingest", filePath, "--no-wait");
+    const exitCode = await proc.exited;
+    const stderr = await new Response(proc.stderr).text();
+
+    expect(exitCode).toBe(1);
+    expect(stderr).toContain("Cannot reach Kore API");
+  });
+});
+
+// ─── Status Command ─────────────────────────────────────────────────────────
+
+describe("status command", () => {
+  const statusServer = serve({
+    port: 19993,
+    fetch(req) {
+      const url = new URL(req.url);
+
+      if (url.pathname === "/api/v1/task/task-found-123") {
+        return new Response(
+          JSON.stringify({
+            id: "task-found-123",
+            status: "completed",
+            source: "test.md",
+            created_at: "2026-03-10T00:00:00Z",
+            updated_at: "2026-03-10T00:00:01Z",
+          }),
+          { headers: { "Content-Type": "application/json" } }
+        );
+      }
+
+      if (url.pathname === "/api/v1/task/task-not-found") {
+        return new Response("Not found", { status: 404 });
+      }
+
+      return new Response("Not found", { status: 404 });
+    },
+  });
+
+  afterAll(() => {
+    statusServer.stop();
+  });
+
+  test("prints task status in human-readable format", async () => {
+    const proc = runCliWithPort(19993, "status", "task-found-123");
+    const exitCode = await proc.exited;
+    const out = await new Response(proc.stdout).text();
+
+    expect(exitCode).toBe(0);
+    expect(out).toContain("task-found-123");
+    expect(out).toContain("completed");
+    expect(out).toContain("test.md");
+  });
+
+  test("--json outputs raw JSON task object", async () => {
+    const proc = runCliWithPort(19993, "status", "task-found-123", "--json");
+    const exitCode = await proc.exited;
+    const out = await new Response(proc.stdout).text();
+
+    expect(exitCode).toBe(0);
+    const data = JSON.parse(out);
+    expect(data.id).toBe("task-found-123");
+    expect(data.status).toBe("completed");
+  });
+
+  test("404 prints not found error and exits 1", async () => {
+    const proc = runCliWithPort(19993, "status", "task-not-found");
+    const exitCode = await proc.exited;
+    const stderr = await new Response(proc.stderr).text();
+
+    expect(exitCode).toBe(1);
+    expect(stderr).toContain("Task task-not-found not found");
+  });
+
+  test("API connection failure prints error", async () => {
+    const proc = runCliWithPort(19994, "status", "some-task");
+    const exitCode = await proc.exited;
+    const stderr = await new Response(proc.stderr).text();
+
+    expect(exitCode).toBe(1);
+    expect(stderr).toContain("Cannot reach Kore API");
   });
 });

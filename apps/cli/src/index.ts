@@ -3,6 +3,8 @@ import { Command } from "commander";
 import { warnIfNoApiKey } from "./utils/env.ts";
 import { healthCommand } from "./commands/health.ts";
 import { configCommand } from "./commands/config.ts";
+import { ingestCommand } from "./commands/ingest.ts";
+import { statusCommand } from "./commands/status.ts";
 
 // Read version from package.json
 const pkg = await import("../package.json", { with: { type: "json" } });
@@ -39,6 +41,30 @@ program
   .option("--json", "Output raw JSON", false)
   .action(async (opts) => {
     await configCommand(opts);
+  });
+
+// ─── ingest ─────────────────────────────────────────────────────────────────
+program
+  .command("ingest")
+  .description("Ingest text content for memory extraction")
+  .argument("[files...]", "Files to ingest (reads stdin if none)")
+  .option("--source <name>", "Override the source label")
+  .option("--url <url>", "Attach an original URL to the ingestion payload")
+  .option("--priority <level>", "Queue priority: low, normal, high", "normal")
+  .option("--no-wait", "Skip polling and return immediately")
+  .option("--json", "Output JSON (with --no-wait)", false)
+  .action(async (files, opts) => {
+    await ingestCommand(files, opts);
+  });
+
+// ─── status ─────────────────────────────────────────────────────────────────
+program
+  .command("status")
+  .description("Check the status of an ingestion task")
+  .argument("<task-id>", "Task ID to check")
+  .option("--json", "Output raw JSON", false)
+  .action(async (taskId, opts) => {
+    await statusCommand(taskId, opts);
   });
 
 // Unknown commands: print error + help, exit 1
