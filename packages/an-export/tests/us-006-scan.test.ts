@@ -156,7 +156,7 @@ describe('Scan Converter', () => {
             // No customMap
             { customMap: null } as any
           ]
-        }
+        } as any
       }
     };
     const result = await convertScanToMarkdown(proto, db, entityKeys, tempDir, tempDir, undefined, tempDir);

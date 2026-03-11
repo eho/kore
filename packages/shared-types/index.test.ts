@@ -9,7 +9,7 @@ import {
 
 describe("MemoryTypeEnum", () => {
   test("accepts valid types", () => {
-    for (const t of ["place", "media", "note", "person"]) {
+    for (const t of ["place", "media", "note", "person"] as const) {
       expect(MemoryTypeEnum.parse(t)).toBe(t);
     }
   });
