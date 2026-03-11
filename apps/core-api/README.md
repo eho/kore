@@ -125,6 +125,22 @@ All endpoints except `/health` require `Authorization: Bearer <KORE_API_KEY>`.
 | `DELETE` | `/api/v1/memory/:id` | Yes | Delete a memory file by its frontmatter `id` |
 | `PUT` | `/api/v1/memory/:id` | Yes | Overwrite an existing memory file with updated content |
 
+### `GET /api/v1/health` response
+
+```json
+{
+  "status": "ok",
+  "version": "1.0.0",
+  "qmd": {
+    "status": "ok",          // "ok" | "bootstrapping" | "unavailable"
+    "doc_count": 42,
+    "collections": 1,
+    "needs_embedding": 5
+  },
+  "queue_length": 0
+}
+```
+
 ### `POST /api/v1/ingest/raw` payload
 
 ```json

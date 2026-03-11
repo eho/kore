@@ -1,6 +1,6 @@
 import { describe, test, expect, beforeAll, afterAll, beforeEach, afterEach } from "bun:test";
 import { createApp, ensureDataDirectories } from "./app";
-import type { QmdHealthStatus } from "./app";
+import type { QmdHealthSummary } from "./app";
 import { QueueRepository } from "./queue";
 import { join } from "node:path";
 import { mkdtemp, rm, readdir, readFile } from "node:fs/promises";
@@ -10,12 +10,12 @@ let tempDir: string;
 let queue: QueueRepository;
 let dbPath: string;
 
-function makeApp(overrides?: { apiKey?: string; qmdStatus?: () => Promise<QmdHealthStatus> }) {
+function makeApp(overrides?: { apiKey?: string; qmdStatus?: () => Promise<QmdHealthSummary> }) {
   process.env.KORE_API_KEY = overrides?.apiKey ?? "test-key";
   return createApp({
     queue,
     dataPath: tempDir,
-    qmdStatus: overrides?.qmdStatus ?? (async () => ({ status: "ready" as const })),
+    qmdStatus: overrides?.qmdStatus ?? (async () => ({ status: "ok" as const })),
   });
 }
 
@@ -69,7 +69,7 @@ describe("GET /api/v1/health", () => {
     expect(body).toEqual({
       status: "ok",
       version: "1.0.0",
-      qmd: { status: "ready" },
+      qmd: { status: "ok" },
       queue_length: 0,
     });
   });
@@ -81,20 +81,19 @@ describe("GET /api/v1/health", () => {
     expect(body.qmd.status).toBe("unavailable");
   });
 
-  test("reflects qmd bootstrapping status with index data", async () => {
-    const mockIndex = {
-      totalDocuments: 0,
-      needsEmbedding: 0,
-      hasVectorIndex: false,
-      collections: [],
+  test("reflects qmd bootstrapping status with flattened fields", async () => {
+    const mockSummary = {
+      status: "bootstrapping" as const,
+      doc_count: 5,
+      collections: 1,
+      needs_embedding: 2,
     };
     const app = makeApp({
-      qmdStatus: async () => ({ status: "bootstrapping" as const, index: mockIndex }),
+      qmdStatus: async () => mockSummary,
     });
     const res = await app.handle(new Request("http://localhost/api/v1/health"));
     const body = await res.json();
-    expect(body.qmd.status).toBe("bootstrapping");
-    expect(body.qmd.index).toEqual(mockIndex);
+    expect(body.qmd).toEqual(mockSummary);
   });
 
   test("does not require auth", async () => {

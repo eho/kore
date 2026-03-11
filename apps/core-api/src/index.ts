@@ -1,5 +1,5 @@
 import { createApp, ensureDataDirectories } from "./app";
-import type { QmdHealthStatus } from "./app";
+import type { QmdHealthSummary } from "./app";
 import { QueueRepository } from "./queue";
 import { resolveDataPath, resolveQueueDbPath } from "./config";
 import { startWorker } from "./worker";
@@ -30,12 +30,16 @@ try {
 
 let bootstrapping = false;
 
-const qmdStatus = async (): Promise<QmdHealthStatus> => {
+const qmdStatus = async (): Promise<QmdHealthSummary> => {
   try {
     const index = await qmdClient.getStatus();
+    const health = await qmdClient.getIndexHealth();
+    
     return {
-      status: bootstrapping ? "bootstrapping" : "ready",
-      index,
+      status: bootstrapping ? "bootstrapping" : "ok",
+      doc_count: index.totalDocuments,
+      collections: index.collections?.length || 0,
+      needs_embedding: health.needsEmbedding,
     };
   } catch {
     return { status: "unavailable" };
