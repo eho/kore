@@ -116,7 +116,7 @@ We should completely overhaul `packages/qmd-client` to wrap the new SDK.
    - Wire `store.getStatus()` into the health endpoint (currently using `qmd status` parse).
 4. **Update Tests:** Refactor `packages/qmd-client/index.test.ts` to mock the QMD store object rather than mocking `Bun.spawn`.
 
-## 6. Docker & Infrastructure Considerations
+## 6. Docker & Infrastructure Considerations ✅ Implemented
 
 Migrating to the native SDK will significantly streamline our Docker setup, but it introduces a critical requirement regarding caching.
 
