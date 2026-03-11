@@ -763,7 +763,11 @@ describe("search command", () => {
       const url = new URL(req.url);
       if (url.pathname === "/api/v1/search" && req.method === "POST") {
         return (async () => {
-          const body = await req.json();
+          const body = (await req.json()) as {
+            query: string;
+            collection?: string;
+            limit?: number;
+          };
           if (body.query === "error") {
             return new Response(JSON.stringify({ error: "Search index not available", code: "UNAVAILABLE" }), {
               status: 503,
