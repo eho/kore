@@ -824,8 +824,40 @@ describe("search command", () => {
 
     expect(exitCode).toBe(0);
     expect(out).toContain("Tokyo Ramen Shop");
+    expect(out).toContain("data/places/tokyo-ramen.md");
     expect(out).toContain("Amazing ramen spot in Shinjuku");
     expect(out).toContain("Travel Notes: Japan Trip");
+    expect(out).toContain("data/notes/japan-trip.md");
+    expect(out).toContain("───");
+  });
+
+  test("snippet truncated to 200 chars", async () => {
+    // Build a server with a long snippet inline
+    const longSnippetServer = serve({
+      port: 19989,
+      fetch() {
+        const results = [
+          {
+            path: "data/long.md",
+            title: "Long Snippet",
+            snippet: "A".repeat(250),
+            score: 0.9,
+            collection: null,
+          },
+        ];
+        return new Response(JSON.stringify(results), {
+          headers: { "Content-Type": "application/json" },
+        });
+      },
+    });
+    const proc = runCliWithPort(19989, "search", "long");
+    const exitCode = await proc.exited;
+    const out = await new Response(proc.stdout).text();
+    longSnippetServer.stop();
+
+    expect(exitCode).toBe(0);
+    expect(out).toContain("A".repeat(200) + "...");
+    expect(out).not.toContain("A".repeat(201) + "...");
   });
 
   test("--limit restricts results", async () => {
