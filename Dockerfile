@@ -14,6 +14,8 @@ RUN apt-get update && apt-get install -y \
 # Copy workspace configuration files first to cache dependencies
 COPY package.json bun.lock ./
 COPY apps/core-api/package.json ./apps/core-api/package.json
+COPY apps/cli/package.json ./apps/cli/package.json
+COPY packages/an-export/package.json ./packages/an-export/package.json
 COPY packages/llm-extractor/package.json ./packages/llm-extractor/package.json
 COPY packages/qmd-client/package.json ./packages/qmd-client/package.json
 COPY packages/shared-types/package.json ./packages/shared-types/package.json
