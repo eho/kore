@@ -3,7 +3,16 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { startWatcher } from "./watcher";
-import type { QmdCommandResult } from "@kore/qmd-client";
+import type { UpdateResult } from "@kore/qmd-client";
+
+const MOCK_UPDATE_RESULT: UpdateResult = {
+  collections: 1,
+  indexed: 1,
+  updated: 0,
+  unchanged: 0,
+  removed: 0,
+  needsEmbedding: 1,
+};
 
 let tempDir: string;
 
@@ -17,9 +26,9 @@ afterEach(async () => {
 
 test("watcher calls updateFn when a .md file is written", async () => {
   let updateCalls = 0;
-  const mockUpdate = async (): Promise<QmdCommandResult> => {
+  const mockUpdate = async (): Promise<UpdateResult> => {
     updateCalls++;
-    return { success: true };
+    return MOCK_UPDATE_RESULT;
   };
 
   const handle = startWatcher({
@@ -43,9 +52,9 @@ test("watcher calls updateFn when a .md file is written", async () => {
 
 test("watcher ignores non-.md files", async () => {
   let updateCalls = 0;
-  const mockUpdate = async (): Promise<QmdCommandResult> => {
+  const mockUpdate = async (): Promise<UpdateResult> => {
     updateCalls++;
-    return { success: true };
+    return MOCK_UPDATE_RESULT;
   };
 
   const handle = startWatcher({
@@ -69,9 +78,9 @@ test("watcher ignores non-.md files", async () => {
 
 test("watcher debounces rapid changes into a single update call", async () => {
   let updateCalls = 0;
-  const mockUpdate = async (): Promise<QmdCommandResult> => {
+  const mockUpdate = async (): Promise<UpdateResult> => {
     updateCalls++;
-    return { success: true };
+    return MOCK_UPDATE_RESULT;
   };
 
   const handle = startWatcher({
@@ -100,9 +109,9 @@ test("watcher debounces rapid changes into a single update call", async () => {
 
 test("watcher resets debounce timer on each new change", async () => {
   let updateCalls = 0;
-  const mockUpdate = async (): Promise<QmdCommandResult> => {
+  const mockUpdate = async (): Promise<UpdateResult> => {
     updateCalls++;
-    return { success: true };
+    return MOCK_UPDATE_RESULT;
   };
 
   const handle = startWatcher({
@@ -136,9 +145,9 @@ test("watcher resets debounce timer on each new change", async () => {
 
 test("stop() prevents further update calls", async () => {
   let updateCalls = 0;
-  const mockUpdate = async (): Promise<QmdCommandResult> => {
+  const mockUpdate = async (): Promise<UpdateResult> => {
     updateCalls++;
-    return { success: true };
+    return MOCK_UPDATE_RESULT;
   };
 
   const handle = startWatcher({
@@ -159,9 +168,9 @@ test("stop() prevents further update calls", async () => {
 
 test("watcher handles updateFn failure gracefully", async () => {
   let updateCalls = 0;
-  const mockUpdate = async (): Promise<QmdCommandResult> => {
+  const mockUpdate = async (): Promise<UpdateResult> => {
     updateCalls++;
-    return { success: false, error: "QMD not found" };
+    return MOCK_UPDATE_RESULT;
   };
 
   const handle = startWatcher({
@@ -185,7 +194,7 @@ test("watcher handles updateFn failure gracefully", async () => {
 
 test("watcher handles updateFn exception gracefully", async () => {
   let updateCalls = 0;
-  const mockUpdate = async (): Promise<QmdCommandResult> => {
+  const mockUpdate = async (): Promise<UpdateResult> => {
     updateCalls++;
     throw new Error("connection refused");
   };
@@ -210,9 +219,9 @@ test("watcher handles updateFn exception gracefully", async () => {
 
 test("watcher detects changes in subdirectories", async () => {
   let updateCalls = 0;
-  const mockUpdate = async (): Promise<QmdCommandResult> => {
+  const mockUpdate = async (): Promise<UpdateResult> => {
     updateCalls++;
-    return { success: true };
+    return MOCK_UPDATE_RESULT;
   };
 
   // Create a subdirectory (simulating type directories like notes/)

@@ -35,9 +35,7 @@ export function startWatcher(deps: WatcherDeps): WatcherHandle {
       debounceTimer = null;
       try {
         const result = await updateFn();
-        if (!result.success) {
-          console.error("Watcher: QMD update failed:", result.error);
-        }
+        console.log(`Watcher: QMD update complete (indexed: ${result.indexed}, updated: ${result.updated})`);
       } catch (err) {
         console.error("Watcher: QMD update error:", err);
       }

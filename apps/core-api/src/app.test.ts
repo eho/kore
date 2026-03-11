@@ -1,5 +1,6 @@
 import { describe, test, expect, beforeAll, afterAll, beforeEach, afterEach } from "bun:test";
 import { createApp, ensureDataDirectories } from "./app";
+import type { QmdHealthStatus } from "./app";
 import { QueueRepository } from "./queue";
 import { join } from "node:path";
 import { mkdtemp, rm, readdir, readFile } from "node:fs/promises";
@@ -9,12 +10,12 @@ let tempDir: string;
 let queue: QueueRepository;
 let dbPath: string;
 
-function makeApp(overrides?: { apiKey?: string; qmdStatus?: () => string }) {
+function makeApp(overrides?: { apiKey?: string; qmdStatus?: () => Promise<QmdHealthStatus> }) {
   process.env.KORE_API_KEY = overrides?.apiKey ?? "test-key";
   return createApp({
     queue,
     dataPath: tempDir,
-    qmdStatus: overrides?.qmdStatus ?? (() => "online"),
+    qmdStatus: overrides?.qmdStatus ?? (async () => ({ status: "ready" as const })),
   });
 }
 
@@ -60,7 +61,7 @@ describe("ensureDataDirectories", () => {
 // ─── Health endpoint ─────────────────────────────────────────────────
 
 describe("GET /api/v1/health", () => {
-  test("returns health status with queue_length", async () => {
+  test("returns health status with qmd object and queue_length", async () => {
     const app = makeApp();
     const res = await app.handle(new Request("http://localhost/api/v1/health"));
     expect(res.status).toBe(200);
@@ -68,16 +69,32 @@ describe("GET /api/v1/health", () => {
     expect(body).toEqual({
       status: "ok",
       version: "1.0.0",
-      qmd_status: "online",
+      qmd: { status: "ready" },
       queue_length: 0,
     });
   });
 
-  test("reflects qmd_status unavailable", async () => {
-    const app = makeApp({ qmdStatus: () => "unavailable" });
+  test("reflects qmd status unavailable", async () => {
+    const app = makeApp({ qmdStatus: async () => ({ status: "unavailable" as const }) });
     const res = await app.handle(new Request("http://localhost/api/v1/health"));
     const body = await res.json();
-    expect(body.qmd_status).toBe("unavailable");
+    expect(body.qmd.status).toBe("unavailable");
+  });
+
+  test("reflects qmd bootstrapping status with index data", async () => {
+    const mockIndex = {
+      totalDocuments: 0,
+      needsEmbedding: 0,
+      hasVectorIndex: false,
+      collections: [],
+    };
+    const app = makeApp({
+      qmdStatus: async () => ({ status: "bootstrapping" as const, index: mockIndex }),
+    });
+    const res = await app.handle(new Request("http://localhost/api/v1/health"));
+    const body = await res.json();
+    expect(body.qmd.status).toBe("bootstrapping");
+    expect(body.qmd.index).toEqual(mockIndex);
   });
 
   test("does not require auth", async () => {

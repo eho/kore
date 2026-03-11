@@ -21,7 +21,7 @@ function makeApp() {
   return createApp({
     queue,
     dataPath: tempDir,
-    qmdStatus: () => "online",
+    qmdStatus: async () => ({ status: "ready" as const }),
     memoryIndex,
     eventDispatcher,
   });
