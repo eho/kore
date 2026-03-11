@@ -5,6 +5,7 @@ import { z } from "zod";
 import { randomUUID } from "crypto";
 import { BaseFrontmatterSchema, MemoryTypeEnum } from "@kore/shared-types";
 import type { BaseFrontmatter } from "@kore/shared-types";
+import type { IndexStatus } from "@kore/qmd-client";
 import { QueueRepository } from "./queue";
 import { slugify } from "./slugify";
 import { renderMarkdown } from "./markdown";
@@ -146,11 +147,18 @@ interface MemoryFull extends MemorySummary {
   content: string;
 }
 
+// ─── QMD Health Status ───────────────────────────────────────────────
+
+export interface QmdHealthStatus {
+  status: "ready" | "bootstrapping" | "unavailable";
+  index?: IndexStatus;
+}
+
 // ─── App Factory ─────────────────────────────────────────────────────
 
 export interface AppDeps {
   queue?: QueueRepository;
-  qmdStatus?: () => string | Promise<string>;
+  qmdStatus?: () => Promise<QmdHealthStatus>;
   dataPath?: string;
   memoryIndex?: MemoryIndex;
   eventDispatcher?: EventDispatcher;
@@ -159,7 +167,7 @@ export interface AppDeps {
 export function createApp(deps: AppDeps = {}) {
   const dataPath = deps.dataPath || resolveDataPath();
   const queue = deps.queue || new QueueRepository();
-  const qmdStatus = deps.qmdStatus || (() => "unavailable");
+  const qmdStatus = deps.qmdStatus || (async () => ({ status: "unavailable" as const }));
   const memoryIndex = deps.memoryIndex || new MemoryIndex();
   const eventDispatcher = deps.eventDispatcher || new EventDispatcher();
   const apiKey = process.env.KORE_API_KEY;
@@ -177,12 +185,15 @@ export function createApp(deps: AppDeps = {}) {
       }
     })
     // ─── Health ───────────────────────────────────────────────────
-    .get("/api/v1/health", async () => ({
-      status: "ok",
-      version: "1.0.0",
-      qmd_status: await qmdStatus(),
-      queue_length: queue.getQueueLength(),
-    }))
+    .get("/api/v1/health", async () => {
+      const qmd = await qmdStatus();
+      return {
+        status: "ok",
+        version: "1.0.0",
+        qmd,
+        queue_length: queue.getQueueLength(),
+      };
+    })
     // ─── Ingest Raw ───────────────────────────────────────────────
     .post("/api/v1/ingest/raw", async ({ body, set }) => {
       const result = RawIngestPayload.safeParse(body);

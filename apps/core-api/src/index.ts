@@ -1,4 +1,5 @@
 import { createApp, ensureDataDirectories } from "./app";
+import type { QmdHealthStatus } from "./app";
 import { QueueRepository } from "./queue";
 import { resolveDataPath, resolveQueueDbPath } from "./config";
 import { startWorker } from "./worker";
@@ -12,15 +13,40 @@ const dataPath = resolveDataPath();
 // Ensure data directories exist on startup
 await ensureDataDirectories(dataPath);
 
+// ── Initialize QMD store ────────────────────────────────────────────────
+
+const qmdDbPath = process.env.KORE_QMD_DB_PATH;
+
+try {
+  await qmdClient.initStore(qmdDbPath);
+  console.log("QMD store initialized");
+} catch (err) {
+  console.error("Failed to initialize QMD store:", err);
+  process.exit(1);
+}
+
+// ── Bootstrap tracking ──────────────────────────────────────────────────
+
+let bootstrapping = false;
+
+const qmdStatus = async (): Promise<QmdHealthStatus> => {
+  try {
+    const index = await qmdClient.getStatus();
+    return {
+      status: bootstrapping ? "bootstrapping" : "ready",
+      index,
+    };
+  } catch {
+    return { status: "unavailable" };
+  }
+};
+
+// ── Build memory index & start server ───────────────────────────────────
+
 const queue = new QueueRepository(resolveQueueDbPath());
 const memoryIndex = new MemoryIndex();
 await memoryIndex.build(dataPath);
 console.log(`Memory index built: ${memoryIndex.size} files indexed`);
-
-const qmdStatus = async () => {
-  const result = await qmdClient.status();
-  return result.online ? "ok" : "unavailable";
-};
 
 const eventDispatcher = new EventDispatcher();
 const app = createApp({
@@ -34,10 +60,49 @@ const app = createApp({
 app.listen(3000);
 console.log(`Kore Core API running on http://localhost:3000`);
 
-// Start background extraction worker
+// ── Background bootstrap (if index is empty) ───────────────────────────
+
+try {
+  const status = await qmdClient.getStatus();
+  if (status.totalDocuments === 0) {
+    bootstrapping = true;
+    console.log("QMD index is empty, bootstrapping in background...");
+
+    // Run update + embed asynchronously — do not block startup
+    (async () => {
+      try {
+        await qmdClient.update();
+        await qmdClient.embed();
+        console.log("QMD bootstrap complete");
+      } catch (err) {
+        console.error("QMD bootstrap error (non-fatal):", err);
+      } finally {
+        bootstrapping = false;
+      }
+    })();
+  }
+} catch (err) {
+  console.error("QMD status check failed (non-fatal):", err);
+}
+
+// ── Start background services ───────────────────────────────────────────
+
 const worker = startWorker({ queue, dataPath });
 console.log("Kore extraction worker started (polling every 5s)");
 
-// Start file watcher for QMD re-indexing
 const watcher = startWatcher({ dataPath });
 console.log("Kore file watcher started (watching for .md changes)");
+
+// ── Graceful shutdown ───────────────────────────────────────────────────
+
+async function shutdown() {
+  console.log("Shutting down...");
+  watcher.stop();
+  worker.stop();
+  await qmdClient.closeStore();
+  console.log("QMD store closed");
+  process.exit(0);
+}
+
+process.on("SIGTERM", shutdown);
+process.on("SIGINT", shutdown);
