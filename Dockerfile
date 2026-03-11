@@ -1,7 +1,7 @@
 # ==========================================
 # Builder Stage
 # ==========================================
-FROM oven/bun:1.1.8-debian AS builder
+FROM oven/bun:1.3.3-debian AS builder
 
 WORKDIR /app
 
@@ -30,7 +30,7 @@ COPY . .
 # ==========================================
 # Runner Stage
 # ==========================================
-FROM oven/bun:1.1.8-debian AS runner
+FROM oven/bun:1.3.3-debian AS runner
 
 WORKDIR /app
 
