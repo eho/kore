@@ -5,7 +5,6 @@ import { z } from "zod";
 import { randomUUID } from "crypto";
 import { BaseFrontmatterSchema, MemoryTypeEnum } from "@kore/shared-types";
 import type { BaseFrontmatter } from "@kore/shared-types";
-import type { IndexStatus } from "@kore/qmd-client";
 import { QueueRepository } from "./queue";
 import { slugify } from "./slugify";
 import { renderMarkdown } from "./markdown";
@@ -149,16 +148,18 @@ interface MemoryFull extends MemorySummary {
 
 // ─── QMD Health Status ───────────────────────────────────────────────
 
-export interface QmdHealthStatus {
-  status: "ready" | "bootstrapping" | "unavailable";
-  index?: IndexStatus;
+export interface QmdHealthSummary {
+  status: "ok" | "bootstrapping" | "unavailable";
+  doc_count?: number;
+  collections?: number;
+  needs_embedding?: number;
 }
 
 // ─── App Factory ─────────────────────────────────────────────────────
 
 export interface AppDeps {
   queue?: QueueRepository;
-  qmdStatus?: () => Promise<QmdHealthStatus>;
+  qmdStatus?: () => Promise<QmdHealthSummary>;
   dataPath?: string;
   memoryIndex?: MemoryIndex;
   eventDispatcher?: EventDispatcher;
