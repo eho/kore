@@ -1,97 +1,93 @@
-# `@kore/qmd-client`
+# @kore/qmd-client
 
-Typed wrapper around the [QMD](https://github.com/tobilu/qmd) CLI. All interactions with QMD go through this package — nothing in `apps/` calls `qmd` directly via shell.
+Typed wrapper around the `@tobilu/qmd` SDK. Manages a singleton `QMDStore` instance and exposes typed, awaitable functions for indexing, embedding, and status queries.
 
-## Prerequisites
+## Usage
 
-QMD must be installed and available on `$PATH`:
+```typescript
+import * as qmdClient from "@kore/qmd-client";
 
-```sh
-# Verify QMD is accessible
-qmd status
+// Initialize the store (once, at process startup)
+await qmdClient.initStore("/app/db/qmd.sqlite");
+
+// Scan filesystem and ingest changes
+const updateResult = await qmdClient.update();
+
+// Generate vector embeddings for new documents
+const embedResult = await qmdClient.embed();
+
+// Get index status
+const status = await qmdClient.getStatus();
+
+// Add a collection
+await qmdClient.addCollection("notes", {
+  path: "/data/notes",
+  pattern: "**/*.md",
+});
+
+// Add context for better search relevance
+await qmdClient.addContext("notes", "/", "Personal knowledge base");
+
+// Close on shutdown
+await qmdClient.closeStore();
 ```
 
 ## API
 
-All functions return typed result objects instead of throwing on failure. Check `success` / `online` before using the result.
+### `initStore(dbPath?: string) → Promise<void>`
 
----
+Initialize the singleton QMD store. Reads the notes directory from
+`KORE_NOTES_PATH` or `KORE_DATA_PATH` env vars and registers it as a
+`"memories"` collection. `dbPath` defaults to `KORE_QMD_DB_PATH` env or
+`/app/db/qmd.sqlite`.
 
-### `update() → Promise<QmdCommandResult>`
+### `closeStore() → Promise<void>`
 
-Triggers `qmd update` to refresh the index after new `.md` files are written.
+Close the store and release all resources (LLM models, DB connections).
 
-```ts
-import { update } from "@kore/qmd-client";
+### `update() → Promise<UpdateResult>`
 
-const result = await update();
-// Wraps: qmd update
+Scan the filesystem and ingest content changes into SQLite. Does NOT
+generate vector embeddings — call `embed()` separately.
 
-if (!result.success) {
-  console.error("QMD update failed:", result.error);
-}
-```
+### `embed() → Promise<EmbedResult>`
 
----
+Generate vector embeddings for documents that need them.
 
-### `collectionAdd(path, name) → Promise<QmdCommandResult>`
+### `getStatus() → Promise<IndexStatus>`
 
-Registers a directory as a QMD collection.
+Get index status (document counts, collections, embedding state).
 
-```ts
-import { collectionAdd } from "@kore/qmd-client";
+### `getIndexHealth() → Promise<IndexHealthInfo>`
 
-const result = await collectionAdd("/Users/you/kore-data", "kore-memory");
-// Wraps: qmd collection add /Users/you/kore-data --name kore-memory
-```
+Get index health info (stale embeddings count, total docs, days stale).
 
----
+### `addCollection(name, opts) → Promise<void>`
 
-### `status() → Promise<QmdStatusResult>`
+Add or update a collection in the store.
 
-Checks if QMD is responsive. Used by the health endpoint.
+### `addContext(collection, path, text) → Promise<boolean>`
 
-```ts
-import { status } from "@kore/qmd-client";
+Add context for a path within a collection.
 
-const result = await status();
-// Wraps: qmd status
+### `resetStore() → void`
 
-if (result.online) {
-  console.log("QMD is up");
-} else {
-  console.warn("QMD unavailable:", result.error);
-}
-```
+**Test-only.** Nullifies the singleton without closing. Use in
+`afterEach` / `beforeEach` to prevent test collisions.
 
----
+## Types
 
-## Return Types
+All types are re-exported from `@tobilu/qmd`:
 
-```ts
-interface QmdCommandResult {
-  success: boolean;
-  error?: string;  // populated when success is false
-}
-
-interface QmdStatusResult {
-  online: boolean;
-  error?: string;  // populated when online is false
-}
-```
-
-## Error Handling
-
-- If the `qmd` binary is not found, the spawn fails gracefully and returns `{ success: false, error: "Failed to spawn \"qmd\": ..." }`.
-- If `qmd` exits with a non-zero code, `stderr` is captured and returned in `error`.
-- No unhandled exceptions are thrown to callers.
+- `UpdateResult` — `{ collections, indexed, updated, unchanged, removed, needsEmbedding }`
+- `EmbedResult` — `{ docsProcessed, chunksEmbedded, errors, durationMs }`
+- `IndexStatus` — `{ totalDocuments, needsEmbedding, hasVectorIndex, collections }`
+- `IndexHealthInfo` — `{ needsEmbedding, totalDocs, daysStale }`
+- `QMDStore` — full store interface
 
 ## Development
 
-```sh
-# Type check
-bun run --filter @kore/qmd-client typecheck
-
-# Run tests (mocks Bun.spawn — no QMD binary required)
+```bash
+# Run tests (mocks QMDStore — no QMD binary required)
 bun test packages/qmd-client
 ```
