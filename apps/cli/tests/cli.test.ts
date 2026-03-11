@@ -753,3 +753,134 @@ describe("delete command", () => {
     expect(out).toContain("Aborted.");
   });
 });
+
+// ─── Search Command ───────────────────────────────────────────────────────────
+
+describe("search command", () => {
+  const searchServer = serve({
+    port: 19988,
+    fetch(req) {
+      const url = new URL(req.url);
+      if (url.pathname === "/api/v1/search" && req.method === "POST") {
+        return (async () => {
+          const body = await req.json();
+          if (body.query === "error") {
+            return new Response(JSON.stringify({ error: "Search index not available", code: "UNAVAILABLE" }), {
+              status: 503,
+              headers: { "Content-Type": "application/json" },
+            });
+          }
+          if (body.query === "empty") {
+            return new Response(JSON.stringify([]), {
+              headers: { "Content-Type": "application/json" },
+            });
+          }
+          const results = [
+            {
+              path: "data/places/tokyo-ramen.md",
+              title: "Tokyo Ramen Shop",
+              snippet: "Amazing ramen spot in Shinjuku with rich tonkotsu broth...",
+              score: 0.95,
+              collection: "places",
+            },
+            {
+              path: "data/notes/japan-trip.md",
+              title: "Travel Notes: Japan Trip",
+              snippet: "Visited several ramen shops including the famous one in...",
+              score: 0.85,
+              collection: "notes",
+            },
+          ];
+          
+          let filtered = results;
+          if (body.collection) {
+             filtered = filtered.filter(r => r.collection === body.collection);
+          }
+          if (body.limit) {
+             filtered = filtered.slice(0, body.limit);
+          }
+
+          return new Response(JSON.stringify(filtered), {
+            headers: { "Content-Type": "application/json" },
+          });
+        })();
+      }
+      return new Response("Not found", { status: 404 });
+    },
+  });
+
+  afterAll(() => {
+    searchServer.stop();
+  });
+
+  test("prints formatted search results", async () => {
+    const proc = runCliWithPort(19988, "search", "ramen");
+    const exitCode = await proc.exited;
+    const out = await new Response(proc.stdout).text();
+
+    expect(exitCode).toBe(0);
+    expect(out).toContain("Tokyo Ramen Shop");
+    expect(out).toContain("Amazing ramen spot in Shinjuku");
+    expect(out).toContain("Travel Notes: Japan Trip");
+  });
+
+  test("--limit restricts results", async () => {
+    const proc = runCliWithPort(19988, "search", "ramen", "--limit", "1");
+    const exitCode = await proc.exited;
+    const out = await new Response(proc.stdout).text();
+
+    expect(exitCode).toBe(0);
+    expect(out).toContain("Tokyo Ramen Shop");
+    expect(out).not.toContain("Travel Notes: Japan Trip");
+  });
+
+  test("--collection filters results", async () => {
+    const proc = runCliWithPort(19988, "search", "ramen", "--collection", "places");
+    const exitCode = await proc.exited;
+    const out = await new Response(proc.stdout).text();
+
+    expect(exitCode).toBe(0);
+    expect(out).toContain("Tokyo Ramen Shop");
+    expect(out).not.toContain("Travel Notes: Japan Trip");
+  });
+
+  test("--json outputs JSON structure with query and results", async () => {
+    const proc = runCliWithPort(19988, "search", "ramen", "--json");
+    const exitCode = await proc.exited;
+    const out = await new Response(proc.stdout).text();
+
+    expect(exitCode).toBe(0);
+    const data = JSON.parse(out);
+    expect(data.query).toBe("ramen");
+    expect(Array.isArray(data.results)).toBe(true);
+    expect(data.results.length).toBe(2);
+    expect(data.results[0].title).toBe("Tokyo Ramen Shop");
+  });
+
+  test("empty results prints 'No results found'", async () => {
+    const proc = runCliWithPort(19988, "search", "empty");
+    const exitCode = await proc.exited;
+    const out = await new Response(proc.stdout).text();
+
+    expect(exitCode).toBe(0);
+    expect(out).toContain("No results found for 'empty'");
+  });
+
+  test("API error gracefully exits with code 1", async () => {
+    const proc = runCliWithPort(19988, "search", "error");
+    const exitCode = await proc.exited;
+    const stderr = await new Response(proc.stderr).text();
+
+    expect(exitCode).toBe(1);
+    expect(stderr).toContain("Search index not available");
+  });
+
+  test("API connection failure exits 1", async () => {
+    const proc = runCliWithPort(19994, "search", "ramen");
+    const exitCode = await proc.exited;
+    const stderr = await new Response(proc.stderr).text();
+
+    expect(exitCode).toBe(1);
+    expect(stderr).toContain("Cannot reach Kore API");
+  });
+});
