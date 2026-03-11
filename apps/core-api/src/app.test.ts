@@ -1,7 +1,7 @@
 import { describe, test, expect, beforeAll, afterAll, beforeEach, afterEach } from "bun:test";
 import { createApp, ensureDataDirectories } from "./app";
 import type { QmdHealthSummary } from "./app";
-import type { HybridQueryResult, HybridQueryOptions } from "@kore/qmd-client";
+import type { HybridQueryResult, SearchOptions } from "@kore/qmd-client";
 import { QueueRepository } from "./queue";
 import { join } from "node:path";
 import { mkdtemp, rm, readdir, readFile } from "node:fs/promises";
@@ -14,7 +14,7 @@ let dbPath: string;
 function makeApp(overrides?: {
   apiKey?: string;
   qmdStatus?: () => Promise<QmdHealthSummary>;
-  searchFn?: (query: string, options?: HybridQueryOptions) => Promise<HybridQueryResult[]>;
+  searchFn?: (query: string, options?: SearchOptions) => Promise<HybridQueryResult[]>;
 }) {
   process.env.KORE_API_KEY = overrides?.apiKey ?? "test-key";
   return createApp({

@@ -4,6 +4,6 @@
   "private": true,
   "main": "index.ts",
   "dependencies": {
-    "@tobilu/qmd": "*"
+    "@tobilu/qmd": "^2.0.1"
   }
 }

@@ -15,7 +15,7 @@ import {
   type IndexHealthInfo,
   type CollectionConfig,
   type HybridQueryResult,
-  type HybridQueryOptions,
+  type SearchOptions,
 } from "@tobilu/qmd";
 
 // Re-export SDK types for downstream consumers
@@ -26,7 +26,7 @@ export type {
   IndexStatus,
   IndexHealthInfo,
   HybridQueryResult,
-  HybridQueryOptions,
+  SearchOptions,
 };
 
 // ── Singleton ──────────────────────────────────────────────────────────────
@@ -158,9 +158,9 @@ export async function addContext(
  */
 export function search(
   query: string,
-  options?: HybridQueryOptions,
+  options?: SearchOptions,
 ): Promise<HybridQueryResult[]> {
-  return withLock(() => requireStore().query(query, options));
+  return withLock(() => requireStore().search({ query, ...options }));
 }
 
 /**

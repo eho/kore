@@ -14,6 +14,7 @@
     "typescript": "^5.9.3"
   },
   "dependencies": {
+    "@tobilu/qmd": "^2.0.1",
     "protobufjs": "^8.0.0"
   }
 }

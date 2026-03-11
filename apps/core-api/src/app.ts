@@ -13,7 +13,7 @@ import { join } from "node:path";
 import { resolveDataPath } from "./config";
 import { MemoryIndex } from "./memory-index";
 import { EventDispatcher } from "./event-dispatcher";
-import type { HybridQueryResult, HybridQueryOptions } from "@kore/qmd-client";
+import type { HybridQueryResult, SearchOptions } from "@kore/qmd-client";
 
 // ─── Zod Schemas for request validation ─────────────────────────────
 
@@ -171,7 +171,7 @@ export interface QmdHealthSummary {
 export interface AppDeps {
   queue?: QueueRepository;
   qmdStatus?: () => Promise<QmdHealthSummary>;
-  searchFn?: (query: string, options?: HybridQueryOptions) => Promise<HybridQueryResult[]>;
+  searchFn?: (query: string, options?: SearchOptions) => Promise<HybridQueryResult[]>;
   dataPath?: string;
   memoryIndex?: MemoryIndex;
   eventDispatcher?: EventDispatcher;
