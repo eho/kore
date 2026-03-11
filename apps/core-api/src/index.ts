@@ -60,6 +60,7 @@ const app = createApp({
   memoryIndex,
   eventDispatcher,
   qmdStatus,
+  searchFn: qmdClient.search,
 });
 
 app.listen(3000);
