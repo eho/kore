@@ -198,6 +198,45 @@ Exits with code `0` on success, `1` on failure or if not found.
 
 ---
 
+### `kore search`
+
+Search memories using hybrid semantic search (BM25 + vector + LLM reranking).
+
+```sh
+kore search "tokyo ramen"
+kore search "meeting notes" --limit 5
+kore search "project ideas" --collection work
+kore search "debugging tips" --intent "programming reference" --json
+
+# Interactive mode (prompts for query)
+kore search
+```
+
+Example output:
+
+```
+Tokyo Ramen Shop
+data/places/tokyo-ramen.md
+Amazing ramen spot in Shinjuku with rich tonkotsu broth...
+───
+Travel Notes: Japan Trip
+data/notes/japan-trip.md
+Visited several ramen shops including the famous one in...
+```
+
+Options:
+
+| Flag                    | Description                                      |
+| ----------------------- | ------------------------------------------------ |
+| `--intent <string>`     | Hint for the LLM reranker                        |
+| `--limit <number>`      | Max results to return (default `10`)             |
+| `--collection <string>` | Filter by a specific collection                  |
+| `--json`                | Output `{ query, results }` JSON envelope        |
+
+Exits with code `1` on API errors (e.g., search index unavailable).
+
+---
+
 ### `kore status`
 
 Check the status of an ingestion task.

@@ -8,6 +8,7 @@ import { statusCommand } from "./commands/status.ts";
 import { listCommand } from "./commands/list.ts";
 import { showCommand } from "./commands/show.ts";
 import { deleteCommand } from "./commands/delete.ts";
+import { searchCommand } from "./commands/search.ts";
 
 // Read version from package.json
 const pkg = await import("../package.json", { with: { type: "json" } });
@@ -99,6 +100,19 @@ program
   .option("--force", "Skip confirmation prompt", false)
   .action(async (id, opts) => {
     await deleteCommand(id, opts);
+  });
+
+// ─── search ──────────────────────────────────────────────────────────────────
+program
+  .command("search")
+  .description("Search memories using semantic search")
+  .argument("[query]", "Search query (prompted interactively if omitted)")
+  .option("--intent <string>", "Hint for the reranker")
+  .option("--limit <number>", "Max results to return", "10")
+  .option("--collection <string>", "Filter by collection")
+  .option("--json", "Output results as JSON", false)
+  .action(async (query, opts) => {
+    await searchCommand(query, opts);
   });
 
 // Unknown commands: print error + help, exit 1
