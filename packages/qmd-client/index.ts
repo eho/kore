@@ -14,6 +14,8 @@ import {
   type IndexStatus,
   type IndexHealthInfo,
   type CollectionConfig,
+  type HybridQueryResult,
+  type HybridQueryOptions,
 } from "@tobilu/qmd";
 
 // Re-export SDK types for downstream consumers
@@ -23,6 +25,8 @@ export type {
   EmbedResult,
   IndexStatus,
   IndexHealthInfo,
+  HybridQueryResult,
+  HybridQueryOptions,
 };
 
 // ── Singleton ──────────────────────────────────────────────────────────────
@@ -146,6 +150,17 @@ export async function addContext(
   contextText: string,
 ): Promise<boolean> {
   return requireStore().addContext(collectionName, pathPrefix, contextText);
+}
+
+/**
+ * Hybrid search: BM25 + vector + query expansion + LLM reranking.
+ * Returns ranked results with snippets and scores.
+ */
+export function search(
+  query: string,
+  options?: HybridQueryOptions,
+): Promise<HybridQueryResult[]> {
+  return withLock(() => requireStore().query(query, options));
 }
 
 /**

@@ -1,6 +1,7 @@
 import { describe, test, expect, beforeAll, afterAll, beforeEach, afterEach } from "bun:test";
 import { createApp, ensureDataDirectories } from "./app";
 import type { QmdHealthSummary } from "./app";
+import type { HybridQueryResult, HybridQueryOptions } from "@kore/qmd-client";
 import { QueueRepository } from "./queue";
 import { join } from "node:path";
 import { mkdtemp, rm, readdir, readFile } from "node:fs/promises";
@@ -10,12 +11,17 @@ let tempDir: string;
 let queue: QueueRepository;
 let dbPath: string;
 
-function makeApp(overrides?: { apiKey?: string; qmdStatus?: () => Promise<QmdHealthSummary> }) {
+function makeApp(overrides?: {
+  apiKey?: string;
+  qmdStatus?: () => Promise<QmdHealthSummary>;
+  searchFn?: (query: string, options?: HybridQueryOptions) => Promise<HybridQueryResult[]>;
+}) {
   process.env.KORE_API_KEY = overrides?.apiKey ?? "test-key";
   return createApp({
     queue,
     dataPath: tempDir,
     qmdStatus: overrides?.qmdStatus ?? (async () => ({ status: "ok" as const })),
+    searchFn: overrides?.searchFn,
   });
 }
 
@@ -331,5 +337,115 @@ describe("POST /api/v1/ingest/structured", () => {
       }),
     });
     expect(res.status).toBe(400);
+  });
+});
+
+// ─── POST /api/v1/search ─────────────────────────────────────────────
+
+describe("POST /api/v1/search", () => {
+  const mockResults: HybridQueryResult[] = [
+    {
+      file: "/app/data/notes/meeting.md",
+      displayPath: "qmd://memories/notes/meeting.md",
+      title: "Team Meeting Notes",
+      body: "Full body content...",
+      bestChunk: "Discussed roadmap priorities for Q2",
+      bestChunkPos: 0,
+      score: 0.92,
+      context: null,
+      docid: "abc123",
+    },
+    {
+      file: "/app/data/people/alice.md",
+      displayPath: "qmd://memories/people/alice.md",
+      title: "Alice Smith",
+      body: "Contact details...",
+      bestChunk: "Product manager at Acme Corp",
+      bestChunkPos: 0,
+      score: 0.78,
+      context: null,
+      docid: "def456",
+    },
+  ];
+
+  test("returns mapped search results on success", async () => {
+    const app = makeApp({
+      searchFn: async () => mockResults,
+    });
+    const res = await req(app, "/api/v1/search", {
+      method: "POST",
+      body: JSON.stringify({ query: "meeting notes" }),
+    });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body).toEqual([
+      {
+        path: "/app/data/notes/meeting.md",
+        title: "Team Meeting Notes",
+        snippet: "Discussed roadmap priorities for Q2",
+        score: 0.92,
+        collection: "memories",
+      },
+      {
+        path: "/app/data/people/alice.md",
+        title: "Alice Smith",
+        snippet: "Product manager at Acme Corp",
+        score: 0.78,
+        collection: "memories",
+      },
+    ]);
+  });
+
+  test("returns 400 when query is missing", async () => {
+    const app = makeApp({
+      searchFn: async () => [],
+    });
+    const res = await req(app, "/api/v1/search", {
+      method: "POST",
+      body: JSON.stringify({}),
+    });
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.code).toBe("VALIDATION_ERROR");
+  });
+
+  test("returns 503 when store is not initialized (no searchFn)", async () => {
+    const app = makeApp(); // no searchFn provided
+    const res = await req(app, "/api/v1/search", {
+      method: "POST",
+      body: JSON.stringify({ query: "test" }),
+    });
+    expect(res.status).toBe(503);
+    const body = await res.json();
+    expect(body.error).toBe("Search index not available");
+  });
+
+  test("returns 503 when searchFn throws", async () => {
+    const app = makeApp({
+      searchFn: async () => {
+        throw new Error("Store not ready");
+      },
+    });
+    const res = await req(app, "/api/v1/search", {
+      method: "POST",
+      body: JSON.stringify({ query: "test" }),
+    });
+    expect(res.status).toBe(503);
+    const body = await res.json();
+    expect(body.error).toBe("Search index not available");
+  });
+
+  test("requires bearer auth", async () => {
+    const app = makeApp({
+      searchFn: async () => [],
+    });
+    const res = await app.handle(
+      new Request("http://localhost/api/v1/search", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ query: "test" }),
+      })
+    );
+    expect(res.status).toBe(401);
   });
 });
