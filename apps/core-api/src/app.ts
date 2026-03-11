@@ -13,6 +13,7 @@ import { join } from "node:path";
 import { resolveDataPath } from "./config";
 import { MemoryIndex } from "./memory-index";
 import { EventDispatcher } from "./event-dispatcher";
+import type { HybridQueryResult, HybridQueryOptions } from "@kore/qmd-client";
 
 // ─── Zod Schemas for request validation ─────────────────────────────
 
@@ -30,6 +31,16 @@ const StructuredIngestPayload = z.object({
     frontmatter: BaseFrontmatterSchema.omit({ id: true }),
   }),
 });
+
+const SearchRequestPayload = z.object({
+  query: z.string().min(1, "query is required"),
+  intent: z.string().optional(),
+  limit: z.number().int().positive().optional(),
+  collection: z.string().optional(),
+});
+
+const DEFAULT_SEARCH_INTENT =
+  "personal knowledge base containing notes, contacts, and bookmarks";
 
 // ─── Helpers ─────────────────────────────────────────────────────────
 
@@ -160,6 +171,7 @@ export interface QmdHealthSummary {
 export interface AppDeps {
   queue?: QueueRepository;
   qmdStatus?: () => Promise<QmdHealthSummary>;
+  searchFn?: (query: string, options?: HybridQueryOptions) => Promise<HybridQueryResult[]>;
   dataPath?: string;
   memoryIndex?: MemoryIndex;
   eventDispatcher?: EventDispatcher;
@@ -169,6 +181,7 @@ export function createApp(deps: AppDeps = {}) {
   const dataPath = deps.dataPath || resolveDataPath();
   const queue = deps.queue || new QueueRepository();
   const qmdStatus = deps.qmdStatus || (async () => ({ status: "unavailable" as const }));
+  const searchFn = deps.searchFn;
   const memoryIndex = deps.memoryIndex || new MemoryIndex();
   const eventDispatcher = deps.eventDispatcher || new EventDispatcher();
   const apiKey = process.env.KORE_API_KEY;
@@ -195,6 +208,48 @@ export function createApp(deps: AppDeps = {}) {
         queue_length: queue.getQueueLength(),
       };
     })
+    // ─── Search ───────────────────────────────────────────────────
+    .post("/api/v1/search", async ({ body, set }) => {
+      const result = SearchRequestPayload.safeParse(body);
+      if (!result.success) {
+        set.status = 400;
+        return {
+          error: result.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; "),
+          code: "VALIDATION_ERROR",
+        };
+      }
+
+      if (!searchFn) {
+        set.status = 503;
+        return { error: "Search index not available" };
+      }
+
+      const { query, intent, limit, collection } = result.data;
+      const cappedLimit = Math.min(limit ?? 10, 20);
+
+      try {
+        const results = await searchFn(query, {
+          intent: intent ?? DEFAULT_SEARCH_INTENT,
+          limit: cappedLimit,
+          collection,
+        });
+
+        return results.map((r) => {
+          // Extract collection name from displayPath (qmd://collection-name/...)
+          const dpMatch = r.displayPath?.match(/^qmd:\/\/([^/]+)/);
+          return {
+            path: r.file,
+            title: r.title,
+            snippet: r.bestChunk,
+            score: r.score,
+            collection: dpMatch?.[1] ?? null,
+          };
+        });
+      } catch {
+        set.status = 503;
+        return { error: "Search index not available" };
+      }
+    }, { body: t.Any() })
     // ─── Ingest Raw ───────────────────────────────────────────────
     .post("/api/v1/ingest/raw", async ({ body, set }) => {
       const result = RawIngestPayload.safeParse(body);

@@ -119,6 +119,7 @@ All endpoints except `/health` require `Authorization: Bearer <KORE_API_KEY>`.
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
 | `GET` | `/api/v1/health` | No | Health check — returns server status, QMD status, and current queue length |
+| `POST` | `/api/v1/search` | Yes | Hybrid semantic search over indexed memories — returns ranked results |
 | `POST` | `/api/v1/ingest/raw` | Yes | Queue raw text for async LLM extraction → returns `202` with `task_id` |
 | `GET` | `/api/v1/task/:id` | Yes | Check extraction task status (`queued`, `processing`, `completed`, `failed`) |
 | `POST` | `/api/v1/ingest/structured` | Yes | Directly write a fully-formed memory file, bypassing LLM → returns `200` with `file_path` |
@@ -139,6 +140,47 @@ All endpoints except `/health` require `Authorization: Bearer <KORE_API_KEY>`.
   },
   "queue_length": 0
 }
+```
+
+### `POST /api/v1/search` payload
+
+```json
+{
+  "query": "meeting notes from last week",
+  "intent": "personal knowledge base containing notes, contacts, and bookmarks",
+  "limit": 10,
+  "collection": "memories"
+}
+```
+
+- `query` (required) — the search string
+- `intent` (optional) — domain hint for reranking; defaults to `"personal knowledge base containing notes, contacts, and bookmarks"`
+- `limit` (optional) — max results, capped at 20, defaults to 10
+- `collection` (optional) — restrict search to a named collection
+
+#### Response `200`
+
+```json
+[
+  {
+    "path": "/app/data/notes/meeting.md",
+    "title": "Team Meeting Notes",
+    "snippet": "Discussed roadmap priorities for Q2",
+    "score": 0.92,
+    "collection": "memories"
+  }
+]
+```
+
+Returns `503 { "error": "Search index not available" }` if the QMD store is not initialized.
+
+#### Example
+
+```bash
+curl -X POST http://localhost:3000/api/v1/search \
+  -H "Authorization: Bearer $KORE_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"query": "ramen spots in Tokyo"}'
 ```
 
 ### `POST /api/v1/ingest/raw` payload
