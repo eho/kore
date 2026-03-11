@@ -1,163 +1,294 @@
-import { test, expect, describe, afterEach } from "bun:test";
-import {
+import { test, expect, describe, beforeEach, mock } from "bun:test";
+import type { QMDStore, UpdateResult, IndexStatus } from "@tobilu/qmd";
+
+// ── Mock Setup ─────────────────────────────────────────────────────────────
+// Mock createStore from @tobilu/qmd before importing qmd-client.
+
+const mockStore: Partial<QMDStore> = {
+  update: mock(() =>
+    Promise.resolve({
+      collections: 1,
+      indexed: 5,
+      updated: 2,
+      unchanged: 3,
+      removed: 0,
+      needsEmbedding: 2,
+    } satisfies UpdateResult),
+  ),
+  embed: mock(() =>
+    Promise.resolve({
+      docsProcessed: 2,
+      chunksEmbedded: 10,
+      errors: 0,
+      durationMs: 500,
+    }),
+  ),
+  getStatus: mock(() =>
+    Promise.resolve({
+      totalDocuments: 5,
+      needsEmbedding: 2,
+      hasVectorIndex: true,
+      collections: [
+        {
+          name: "memories",
+          path: "/app/data",
+          pattern: "**/*.md",
+          documents: 5,
+          lastUpdated: "2026-03-11T00:00:00Z",
+        },
+      ],
+    } satisfies IndexStatus),
+  ),
+  getIndexHealth: mock(() =>
+    Promise.resolve({
+      needsEmbedding: 2,
+      totalDocs: 5,
+      daysStale: null,
+    }),
+  ),
+  addCollection: mock(() => Promise.resolve()),
+  addContext: mock(() => Promise.resolve(true)),
+  close: mock(() => Promise.resolve()),
+};
+
+mock.module("@tobilu/qmd", () => ({
+  createStore: mock(() => Promise.resolve(mockStore)),
+}));
+
+// Import qmd-client AFTER mocking @tobilu/qmd
+const {
+  initStore,
+  closeStore,
   update,
-  collectionAdd,
-  status,
-  setSpawn,
-  type SpawnFn,
-} from "./index";
+  embed,
+  getStatus,
+  getIndexHealth,
+  addCollection,
+  addContext,
+  resetStore,
+} = await import("./index");
 
-function mockSpawn(
-  overrides: Partial<{ exitCode: number; stdout: string; stderr: string }> = {}
-): { spy: SpawnFn & { calls: string[][] }; restore: () => void } {
-  const calls: string[][] = [];
-  const fn: SpawnFn & { calls: string[][] } = async (cmd) => {
-    calls.push(cmd);
-    return {
-      exitCode: overrides.exitCode ?? 0,
-      stdout: overrides.stdout ?? "",
-      stderr: overrides.stderr ?? "",
-    };
-  };
-  fn.calls = calls;
-  const restore = setSpawn(fn);
-  return { spy: fn, restore };
-}
+const { createStore: mockCreateStore } = await import("@tobilu/qmd");
 
-function mockSpawnThrow(errorMessage: string) {
-  const restore = setSpawn(async () => {
-    throw new Error(errorMessage);
-  });
-  return { restore };
-}
+// ── Tests ──────────────────────────────────────────────────────────────────
 
 describe("qmd-client", () => {
-  let restore: (() => void) | null = null;
-
-  afterEach(() => {
-    restore?.();
-    restore = null;
+  beforeEach(() => {
+    resetStore();
+    (mockCreateStore as ReturnType<typeof mock>).mockClear();
+    // Clear all mock store method call counts
+    for (const fn of Object.values(mockStore)) {
+      if (typeof fn === "function" && "mockClear" in fn) {
+        (fn as ReturnType<typeof mock>).mockClear();
+      }
+    }
   });
 
-  // ─── update() ─────────────────────────────────────────────
+  // ─── initStore() ───────────────────────────────────────────
+
+  describe("initStore()", () => {
+    test("calls createStore with correct dbPath and inline config", async () => {
+      await initStore("/tmp/test.sqlite");
+
+      expect(mockCreateStore).toHaveBeenCalledTimes(1);
+      const callArgs = (mockCreateStore as ReturnType<typeof mock>).mock
+        .calls[0] as [{ dbPath: string; config: Record<string, unknown> }];
+      expect(callArgs[0].dbPath).toBe("/tmp/test.sqlite");
+      expect(callArgs[0].config).toEqual({
+        collections: {
+          memories: {
+            path: expect.any(String),
+            pattern: "**/*.md",
+          },
+        },
+      });
+    });
+
+    test("throws if called twice without closeStore()", async () => {
+      await initStore("/tmp/test.sqlite");
+      expect(initStore("/tmp/test2.sqlite")).rejects.toThrow(
+        "already initialized",
+      );
+    });
+
+    test("uses KORE_QMD_DB_PATH env var as default dbPath", async () => {
+      const original = process.env.KORE_QMD_DB_PATH;
+      process.env.KORE_QMD_DB_PATH = "/custom/path.sqlite";
+      try {
+        await initStore();
+        const callArgs = (mockCreateStore as ReturnType<typeof mock>).mock
+          .calls[0] as [{ dbPath: string }];
+        expect(callArgs[0].dbPath).toBe("/custom/path.sqlite");
+      } finally {
+        if (original === undefined) {
+          delete process.env.KORE_QMD_DB_PATH;
+        } else {
+          process.env.KORE_QMD_DB_PATH = original;
+        }
+      }
+    });
+  });
+
+  // ─── Functions before init ─────────────────────────────────
+
+  describe("before initStore()", () => {
+    test("update() throws when store not initialized", () => {
+      expect(update()).rejects.toThrow("not initialized");
+    });
+
+    test("embed() throws when store not initialized", () => {
+      expect(embed()).rejects.toThrow("not initialized");
+    });
+
+    test("getStatus() throws when store not initialized", () => {
+      expect(getStatus()).rejects.toThrow("not initialized");
+    });
+
+    test("addCollection() throws when store not initialized", () => {
+      expect(
+        addCollection("test", { path: "/data" }),
+      ).rejects.toThrow("not initialized");
+    });
+
+    test("addContext() throws when store not initialized", () => {
+      expect(
+        addContext("test", "/", "some context"),
+      ).rejects.toThrow("not initialized");
+    });
+  });
+
+  // ─── update() ──────────────────────────────────────────────
 
   describe("update()", () => {
-    test("calls qmd update and returns success", async () => {
-      const { spy, restore: r } = mockSpawn();
-      restore = r;
+    test("returns UpdateResult on success", async () => {
+      await initStore("/tmp/test.sqlite");
       const result = await update();
-      expect(result).toEqual({ success: true });
-      expect(spy.calls).toEqual([["qmd", "update"]]);
-    });
-
-    test("returns error on non-zero exit code", async () => {
-      const { spy: _, restore: r } = mockSpawn({
-        exitCode: 1,
-        stderr: "index locked",
+      expect(result).toEqual({
+        collections: 1,
+        indexed: 5,
+        updated: 2,
+        unchanged: 3,
+        removed: 0,
+        needsEmbedding: 2,
       });
-      restore = r;
-      const result = await update();
-      expect(result.success).toBe(false);
-      expect(result.error).toBe("index locked");
+      expect(mockStore.update).toHaveBeenCalledTimes(1);
     });
 
-    test("returns exit code message when stderr is empty", async () => {
-      const { restore: r } = mockSpawn({ exitCode: 2, stderr: "" });
-      restore = r;
-      const result = await update();
-      expect(result.success).toBe(false);
-      expect(result.error).toBe("qmd update exited with code 2");
-    });
-
-    test("handles spawn failure gracefully", async () => {
-      const { restore: r } = mockSpawnThrow("qmd not found");
-      restore = r;
-      const result = await update();
-      expect(result.success).toBe(false);
-      expect(result.error).toContain("qmd not found");
-    });
-  });
-
-  // ─── collectionAdd() ─────────────────────────────────────
-
-  describe("collectionAdd()", () => {
-    test("calls qmd collection add with correct args", async () => {
-      const { spy, restore: r } = mockSpawn();
-      restore = r;
-      const result = await collectionAdd("/data/notes", "my-notes");
-      expect(result).toEqual({ success: true });
-      expect(spy.calls).toEqual([
-        ["qmd", "collection", "add", "/data/notes", "--name", "my-notes"],
-      ]);
-    });
-
-    test("returns error on non-zero exit code", async () => {
-      const { restore: r } = mockSpawn({
-        exitCode: 1,
-        stderr: "collection already exists",
-      });
-      restore = r;
-      const result = await collectionAdd("/data", "test");
-      expect(result.success).toBe(false);
-      expect(result.error).toBe("collection already exists");
-    });
-
-    test("returns exit code message when stderr is empty", async () => {
-      const { restore: r } = mockSpawn({ exitCode: 3, stderr: "  " });
-      restore = r;
-      const result = await collectionAdd("/data", "test");
-      expect(result.success).toBe(false);
-      // stderr is whitespace-only, so falls back to exit code message
-      expect(result.error).toBe("qmd collection add exited with code 3");
-    });
-
-    test("handles spawn failure gracefully", async () => {
-      const { restore: r } = mockSpawnThrow("permission denied");
-      restore = r;
-      const result = await collectionAdd("/data", "test");
-      expect(result.success).toBe(false);
-      expect(result.error).toContain("permission denied");
-    });
-  });
-
-  // ─── status() ─────────────────────────────────────────────
-
-  describe("status()", () => {
-    test("calls qmd status and returns online", async () => {
-      const { spy, restore: r } = mockSpawn({ stdout: "QMD is running" });
-      restore = r;
-      const result = await status();
-      expect(result).toEqual({ online: true });
-      expect(spy.calls).toEqual([["qmd", "status"]]);
-    });
-
-    test("returns offline on non-zero exit code", async () => {
-      const { restore: r } = mockSpawn({
-        exitCode: 1,
-        stderr: "daemon not running",
-      });
-      restore = r;
-      const result = await status();
-      expect(result.online).toBe(false);
-      expect(result.error).toBe("daemon not running");
-    });
-
-    test("returns exit code message when stderr is empty", async () => {
-      const { restore: r } = mockSpawn({ exitCode: 127, stderr: "" });
-      restore = r;
-      const result = await status();
-      expect(result.online).toBe(false);
-      expect(result.error).toBe("qmd status exited with code 127");
-    });
-
-    test("handles spawn failure gracefully (binary not found)", async () => {
-      const { restore: r } = mockSpawnThrow(
-        "Failed to spawn \"qmd\": No such file"
+    test("propagates errors from store.update()", async () => {
+      await initStore("/tmp/test.sqlite");
+      (mockStore.update as ReturnType<typeof mock>).mockImplementationOnce(
+        () => Promise.reject(new Error("SQLite lock")),
       );
-      restore = r;
-      const result = await status();
-      expect(result.online).toBe(false);
-      expect(result.error).toContain("Failed to spawn");
+      expect(update()).rejects.toThrow("SQLite lock");
+    });
+  });
+
+  // ─── embed() ──────────────────────────────────────────────
+
+  describe("embed()", () => {
+    test("delegates to store.embed() and returns EmbedResult", async () => {
+      await initStore("/tmp/test.sqlite");
+      const result = await embed();
+      expect(result).toEqual({
+        docsProcessed: 2,
+        chunksEmbedded: 10,
+        errors: 0,
+        durationMs: 500,
+      });
+      expect(mockStore.embed).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  // ─── getStatus() ──────────────────────────────────────────
+
+  describe("getStatus()", () => {
+    test("returns typed IndexStatus object", async () => {
+      await initStore("/tmp/test.sqlite");
+      const result = await getStatus();
+      expect(result.totalDocuments).toBe(5);
+      expect(result.needsEmbedding).toBe(2);
+      expect(result.hasVectorIndex).toBe(true);
+      expect(result.collections).toHaveLength(1);
+      expect(result.collections[0]!.name).toBe("memories");
+    });
+  });
+
+  // ─── getIndexHealth() ─────────────────────────────────────
+
+  describe("getIndexHealth()", () => {
+    test("returns typed IndexHealthInfo object", async () => {
+      await initStore("/tmp/test.sqlite");
+      const result = await getIndexHealth();
+      expect(result.needsEmbedding).toBe(2);
+      expect(result.totalDocs).toBe(5);
+      expect(result.daysStale).toBeNull();
+    });
+  });
+
+  // ─── addCollection() ──────────────────────────────────────
+
+  describe("addCollection()", () => {
+    test("delegates to store.addCollection()", async () => {
+      await initStore("/tmp/test.sqlite");
+      await addCollection("notes", { path: "/data/notes", pattern: "**/*.md" });
+      expect(mockStore.addCollection).toHaveBeenCalledWith("notes", {
+        path: "/data/notes",
+        pattern: "**/*.md",
+      });
+    });
+  });
+
+  // ─── addContext() ─────────────────────────────────────────
+
+  describe("addContext()", () => {
+    test("delegates to store.addContext()", async () => {
+      await initStore("/tmp/test.sqlite");
+      const result = await addContext("memories", "/", "Personal knowledge");
+      expect(result).toBe(true);
+      expect(mockStore.addContext).toHaveBeenCalledWith(
+        "memories",
+        "/",
+        "Personal knowledge",
+      );
+    });
+  });
+
+  // ─── closeStore() ─────────────────────────────────────────
+
+  describe("closeStore()", () => {
+    test("calls store.close() and nullifies singleton", async () => {
+      await initStore("/tmp/test.sqlite");
+      await closeStore();
+      expect(mockStore.close).toHaveBeenCalledTimes(1);
+      // After close, calling functions should throw
+      expect(update()).rejects.toThrow("not initialized");
+    });
+
+    test("is safe to call when not initialized", async () => {
+      // Should not throw
+      await closeStore();
+    });
+
+    test("allows re-initialization after close", async () => {
+      await initStore("/tmp/test.sqlite");
+      await closeStore();
+      await initStore("/tmp/test2.sqlite");
+      // Should work without issues
+      const result = await getStatus();
+      expect(result.totalDocuments).toBe(5);
+    });
+  });
+
+  // ─── resetStore() ─────────────────────────────────────────
+
+  describe("resetStore()", () => {
+    test("nullifies singleton without calling close", async () => {
+      await initStore("/tmp/test.sqlite");
+      resetStore();
+      // close was NOT called
+      expect(mockStore.close).not.toHaveBeenCalled();
+      // But store is now null
+      expect(update()).rejects.toThrow("not initialized");
     });
   });
 });
