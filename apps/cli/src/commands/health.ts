@@ -5,7 +5,12 @@ import { API_URL } from "../utils/env.ts";
 interface HealthResponse {
   status: string;
   version: string;
-  qmd_status: string;
+  qmd: {
+    status: string;
+    doc_count?: number;
+    collections?: number;
+    needs_embedding?: number;
+  };
   queue_length: number;
 }
 
@@ -28,16 +33,30 @@ export async function healthCommand(opts: { json: boolean }): Promise<void> {
     return;
   }
 
-  const { status, version, qmd_status, queue_length } = result.data;
+  const { status, version, qmd, queue_length } = result.data;
   const statusColor = status === "ok" ? pc.green(status) : pc.red(status);
+  
+  // Guard against missing `qmd` if server returns old structure temporarily
+  const qmdStatus = qmd?.status || "undefined";
   const qmdColor =
-    qmd_status === "ok" ? pc.green(qmd_status) : pc.yellow(qmd_status);
+    qmdStatus === "ok" ? pc.green(qmdStatus) : pc.yellow(qmdStatus);
+    
+  let qmdDetails = "";
+  if (qmd) {
+    const details = [];
+    if (qmd.doc_count !== undefined) details.push(`docs: ${qmd.doc_count}`);
+    if (qmd.collections !== undefined) details.push(`collections: ${qmd.collections}`);
+    if (qmd.needs_embedding) details.push(`needs embedding: ${qmd.needs_embedding}`);
+    if (details.length > 0) {
+      qmdDetails = ` (${details.join(", ")})`;
+    }
+  }
 
   process.stdout.write(
     [
       `API Status:   ${statusColor}`,
       `Version:      ${version}`,
-      `QMD Status:   ${qmdColor}`,
+      `QMD Status:   ${qmdColor}${qmdDetails}`,
       `Queue Length: ${queue_length}`,
     ].join("\n") + "\n"
   );
