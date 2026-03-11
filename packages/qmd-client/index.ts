@@ -28,6 +28,7 @@ export type {
 // ── Singleton ──────────────────────────────────────────────────────────────
 
 let store: QMDStore | null = null;
+let operationLock: Promise<unknown> = Promise.resolve();
 
 const DEFAULT_DB_PATH = "/app/db/qmd.sqlite";
 
@@ -38,6 +39,17 @@ function requireStore(): QMDStore {
     );
   }
   return store;
+}
+
+/**
+ * Acquire the operation lock, ensuring update() and embed() never run
+ * concurrently (prevents SQLite lock contention).
+ */
+function withLock<T>(fn: () => Promise<T>): Promise<T> {
+  const next = operationLock.then(fn, fn);
+  // Keep the chain going regardless of success/failure
+  operationLock = next.catch(() => {});
+  return next;
 }
 
 // ── Exported Functions ─────────────────────────────────────────────────────
@@ -90,15 +102,15 @@ export async function closeStore(): Promise<void> {
  * Scan the filesystem and ingest content changes into the index.
  * Does NOT generate vector embeddings — call embed() separately.
  */
-export async function update(): Promise<UpdateResult> {
-  return requireStore().update();
+export function update(): Promise<UpdateResult> {
+  return withLock(() => requireStore().update());
 }
 
 /**
  * Generate vector embeddings for documents that need them.
  */
-export async function embed(): Promise<EmbedResult> {
-  return requireStore().embed();
+export function embed(): Promise<EmbedResult> {
+  return withLock(() => requireStore().embed());
 }
 
 /**
@@ -142,4 +154,5 @@ export async function addContext(
  */
 export function resetStore(): void {
   store = null;
+  operationLock = Promise.resolve();
 }

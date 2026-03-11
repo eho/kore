@@ -279,6 +279,82 @@ describe("qmd-client", () => {
     });
   });
 
+  // ─── Concurrency Lock ──────────────────────────────────────
+
+  describe("concurrency lock", () => {
+    test("update() and embed() do not run concurrently", async () => {
+      await initStore("/tmp/test.sqlite");
+
+      const executionLog: string[] = [];
+
+      (mockStore.update as ReturnType<typeof mock>).mockImplementation(
+        () =>
+          new Promise((resolve) => {
+            executionLog.push("update-start");
+            setTimeout(() => {
+              executionLog.push("update-end");
+              resolve({
+                collections: 1,
+                indexed: 5,
+                updated: 2,
+                unchanged: 3,
+                removed: 0,
+                needsEmbedding: 2,
+              });
+            }, 50);
+          }),
+      );
+
+      (mockStore.embed as ReturnType<typeof mock>).mockImplementation(
+        () =>
+          new Promise((resolve) => {
+            executionLog.push("embed-start");
+            setTimeout(() => {
+              executionLog.push("embed-end");
+              resolve({
+                docsProcessed: 2,
+                chunksEmbedded: 10,
+                errors: 0,
+                durationMs: 500,
+              });
+            }, 50);
+          }),
+      );
+
+      // Fire both concurrently
+      const [updateResult, embedResult] = await Promise.all([
+        update(),
+        embed(),
+      ]);
+
+      expect(updateResult.indexed).toBe(5);
+      expect(embedResult.docsProcessed).toBe(2);
+
+      // They should have run sequentially: update fully completes before embed starts
+      expect(executionLog).toEqual([
+        "update-start",
+        "update-end",
+        "embed-start",
+        "embed-end",
+      ]);
+    });
+
+    test("lock releases after an error so subsequent calls still work", async () => {
+      await initStore("/tmp/test.sqlite");
+
+      (mockStore.update as ReturnType<typeof mock>).mockImplementationOnce(
+        () => Promise.reject(new Error("first call fails")),
+      );
+
+      // First call fails
+      await expect(update()).rejects.toThrow("first call fails");
+
+      // Second call should still work (lock released)
+      const result = await update();
+      expect(result.indexed).toBe(5);
+    });
+  });
+
   // ─── resetStore() ─────────────────────────────────────────
 
   describe("resetStore()", () => {
