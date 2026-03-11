@@ -4,6 +4,7 @@ import { QueueRepository } from "./queue";
 import { resolveDataPath, resolveQueueDbPath } from "./config";
 import { startWorker } from "./worker";
 import { startWatcher } from "./watcher";
+import { startEmbedInterval } from "./embedder";
 import { MemoryIndex } from "./memory-index";
 import { EventDispatcher } from "./event-dispatcher";
 import * as qmdClient from "@kore/qmd-client";
@@ -93,11 +94,15 @@ console.log("Kore extraction worker started (polling every 5s)");
 const watcher = startWatcher({ dataPath });
 console.log("Kore file watcher started (watching for .md changes)");
 
+const embedder = startEmbedInterval();
+console.log("Kore embed interval started");
+
 // ── Graceful shutdown ───────────────────────────────────────────────────
 
 async function shutdown() {
   console.log("Shutting down...");
   watcher.stop();
+  embedder.stop();
   worker.stop();
   await qmdClient.closeStore();
   console.log("QMD store closed");
