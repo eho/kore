@@ -6,6 +6,8 @@
  * Replaces the previous Bun.spawn CLI wrapper.
  */
 
+import { join } from "node:path";
+import { homedir } from "node:os";
 import {
   createStore,
   type QMDStore,
@@ -29,12 +31,28 @@ export type {
   SearchOptions,
 };
 
+// ── Path resolution ────────────────────────────────────────────────────────
+
+/**
+ * Resolve the KORE_HOME base directory.
+ * Reads KORE_HOME env var; falls back to ~/.kore.
+ * Expands leading ~ to os.homedir().
+ */
+export function resolveKoreHome(): string {
+  const raw = process.env.KORE_HOME ?? "~/.kore";
+  if (raw.startsWith("~/")) {
+    return join(homedir(), raw.slice(2));
+  }
+  if (raw === "~") {
+    return homedir();
+  }
+  return raw;
+}
+
 // ── Singleton ──────────────────────────────────────────────────────────────
 
 let store: QMDStore | null = null;
 let operationLock: Promise<unknown> = Promise.resolve();
-
-const DEFAULT_DB_PATH = "/app/db/qmd.sqlite";
 
 function requireStore(): QMDStore {
   if (!store) {
@@ -75,10 +93,10 @@ export async function initStore(dbPath?: string): Promise<void> {
   }
 
   const resolvedDbPath =
-    dbPath ?? process.env.KORE_QMD_DB_PATH ?? DEFAULT_DB_PATH;
+    dbPath ?? process.env.KORE_QMD_DB_PATH ?? join(resolveKoreHome(), "db", "qmd.sqlite");
 
   const notesPath =
-    process.env.KORE_NOTES_PATH ?? process.env.KORE_DATA_PATH ?? "/app/data";
+    process.env.KORE_NOTES_PATH ?? process.env.KORE_DATA_PATH ?? join(resolveKoreHome(), "data");
 
   const config: CollectionConfig = {
     collections: {
