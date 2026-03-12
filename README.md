@@ -162,65 +162,27 @@ bun add <package> --filter @kore/core-api
 
 ---
 
-## Docker Setup
+## Running Natively
 
-Kore includes a multi-stage `Dockerfile` and a `docker-compose.yml` at the project root for containerized deployment.
+Kore runs as a single Bun process — no Docker or process orchestration required. The API server, extraction worker, file watcher, and embedder all run together via `apps/core-api/src/index.ts`.
 
 ### Prerequisites
 
-- Docker and Docker Compose installed
-- Ollama running on the host machine with a model pulled (e.g., `ollama pull qwen2.5:7b`)
+- [Bun](https://bun.sh/) installed
+- [Ollama](https://ollama.ai/) running locally with a model pulled (e.g., `ollama pull qwen2.5:7b`)
+- [QMD](https://github.com/tobilu/qmd) installed and on `$PATH`
 
-### Production Deployment
-
-1. Copy `.env.example` to `.env` and configure your values:
-
-```sh
-cp .env.example .env
-# Edit .env — set KORE_API_KEY and KORE_DATA_PATH at minimum
-```
-
-2. Start all services:
+### Start the full stack
 
 ```sh
-docker compose up -d
+# Production
+bun run start
+
+# Development (with hot-reload)
+bun run dev
 ```
 
-This launches two services:
-
-| Service | Description | Port |
-|---|---|---|
-| `core-api` | HTTP API server (Pull channel) | 3000 |
-| `notification-worker` | Background extraction worker + file watcher (Push channel) | — |
-
-Both containers share the same image (`oven/bun:debian`, non-root `bun` user) and use host bind mounts for persistence:
-
-- **`$KORE_DATA_PATH`** (default `~/.kore/data`) → `/app/data` — Markdown memory files
-- **`$KORE_DB_PATH`** (default `~/.kore/db`) → `/app/db` — Shared SQLite task queue
-- **`$QMD_CONFIG_PATH`** (default `~/.kore/qmd-config`) → `/home/bun/.config/qmd` — QMD configuration
-
-3. Verify the API is running:
-
-```sh
-curl http://localhost:3000/api/v1/health
-```
-
-### Ollama Connectivity
-
-The containers connect to the host's Ollama instance via `host.docker.internal`. This works automatically on macOS and Windows. On Linux, the `extra_hosts` directive in `docker-compose.yml` maps `host.docker.internal` to the host gateway.
-
-Override the Ollama URL in `.env` if needed:
-
-```sh
-OLLAMA_BASE_URL=http://host.docker.internal:11434
-```
-
-### Stopping Services
-
-```sh
-docker compose down        # stop containers, keep volumes
-docker compose down -v     # stop containers and remove volumes
-```
+The API is available at `http://localhost:3000`.
 
 ---
 

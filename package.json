@@ -2,6 +2,8 @@
   "name": "@kore/root",
   "private": true,
   "scripts": {
+    "start": "bun run apps/core-api/src/index.ts",
+    "dev": "bun --hot run apps/core-api/src/index.ts",
     "test": "bun test --recursive",
     "typecheck": "bunx tsc --noEmit --project tsconfig.json"
   },

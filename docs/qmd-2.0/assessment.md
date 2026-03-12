@@ -82,7 +82,7 @@ We should completely overhaul `packages/qmd-client` to wrap the new SDK.
   ```typescript
   createStore({ dbPath: '/app/db/qmd.sqlite', configPath: '/home/bun/.config/qmd/index.yml' })
   ```
-  With `configPath`, mutations via `store.addCollection()` write through to both SQLite and the YAML file. The current `docker-compose.yml` already mounts a YAML config volume, so this path requires minimal change but keeps the YAML as the authoritative config.
+  With `configPath`, mutations via `store.addCollection()` write through to both SQLite and the YAML file. This path requires minimal change but keeps the YAML as the authoritative config.
 - **Benefit:** Scopes `kore`'s index away from the user's default `~/.cache/qmd/index.sqlite`, sandboxing it from other projects.
 
 ### D. Advanced Search & RAG Integration
@@ -116,21 +116,12 @@ We should completely overhaul `packages/qmd-client` to wrap the new SDK.
    - Wire `store.getStatus()` into the health endpoint (currently using `qmd status` parse).
 4. **Update Tests:** Refactor `packages/qmd-client/index.test.ts` to mock the QMD store object rather than mocking `Bun.spawn`.
 
-## 6. Docker & Infrastructure Considerations ✅ Implemented
+## 6. Infrastructure Considerations ✅ Implemented
 
-Migrating to the native SDK will significantly streamline our Docker setup, but it introduces a critical requirement regarding caching.
-
-### A. Dockerfile Cleanup
-We can simplify our `Dockerfile` by removing the global CLI installation steps:
-- **Remove:** `RUN bun install -g @tobilu/qmd` and its associated `BUN_INSTALL` PATH configurations. Since QMD will be a standard `node_modules` dependency in `@kore/qmd-client`, it will be installed alongside the rest of the workspace dependencies.
-- **Remove:** The node symlink (`RUN ln -s /usr/local/bin/bun /usr/local/bin/node`) is no longer required, as we won't be invoking the `qmd` CLI binary at all.
-- **Keep:** Native build tools (`build-essential`, `python3`) in the builder stage. These are still required — now for `@tobilu/qmd`'s own native C++ addons (`better-sqlite3`, `sqlite-vec`, `node-llama-cpp`) rather than the global CLI.
+Migrating to the native SDK introduces a critical requirement regarding model caching.
 
 > **Note:** `@tobilu/qmd` uses `better-sqlite3` (a Node.js native addon) rather than `bun:sqlite`. This works correctly on Bun via Node.js compatibility, but means the QMD store's SQLite connection runs through a different driver than kore's own queue DB (`bun:sqlite`). Both work correctly in the same process; just be aware they are independent connections.
 
-### B. State Management (`docker-compose.yml`)
-- **Database Path:** Currently, QMD stores its index at `~/.cache/qmd/index.sqlite`. With the SDK, we will explicitly configure this path via `createStore({ dbPath: '/app/db/qmd.sqlite' })`. This neatly places the QMD database in our existing persistent mount (`${KORE_DB_PATH:-~/.kore/db}:/app/db`).
-- **GGUF Model Caching (Critical):** QMD 2.0 automatically downloads over 2GB of GGUF models (for embeddings, re-ranking, and query expansion) on first use. These are stored by default in `~/.cache/qmd/models`.
-  - **Action Needed:** We must persist the `~/.cache` directory in `docker-compose.yml`. If we fail to mount a volume for this cache, the container will re-download the 2GB+ models every time it restarts, causing massive startup delays and bandwidth usage.
-  - **Implementation:** Replace the old `${QMD_CONFIG_PATH}:/home/bun/.config/qmd` volume mount with `${QMD_CACHE_PATH:-~/.kore/qmd-cache}:/home/bun/.cache/qmd`.
-  - If retaining the YAML config via `configPath`, keep a separate config volume: `${QMD_CONFIG_PATH:-~/.kore/qmd-config}:/home/bun/.config/qmd`.
+### State Management
+- **Database Path:** QMD stores its index at `~/.cache/qmd/index.sqlite` by default. Configure this path explicitly via `createStore({ dbPath: '~/.kore/db/qmd.sqlite' })` to keep it alongside kore's other state.
+- **GGUF Model Caching (Critical):** QMD 2.0 automatically downloads over 2GB of GGUF models (for embeddings, re-ranking, and query expansion) on first use. These are stored in `~/.cache/qmd/models` (configurable via `QMD_CACHE_PATH`).

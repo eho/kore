@@ -8,7 +8,7 @@ This document defines the primary external-facing routes for the MVP.
 
 Kore is designed as a "Local First" or "Self Hosted" application.
 
-*   By default, the Elysia server runs locally (`localhost:3000`) and the `CORS` policy restricts access to the local machine or Docker network.
+*   By default, the server runs locally (`localhost:3000`) and the `CORS` policy restricts access to the local machine.
 *   **Security Measure:** Ingestion routes expect an `Authorization: Bearer <token>` header to prevent unauthorized logging if exposed on a wider network.
 
 ---
