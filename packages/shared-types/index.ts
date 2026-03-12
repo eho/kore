@@ -42,12 +42,15 @@ export const MemoryExtractionSchema = z.object({
 
   distilled_items: z
     .array(z.string())
+    .min(1)
+    .max(7)
     .describe(
       "1 to 7 atomic facts, quotes, or instructions extracted from the raw source. Must be standalone sentences."
     ),
 
   qmd_category: z
     .string()
+    .regex(/^qmd:\/\//, "qmd_category must start with qmd://")
     .describe(
       "A hierarchical classification path starting with qmd://, e.g. qmd://tech/programming/python"
     ),
@@ -55,7 +58,9 @@ export const MemoryExtractionSchema = z.object({
   type: z.enum(["place", "media", "note", "person"]).describe("The type of memory, either place, media, note, or person."),
 
   tags: z
-    .array(z.string())
+    .array(z.string().regex(/^[a-z0-9]+(-[a-z0-9]+)*$/, "tags must be lowercase kebab-case"))
+    .min(1)
+    .max(5)
     .describe("Between 1 and 5 thematic tags. lowercase, kebab-case."),
 });
 

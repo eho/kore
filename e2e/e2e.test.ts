@@ -316,7 +316,7 @@ beforeAll(async () => {
   const health = runCli(["health", "--json"]);
   if (health.exitCode !== 0) {
     throw new Error(
-      "Kore API is not reachable. Start the Docker stack before running E2E tests."
+      "Kore API is not reachable. Start the API with `bun run start` before running E2E tests."
     );
   }
   let healthData: { status: string };

@@ -149,7 +149,7 @@ See `docs/manual-e2e-testing.md` for a complete walkthrough of all scenarios.
 ## Development
 
 ```sh
-# Run all tests
+# Run all unit tests (excludes E2E)
 bun test
 
 # Type check all packages
@@ -160,6 +160,9 @@ bun test packages/shared-types
 bun test packages/llm-extractor
 bun test packages/qmd-client
 bun test apps/core-api
+
+# Run E2E tests (requires the API to be running: bun run start)
+bun run test:e2e
 
 # Add a dependency to a specific workspace
 bun add <package> --filter @kore/core-api

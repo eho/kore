@@ -38,11 +38,14 @@ test("watcher calls updateFn when a .md file is written", async () => {
   });
 
   try {
+    // Brief delay to let fs.watch register before triggering an event
+    await new Promise((r) => setTimeout(r, 50));
+
     // Write a .md file to trigger the watcher
     await Bun.write(join(tempDir, "test_memory.md"), "# Test");
 
     // Wait for debounce + processing
-    await new Promise((r) => setTimeout(r, 300));
+    await new Promise((r) => setTimeout(r, 400));
 
     expect(updateCalls).toBe(1);
   } finally {
