@@ -33,7 +33,7 @@ A privacy-first, self-hosted data layer strictly adhering to a "File System Firs
 
 ## 2. Technology Stack
 
-Following the established project constraints (Strict TypeScript, Bun, Docker-first):
+Following the established project constraints (Strict TypeScript, Bun, native-first):
 
 *   **Monorepo Tooling:** Bun workspaces (`packages/`, `apps/`, `services/`).
 *   **Ingestion & Scrapers:** TypeScript (Strict mode) utilizing `bun`.
@@ -44,7 +44,7 @@ Following the established project constraints (Strict TypeScript, Bun, Docker-fi
     *   **File System:** For raw markdown files.
     *   **QMD (`@tobilu/qmd`):** For agentic hybrid search (BM25 + Vector + Reranking) running cleanly within the Node/Bun ecosystem.
 *   **LLM Integration:** **Vercel AI SDK** with `createOpenAI()` provider defaulting to a local **Ollama** instance (`http://localhost:11434/v1`, model `qwen2.5:7b`) for cost-efficient, privacy-first extraction. Cloud providers (OpenAI, Anthropic) can be configured as alternatives. QMD handles local GGUF embedding via Node LLAMA CPP. Plugins can run their own specialized LLM calls.
-*   **Infrastructure:** Docker Compose. A single Bun ecosystem image running the API, background workers, and QMD, minimizing container sprawl.
+*   **Infrastructure:** Native Bun process. The API, background workers, and QMD all run in a single `bun run apps/core-api/src/index.ts` process — no containers or orchestration required.
 
 ---
 
