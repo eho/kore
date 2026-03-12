@@ -9,6 +9,7 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y \
     build-essential \
     python3 \
+    git \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy workspace configuration files first to cache dependencies
@@ -36,9 +37,10 @@ FROM oven/bun:1.3.3-debian AS runner
 
 WORKDIR /app
 
-# Install Spatialite runtime dependency
+# Install Spatialite runtime dependency and git for node-llama-cpp downloads
 RUN apt-get update && apt-get install -y \
     libsqlite3-mod-spatialite \
+    git \
     && rm -rf /var/lib/apt/lists/*
 
 # Ensure the container runs as a non-root user to avoid permission issues
@@ -55,3 +57,4 @@ COPY --from=builder --chown=bun:bun /app/packages ./packages
 
 # Expose the API port
 EXPOSE 3000
+

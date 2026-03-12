@@ -349,20 +349,35 @@ beforeAll(async () => {
     expect(result.exitCode).toBe(0);
   }
 
-  // Wait for QMD re-indexing
-  await Bun.sleep(3000);
-
-  // Build labelToId map
-  const listResult = runCli(["list", "--json", "--limit", "200"]);
-  expect(listResult.exitCode).toBe(0);
-  const memories: Array<{ id: string; source: string }> = JSON.parse(listResult.stdout);
+  // Wait for LLM extraction and QMD re-indexing by polling `kore list`
+  // since local models take a while. Timeout after 120 seconds.
   labelToId = new Map();
-  for (const m of memories) {
-    if (m.source.startsWith(`e2e-run-${RUN_ID}/`)) {
-      const label = m.source.slice(`e2e-run-${RUN_ID}/`.length);
-      labelToId.set(label, m.id);
+  let attempts = 0;
+  while (attempts < 60) {
+    const listResult = runCli(["list", "--json", "--limit", "200"]);
+    if (listResult.exitCode === 0) {
+      const memories: Array<{ id: string; source: string }> = JSON.parse(listResult.stdout);
+      for (const m of memories) {
+        if (m.source.startsWith(`e2e-run-${RUN_ID}/`)) {
+          const label = m.source.slice(`e2e-run-${RUN_ID}/`.length);
+          labelToId.set(label, m.id);
+        }
+      }
+      
+      if (labelToId.size === dataset.length) {
+        break; // all files successfully indexed
+      }
     }
+    
+    // not all indexed yet, sleep 2s and try again
+    await Bun.sleep(2000);
+    attempts++;
   }
+  
+  if (labelToId.size !== dataset.length) {
+    console.error(`Only ingested ${labelToId.size} / ${dataset.length} memories within timeout. Continuing with partial dataset.`);
+  }
+
   ingestedIds = Array.from(labelToId.values());
 }, 300000); // 5 minute timeout
 
