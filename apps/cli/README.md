@@ -212,7 +212,7 @@ kore search "debugging tips" --intent "programming reference" --json
 kore search
 ```
 
-Example output:
+Example output (formatted):
 
 ```
 Tokyo Ramen Shop
@@ -224,6 +224,26 @@ data/notes/japan-trip.md
 Visited several ramen shops including the famous one in...
 ```
 
+Example output (`--json`):
+
+```json
+{
+  "query": "tokyo ramen",
+  "results": [
+    {
+      "id": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
+      "path": "/home/user/kore-data/places/tokyo-ramen.md",
+      "title": "Tokyo Ramen Shop",
+      "snippet": "Amazing ramen spot in Shinjuku with rich tonkotsu broth...",
+      "score": 0.94,
+      "collection": "places"
+    }
+  ]
+}
+```
+
+The `id` field can be passed directly to `kore show <id>` to fetch the full memory content.
+
 Options:
 
 | Flag                    | Description                                      |
@@ -231,7 +251,7 @@ Options:
 | `--intent <string>`     | Hint for the LLM reranker                        |
 | `--limit <number>`      | Max results to return (default `10`)             |
 | `--collection <string>` | Filter by a specific collection                  |
-| `--json`                | Output `{ query, results }` JSON envelope        |
+| `--json`                | Output `{ query, results }` JSON envelope (each result includes `id`) |
 
 Exits with code `1` on API errors (e.g., search index unavailable).
 

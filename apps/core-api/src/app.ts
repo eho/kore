@@ -238,6 +238,7 @@ export function createApp(deps: AppDeps = {}) {
           // Extract collection name from displayPath (qmd://collection-name/...)
           const dpMatch = r.displayPath?.match(/^qmd:\/\/([^/]+)/);
           return {
+            id: memoryIndex.getIdByPath(r.file) ?? null,
             path: r.file,
             title: r.title,
             snippet: r.bestChunk,

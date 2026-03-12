@@ -380,6 +380,7 @@ describe("POST /api/v1/search", () => {
     const body = await res.json();
     expect(body).toEqual([
       {
+        id: null,
         path: "/app/data/notes/meeting.md",
         title: "Team Meeting Notes",
         snippet: "Discussed roadmap priorities for Q2",
@@ -387,6 +388,7 @@ describe("POST /api/v1/search", () => {
         collection: "memories",
       },
       {
+        id: null,
         path: "/app/data/people/alice.md",
         title: "Alice Smith",
         snippet: "Product manager at Acme Corp",

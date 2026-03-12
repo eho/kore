@@ -114,11 +114,47 @@ Returns the current status of an ingestion task created by `POST /ingest/raw`.
 
 ---
 
-## 4. Memory Management Endpoints
+## 4. Search Endpoint
+
+### 4.1 Semantic Search
+**`POST /api/v1/search`**
+Performs a hybrid BM25 + vector search with optional LLM reranking over all indexed memories.
+
+**Request Payload:**
+```typescript
+{
+  "query": "anniversary dinner ideas in Sydney",
+  "intent": "personal knowledge base",  // optional: hint for LLM reranker
+  "limit": 10,                           // optional: max results (capped at 20)
+  "collection": "travel"                 // optional: filter to a specific collection
+}
+```
+
+**Response (200 OK):**
+```typescript
+[
+  {
+    "id": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",  // memory UUID (null if not in index)
+    "path": "/home/user/kore-data/places/sixpenny.md",
+    "title": "Sixpenny Restaurant",
+    "snippet": "A degustation menu restaurant in Stanmore, Sydney...",
+    "score": 0.92,
+    "collection": "travel"
+  }
+]
+```
+
+**Response (400 Bad Request):** Query field is missing or empty.
+
+**Response (503 Service Unavailable):** QMD search index is not available.
+
+---
+
+## 5. Memory Management Endpoints
 
 While QMD manages the semantic *search* of memories natively via MCP, the Core API manages the actual filesystem mutations to ensure state synchronization (specifically so `memory.deleted` and `memory.updated` lifecycle events fire to notify plugins like Spatialite).
 
-### 4.1 Delete Memory
+### 5.1 Delete Memory
 **`DELETE /api/v1/memory/:id`**
 
 Deletes the underlying `.md` file, updates the QMD index, and fires `onMemoryDeleted` to plugins.
@@ -132,7 +168,7 @@ Deletes the underlying `.md` file, updates the QMD index, and fires `onMemoryDel
 }
 ```
 
-### 4.2 Update Memory Content
+### 5.2 Update Memory Content
 **`PUT /api/v1/memory/:id`**
 
 Used to mutate the body text or append new distracted facts to an existing memory. Overwrites the file and fires `onMemoryUpdated`.
@@ -166,7 +202,7 @@ The `id` is taken from the route parameter `:id`, not the payload.
 
 ---
 
-## 5. Plugin Route Mounting
+## 6. Plugin Route Mounting
 
 As defined in `plugin_system.md`, plugins can mount their own routes to the core API context.
 If a plugin `kore-plugin-spatialite` mounts a route, it is accessible on the root server:
@@ -176,7 +212,7 @@ If a plugin `kore-plugin-spatialite` mounts a route, it is accessible on the roo
 
 ---
 
-## 6. Error Response Format
+## 7. Error Response Format
 
 All error responses from the API follow a standardized shape:
 

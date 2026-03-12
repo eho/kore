@@ -62,6 +62,14 @@ export class MemoryIndex {
     return this.index.size;
   }
 
+  /** Look up an id by its file path. Returns undefined if not found. */
+  getIdByPath(filePath: string): string | undefined {
+    for (const [id, fp] of this.index) {
+      if (fp === filePath) return id;
+    }
+    return undefined;
+  }
+
   /** Iterate over all [id, filePath] pairs. */
   entries(): IterableIterator<[string, string]> {
     return this.index.entries();

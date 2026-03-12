@@ -2,6 +2,7 @@ import pc from "picocolors";
 import { apiFetch } from "../api.ts";
 
 interface SearchResult {
+  id: string | null;
   path: string;
   title: string;
   snippet: string;
