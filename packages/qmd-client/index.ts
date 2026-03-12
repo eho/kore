@@ -223,13 +223,23 @@ export async function addContext(
 
 /**
  * Hybrid search: BM25 + vector + query expansion + LLM reranking.
+ * Falls back to BM25-only (searchLex) if the hybrid pipeline fails
+ * (e.g. node-llama-cpp not available, model loading error).
  * Returns ranked results with snippets and scores.
  */
-export function search(
+export async function search(
   query: string,
   options?: SearchOptions,
 ): Promise<HybridQueryResult[]> {
-  return withLock(() => requireStore().search({ query, ...options }));
+  return withLock(async () => {
+    const s = requireStore();
+    try {
+      return await s.search({ query, ...options });
+    } catch (err) {
+      console.warn("Hybrid search failed, falling back to BM25:", err instanceof Error ? err.message : err);
+      return s.searchLex(query, { limit: options?.limit, collection: options?.collection });
+    }
+  });
 }
 
 /**

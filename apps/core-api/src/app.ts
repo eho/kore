@@ -246,7 +246,8 @@ export function createApp(deps: AppDeps = {}) {
             collection: dpMatch?.[1] ?? null,
           };
         });
-      } catch {
+      } catch (err) {
+        console.error("Search error:", err instanceof Error ? err.message : err);
         set.status = 503;
         return { error: "Search index not available" };
       }
