@@ -4,10 +4,10 @@ Use this guide to validate the Kore ingestion and search pipeline step by step b
 
 ## Prerequisites
 
-Start the Docker stack:
+Start the API natively:
 ```sh
-docker compose up -d
-docker compose logs -f   # watch worker output in a separate terminal
+bun run start
+# Watch logs directly in this terminal — worker and watcher output appears here
 ```
 
 ---
@@ -79,7 +79,7 @@ Delete a specific memory:
 bun run apps/cli/src/index.ts delete <id> --force
 ```
 
-Stop the stack:
+Stop the server:
 ```sh
-docker compose down
+# Press Ctrl+C in the terminal running `bun run start`
 ```
