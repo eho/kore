@@ -1,22 +1,9 @@
 import { join, resolve } from "node:path";
 import { homedir } from "node:os";
 import { mkdir } from "node:fs/promises";
+import { resolveKoreHome } from "@kore/qmd-client";
 
-/**
- * Resolve the KORE_HOME base directory.
- * Reads KORE_HOME env var; falls back to ~/.kore.
- * Expands leading ~ to os.homedir().
- */
-export function resolveKoreHome(): string {
-  const raw = process.env.KORE_HOME ?? "~/.kore";
-  if (raw.startsWith("~/")) {
-    return join(homedir(), raw.slice(2));
-  }
-  if (raw === "~") {
-    return homedir();
-  }
-  return resolve(raw);
-}
+export { resolveKoreHome };
 
 export function resolveDataPath(): string {
   return join(resolveKoreHome(), "data");

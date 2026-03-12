@@ -6,7 +6,7 @@
  * Replaces the previous Bun.spawn CLI wrapper.
  */
 
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { homedir } from "node:os";
 import {
   createStore,
@@ -46,7 +46,7 @@ export function resolveKoreHome(): string {
   if (raw === "~") {
     return homedir();
   }
-  return raw;
+  return resolve(raw);
 }
 
 // ── Singleton ──────────────────────────────────────────────────────────────
