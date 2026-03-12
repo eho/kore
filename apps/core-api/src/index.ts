@@ -1,7 +1,7 @@
 import { createApp, ensureDataDirectories } from "./app";
 import type { QmdHealthSummary } from "./app";
 import { QueueRepository } from "./queue";
-import { resolveDataPath, resolveQueueDbPath } from "./config";
+import { resolveDataPath, resolveQueueDbPath, resolveQmdDbPath, ensureKoreDirectories } from "./config";
 import { startWorker } from "./worker";
 import { startWatcher } from "./watcher";
 import { startEmbedInterval } from "./embedder";
@@ -11,12 +11,13 @@ import * as qmdClient from "@kore/qmd-client";
 
 const dataPath = resolveDataPath();
 
-// Ensure data directories exist on startup
+// Ensure $KORE_HOME/data and $KORE_HOME/db exist before any SQLite connections
+await ensureKoreDirectories();
 await ensureDataDirectories(dataPath);
 
 // ── Initialize QMD store ────────────────────────────────────────────────
 
-const qmdDbPath = process.env.KORE_QMD_DB_PATH;
+const qmdDbPath = resolveQmdDbPath();
 
 try {
   await qmdClient.initStore(qmdDbPath);

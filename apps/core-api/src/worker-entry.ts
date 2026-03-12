@@ -6,7 +6,7 @@
  * command override for the `notification-worker` service.
  */
 import { QueueRepository } from "./queue";
-import { resolveDataPath, resolveQueueDbPath } from "./config";
+import { resolveDataPath, resolveQueueDbPath, resolveQmdDbPath, ensureKoreDirectories } from "./config";
 import { ensureDataDirectories } from "./app";
 import { startWorker } from "./worker";
 import { startWatcher } from "./watcher";
@@ -14,11 +14,13 @@ import * as qmdClient from "@kore/qmd-client";
 
 const dataPath = resolveDataPath();
 
+// Ensure $KORE_HOME/data and $KORE_HOME/db exist before any SQLite connections
+await ensureKoreDirectories();
 await ensureDataDirectories(dataPath);
 
 // ── Initialize QMD store ────────────────────────────────────────────────
 
-const qmdDbPath = process.env.KORE_QMD_DB_PATH;
+const qmdDbPath = resolveQmdDbPath();
 
 try {
   await qmdClient.initStore(qmdDbPath);
