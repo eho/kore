@@ -5,7 +5,8 @@
     "start": "bun run apps/core-api/src/index.ts",
     "dev": "bun --hot run apps/core-api/src/index.ts",
     "test": "bun test --recursive",
-    "typecheck": "bunx tsc --noEmit --project tsconfig.json"
+    "typecheck": "bunx tsc --noEmit --project tsconfig.json",
+    "build:bin": "bun run --cwd apps/core-api build:bin && bun run --cwd apps/cli build:bin"
   },
   "workspaces": [
     "./packages/*",

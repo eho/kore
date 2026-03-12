@@ -79,6 +79,9 @@ kore/
 - [Bun](https://bun.sh/) — `curl -fsSL https://bun.sh/install | bash`
 - [Ollama](https://ollama.ai/) — install, then `ollama pull qwen2.5:7b`
 - [QMD](https://github.com/tobilu/qmd) — installed and on `$PATH`
+- **Spatialite** (required for geospatial memory features):
+  - macOS: `brew install spatialite-tools`
+  - Linux (Debian/Ubuntu): `apt-get install libsqlite3-mod-spatialite`
 
 ### 1. Install dependencies
 
@@ -92,30 +95,32 @@ bun install
 cp .env.example .env
 ```
 
-Edit `.env`:
+Edit `.env`. The primary configuration variable is `KORE_HOME`, which sets the base directory for all Kore data (database files, notes storage). It defaults to `~/.kore` if not set.
 
 ```
-KORE_DATA_PATH=~/.kore/data
+KORE_HOME=~/.kore
 KORE_API_KEY=your-secret-key-here
 OLLAMA_BASE_URL=http://localhost:11434
 OLLAMA_MODEL=qwen2.5:7b
 ```
 
-### 3. Register your data directory with QMD (one-time)
+| Variable | Default | Description |
+|---|---|---|
+| `KORE_HOME` | `~/.kore` | Base directory for all Kore data (SQLite queue, notes, QMD cache) |
+| `KORE_API_KEY` | *(required)* | Bearer token for API authentication |
+| `OLLAMA_BASE_URL` | `http://localhost:11434` | Ollama server URL |
+| `OLLAMA_MODEL` | `qwen2.5:7b` | Model used for LLM extraction |
+| `QMD_CACHE_PATH` | `~/.kore/qmd-cache` | Cache directory for QMD GGUF embedding models |
+
+### 3. Start the API
 
 ```sh
-qmd collection add ~/.kore/data --name kore-memory
+bun run start
 ```
 
-### 4. Start the API
+The API is now running at `http://localhost:3000`. Logs appear directly in your terminal.
 
-```sh
-bun run --filter @kore/core-api start
-```
-
-The API is now running at `http://localhost:3000`.
-
-### 5. Install and use the CLI
+### 4. Install and use the CLI
 
 ```sh
 # Install globally
@@ -124,7 +129,7 @@ bun install -g ./apps/cli
 # Check connectivity
 kore health
 
-# Send your first memory (coming in US-002)
+# Send your first memory
 kore ingest note.md
 ```
 
@@ -166,14 +171,6 @@ bun add <package> --filter @kore/core-api
 
 Kore runs as a single Bun process — no Docker or process orchestration required. The API server, extraction worker, file watcher, and embedder all run together via `apps/core-api/src/index.ts`.
 
-### Prerequisites
-
-- [Bun](https://bun.sh/) installed
-- [Ollama](https://ollama.ai/) running locally with a model pulled (e.g., `ollama pull qwen2.5:7b`)
-- [QMD](https://github.com/tobilu/qmd) installed and on `$PATH`
-
-### Start the full stack
-
 ```sh
 # Production
 bun run start
@@ -182,7 +179,22 @@ bun run start
 bun run dev
 ```
 
-The API is available at `http://localhost:3000`.
+The API is available at `http://localhost:3000`. All log output (startup, worker activity, watcher events) appears directly in your terminal.
+
+## Building Standalone Binaries
+
+You can compile the API server and CLI into self-contained executables using Bun's `--compile` flag:
+
+```sh
+# Build both binaries
+bun run build:bin
+
+# Or build individually
+bun run --cwd apps/core-api build:bin   # → apps/core-api/bin/kore-server
+bun run --cwd apps/cli build:bin        # → apps/cli/bin/kore
+```
+
+> **Note on `node-llama-cpp`:** QMD depends on `node-llama-cpp`, which ships pre-built native `.node` binaries for each platform (e.g., `@node-llama-cpp/mac-arm64-metal`). These native addons are **not bundleable** into a single `bun build --compile` executable. The compiled `kore-server` binary falls back gracefully — QMD's embedding features will be unavailable unless you run via `bun run start` (which resolves the native addons through `node_modules`). For production deployments, `bun run start` is the recommended approach. **Spatialite (`mod_spatialite`) must also be installed on the host — it cannot be bundled.**
 
 ---
 

@@ -44,7 +44,7 @@ Following the established project constraints (Strict TypeScript, Bun, native-fi
     *   **File System:** For raw markdown files.
     *   **QMD (`@tobilu/qmd`):** For agentic hybrid search (BM25 + Vector + Reranking) running cleanly within the Node/Bun ecosystem.
 *   **LLM Integration:** **Vercel AI SDK** with `createOpenAI()` provider defaulting to a local **Ollama** instance (`http://localhost:11434/v1`, model `qwen2.5:7b`) for cost-efficient, privacy-first extraction. Cloud providers (OpenAI, Anthropic) can be configured as alternatives. QMD handles local GGUF embedding via Node LLAMA CPP. Plugins can run their own specialized LLM calls.
-*   **Infrastructure:** Native Bun process. The API, background workers, and QMD all run in a single `bun run apps/core-api/src/index.ts` process — no containers or orchestration required.
+*   **Infrastructure:** Native Bun single-process. The API server, extraction worker, file watcher, and QMD embedder all run together in a single `bun run start` (`apps/core-api/src/index.ts`) process — no Docker, containers, or process orchestration required. `KORE_HOME` (default: `~/.kore`) is the single environment variable controlling where all data is stored.
 
 ---
 
