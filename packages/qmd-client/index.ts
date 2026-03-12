@@ -69,10 +69,9 @@ const SPATIALITE_CANDIDATES = [
  * 4. Linux system default: /usr/lib/x86_64-linux-gnu/mod_spatialite.so
  * 5. Linux alternative:    /usr/lib/aarch64-linux-gnu/mod_spatialite.so
  *
- * @returns Resolved path to mod_spatialite
- * @throws Error with all checked paths and OS-specific install instructions
+ * @returns Resolved path to mod_spatialite, or null if not found
  */
-export function findSpatialite(): string {
+export function findSpatialite(): string | null {
   const envPath = process.env.SPATIALITE_PATH;
   if (envPath) {
     return envPath;
@@ -84,17 +83,7 @@ export function findSpatialite(): string {
     }
   }
 
-  const os = platform();
-  const installCmd =
-    os === "darwin"
-      ? "brew install spatialite-tools"
-      : "apt-get install libsqlite3-mod-spatialite";
-
-  throw new Error(
-    `Spatialite extension not found. Checked paths:\n` +
-      SPATIALITE_CANDIDATES.map((p) => `  - ${p}`).join("\n") +
-      `\n\nInstall it with: ${installCmd}`,
-  );
+  return null;
 }
 
 // ── Singleton ──────────────────────────────────────────────────────────────
@@ -140,8 +129,14 @@ export async function initStore(dbPath?: string): Promise<void> {
     );
   }
 
-  // NHP-003: Auto-detect Spatialite extension before creating store
+  // NHP-003: Auto-detect Spatialite extension (optional — required only for geospatial plugin)
   const spatialitePath = findSpatialite();
+  if (!spatialitePath) {
+    console.warn(
+      "Spatialite extension not found — geospatial features will be unavailable. " +
+      "Install with: brew install spatialite-tools (macOS) or apt-get install libsqlite3-mod-spatialite (Linux)",
+    );
+  }
 
   const resolvedDbPath =
     dbPath ?? process.env.KORE_QMD_DB_PATH ?? join(resolveKoreHome(), "db", "qmd.sqlite");
@@ -160,9 +155,10 @@ export async function initStore(dbPath?: string): Promise<void> {
 
   store = await createStore({ dbPath: resolvedDbPath, config });
 
-  // NHP-003: Load Spatialite extension into the database
-  // The SDK store exposes its underlying database via internal.db
-  store.internal.db.loadExtension(spatialitePath);
+  // NHP-003: Load Spatialite extension if available
+  if (spatialitePath) {
+    store.internal.db.loadExtension(spatialitePath);
+  }
 }
 
 /**

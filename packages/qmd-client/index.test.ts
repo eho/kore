@@ -462,25 +462,7 @@ describe("findSpatialite()", () => {
     expect(result).toBe("/usr/lib/aarch64-linux-gnu/mod_spatialite.so");
   });
 
-  test("throws when no path found, listing all checked paths", () => {
-    expect(() => findSpatialite()).toThrow(
-      /Spatialite extension not found/,
-    );
-    expect(() => findSpatialite()).toThrow(
-      /\/opt\/homebrew\/lib\/mod_spatialite\.dylib/,
-    );
-    expect(() => findSpatialite()).toThrow(
-      /\/usr\/local\/lib\/mod_spatialite\.dylib/,
-    );
-    expect(() => findSpatialite()).toThrow(
-      /\/usr\/lib\/x86_64-linux-gnu\/mod_spatialite\.so/,
-    );
-    expect(() => findSpatialite()).toThrow(
-      /\/usr\/lib\/aarch64-linux-gnu\/mod_spatialite\.so/,
-    );
-  });
-
-  test("error includes install command", () => {
-    expect(() => findSpatialite()).toThrow(/Install it with:/);
+  test("returns null when no path found", () => {
+    expect(findSpatialite()).toBeNull();
   });
 });
