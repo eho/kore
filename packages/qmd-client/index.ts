@@ -140,6 +140,9 @@ export async function initStore(dbPath?: string): Promise<void> {
     );
   }
 
+  // NHP-003: Auto-detect Spatialite extension before creating store
+  const spatialitePath = findSpatialite();
+
   const resolvedDbPath =
     dbPath ?? process.env.KORE_QMD_DB_PATH ?? join(resolveKoreHome(), "db", "qmd.sqlite");
 
@@ -156,6 +159,10 @@ export async function initStore(dbPath?: string): Promise<void> {
   };
 
   store = await createStore({ dbPath: resolvedDbPath, config });
+
+  // NHP-003: Load Spatialite extension into the database
+  // The SDK store exposes its underlying database via internal.db
+  store.internal.db.loadExtension(spatialitePath);
 }
 
 /**

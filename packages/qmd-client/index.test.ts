@@ -6,6 +6,11 @@ import type { QMDStore, UpdateResult, IndexStatus } from "@tobilu/qmd";
 // Mock createStore from @tobilu/qmd before importing qmd-client.
 
 const mockStore: Partial<QMDStore> = {
+  internal: {
+    db: {
+      loadExtension: mock(() => {}),
+    },
+  } as any,
   update: mock(() =>
     Promise.resolve({
       collections: 1,
@@ -75,14 +80,29 @@ const { createStore: mockCreateStore } = await import("@tobilu/qmd");
 // ── Tests ──────────────────────────────────────────────────────────────────
 
 describe("qmd-client", () => {
+  let originalSpatialitePath: string | undefined;
+
   beforeEach(() => {
     resetStore();
+    originalSpatialitePath = process.env.SPATIALITE_PATH;
+    process.env.SPATIALITE_PATH = "/tmp/fake-spatialite.so";
+
     (mockCreateStore as ReturnType<typeof mock>).mockClear();
     // Clear all mock store method call counts
     for (const fn of Object.values(mockStore)) {
       if (typeof fn === "function" && "mockClear" in fn) {
         (fn as ReturnType<typeof mock>).mockClear();
       }
+    }
+    // Deep clear loadExtension
+    (mockStore.internal as any).db.loadExtension.mockClear();
+  });
+
+  afterEach(() => {
+    if (originalSpatialitePath === undefined) {
+      delete process.env.SPATIALITE_PATH;
+    } else {
+      process.env.SPATIALITE_PATH = originalSpatialitePath;
     }
   });
 
@@ -104,6 +124,15 @@ describe("qmd-client", () => {
           },
         },
       });
+    });
+
+    test("auto-detects and loads Spatialite extension", async () => {
+      process.env.SPATIALITE_PATH = "/custom/spatialite.so";
+      await initStore("/tmp/test.sqlite");
+
+      expect((mockStore.internal as any).db.loadExtension).toHaveBeenCalledWith(
+        "/custom/spatialite.so",
+      );
     });
 
     test("throws if called twice without closeStore()", async () => {
