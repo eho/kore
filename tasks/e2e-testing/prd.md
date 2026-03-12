@@ -8,7 +8,7 @@ The tests serve two purposes: (1) confirm the pipeline works correctly, and (2) 
 
 The full testing strategy is documented in [`tasks/e2e-testing/plan.md`](./plan.md). This PRD translates that plan into independently implementable user stories.
 
-**Implementation target:** `tasks/e2e-testing/e2e.test.ts` using `bun:test`.
+**Implementation target:** `e2e/e2e.test.ts` using `bun:test`.
 
 **Runtime environment:** Local Docker instance (`docker-compose up`). Required env vars: `KORE_API_KEY`, `KORE_BASE_URL` (default `http://localhost:3000`).
 
@@ -42,7 +42,7 @@ The full testing strategy is documented in [`tasks/e2e-testing/plan.md`](./plan.
 **Acceptance Criteria:**
 
 *File & constants:*
-- [ ] File created at `tasks/e2e-testing/e2e.test.ts` using `import { describe, test, expect, beforeAll, afterAll } from "bun:test"`.
+- [ ] File created at `e2e/e2e.test.ts` using `import { describe, test, expect, beforeAll, afterAll } from "bun:test"`.
 - [ ] A `RUN_ID` constant is generated at module load time: `const RUN_ID = \`e2e-${Date.now()}\``. Used as a prefix for all ingested memory `source` labels (e.g. `e2e-run-<RUN_ID>/tokyo-ramen`).
 - [ ] A `MIN_SCORE = 0.5` constant is defined at the top of the file. All semantic search score assertions reference this constant.
 - [ ] A `runCli(args: string[]): { stdout: string; stderr: string; exitCode: number }` helper is defined. It calls `Bun.spawnSync(["bun", "run", "apps/cli/src/index.ts", ...args], { env: { ...process.env } })` and returns decoded stdout/stderr and the exit code.
@@ -81,7 +81,7 @@ The full testing strategy is documented in [`tasks/e2e-testing/plan.md`](./plan.
 
 *Quality:*
 - [ ] Typecheck passes (`bunx tsc --noEmit`).
-- [ ] Running `bun test tasks/e2e-testing/e2e.test.ts` against a healthy stack exits with code `0` (no tests yet, but hooks run without error).
+- [ ] Running `bun test e2e/e2e.test.ts` against a healthy stack exits with code `0` (no tests yet, but hooks run without error).
 
 ---
 
@@ -234,7 +234,7 @@ The full testing strategy is documented in [`tasks/e2e-testing/plan.md`](./plan.
 
 ## 4. Functional Requirements
 
-- **FR-1:** The test file must use `bun:test` and be runnable with `bun test tasks/e2e-testing/e2e.test.ts`.
+- **FR-1:** The test file must use `bun:test` and be runnable with `bun test e2e/e2e.test.ts`.
 - **FR-2:** All CLI invocations must use `Bun.spawnSync` targeting `apps/cli/src/index.ts` (not a globally installed `kore` binary) so tests work in a fresh repo checkout.
 - **FR-3:** All memories ingested during a test run must be cleaned up in `afterAll`, even if tests fail.
 - **FR-4:** `MIN_SCORE = 0.5` must be defined once and referenced in all score assertions.

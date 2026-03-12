@@ -42,31 +42,20 @@ export const MemoryExtractionSchema = z.object({
 
   distilled_items: z
     .array(z.string())
-    .min(1)
-    .max(7)
     .describe(
       "1 to 7 atomic facts, quotes, or instructions extracted from the raw source. Must be standalone sentences."
     ),
 
   qmd_category: z
     .string()
-    .startsWith("qmd://")
     .describe(
       "A hierarchical classification path starting with qmd://, e.g. qmd://tech/programming/python"
     ),
 
-  type: MemoryTypeEnum,
+  type: z.enum(["place", "media", "note", "person"]).describe("The type of memory, either place, media, note, or person."),
 
   tags: z
-    .array(
-      z
-        .string()
-        .regex(
-          /^[a-z0-9]+(-[a-z0-9]+)*$/,
-          "Tags must be lowercase kebab-case"
-        )
-    )
-    .max(5)
+    .array(z.string())
     .describe("Between 1 and 5 thematic tags. lowercase, kebab-case."),
 });
 

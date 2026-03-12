@@ -119,7 +119,7 @@ The vision depends on LLMs extracting structured metadata from raw content (tags
 - **Workaround:** The test script programmatically reads the temp dataset directory and passes the full array of file paths to the CLI. No shell expansion.
 
 ## 8. Execution Strategy
-- **Test Framework:** Implement as a `tasks/e2e-testing/e2e.test.ts` file using `bun:test`. This integrates with the project's existing `bun test` infrastructure, gives structured pass/fail output, and allows running with `bun test tasks/e2e-testing/`.
+- **Test Framework:** Implement as a `e2e/e2e.test.ts` file using `bun:test`. This integrates with the project's existing `bun test` infrastructure, gives structured pass/fail output, and allows running with `bun test e2e/`.
 - **Script Structure:**
   1. `beforeAll`: Assert `kore health`. Generate the temp dataset directory. Ingest all files (synchronous, capturing `task_id`s and memory paths). Run `kore list` sanity check.
   2. Test cases: Each search test is a `test()` block that parses JSON output and runs assertions.
