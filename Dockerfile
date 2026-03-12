@@ -21,7 +21,10 @@ COPY packages/llm-extractor/package.json ./packages/llm-extractor/package.json
 COPY packages/qmd-client/package.json ./packages/qmd-client/package.json
 COPY packages/shared-types/package.json ./packages/shared-types/package.json
 
-# Install dependencies (respecting workspaces)
+# Install dependencies (respecting workspaces).
+# node-llama-cpp ships pre-built platform binaries as optional packages
+# (@node-llama-cpp/linux-arm64, @node-llama-cpp/linux-x64, etc.) — bun selects
+# the correct one based on the container's OS/arch, so no source compilation is needed.
 RUN bun install --frozen-lockfile
 
 # Copy the rest of the source code
@@ -37,10 +40,9 @@ FROM oven/bun:1.3.3-debian AS runner
 
 WORKDIR /app
 
-# Install Spatialite runtime dependency and git for node-llama-cpp downloads
+# Install Spatialite runtime dependency only — llama.cpp pre-built binaries come from node_modules
 RUN apt-get update && apt-get install -y \
     libsqlite3-mod-spatialite \
-    git \
     && rm -rf /var/lib/apt/lists/*
 
 # Ensure the container runs as a non-root user to avoid permission issues
