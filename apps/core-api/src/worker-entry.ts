@@ -10,10 +10,23 @@ import { resolveDataPath, resolveQueueDbPath } from "./config";
 import { ensureDataDirectories } from "./app";
 import { startWorker } from "./worker";
 import { startWatcher } from "./watcher";
+import * as qmdClient from "@kore/qmd-client";
 
 const dataPath = resolveDataPath();
 
 await ensureDataDirectories(dataPath);
+
+// ── Initialize QMD store ────────────────────────────────────────────────
+
+const qmdDbPath = process.env.KORE_QMD_DB_PATH;
+
+try {
+  await qmdClient.initStore(qmdDbPath);
+  console.log("QMD store initialized in worker");
+} catch (err) {
+  console.error("Failed to initialize QMD store in worker:", err);
+  process.exit(1);
+}
 
 const queue = new QueueRepository(resolveQueueDbPath());
 
@@ -22,3 +35,17 @@ console.log("Kore extraction worker started (polling every 5s)");
 
 const watcher = startWatcher({ dataPath });
 console.log("Kore file watcher started (watching for .md changes)");
+
+// ── Graceful shutdown ───────────────────────────────────────────────────
+
+async function shutdown() {
+  console.log("Shutting down worker...");
+  watcher.stop();
+  worker.stop();
+  await qmdClient.closeStore();
+  console.log("QMD store closed");
+  process.exit(0);
+}
+
+process.on("SIGTERM", shutdown);
+process.on("SIGINT", shutdown);

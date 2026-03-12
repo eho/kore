@@ -1,12 +1,13 @@
 import { describe, test, expect, beforeAll, afterAll } from "bun:test";
 import * as fs from "node:fs";
 import * as path from "node:path";
+import * as os from "node:os";
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
 const RUN_ID = `e2e-${Date.now()}`;
 const MIN_SCORE = 0.5;
-const TMP_DIR = `/tmp/kore-e2e-${RUN_ID}`;
+const TMP_DIR = path.join(os.tmpdir(), `kore-e2e-${RUN_ID}`);
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -363,7 +364,7 @@ beforeAll(async () => {
     }
   }
   ingestedIds = Array.from(labelToId.values());
-});
+}, 300000); // 5 minute timeout
 
 afterAll(async () => {
   try {

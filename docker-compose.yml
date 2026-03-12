@@ -14,6 +14,7 @@ services:
       - KORE_QMD_DB_PATH=/app/db/qmd.sqlite
       - KORE_EMBED_INTERVAL_MS=${KORE_EMBED_INTERVAL_MS:-300000}
     volumes:
+      - .:/app
       - ${KORE_DATA_PATH:-~/.kore/data}:/app/data
       - ${KORE_DB_PATH:-~/.kore/db}:/app/db
       - ${QMD_CACHE_PATH:-~/.kore/qmd-cache}:/home/bun/.cache/qmd
@@ -33,6 +34,7 @@ services:
       - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
       - OLLAMA_MODEL=${OLLAMA_MODEL:-qwen2.5:7b}
     volumes:
+      - .:/app
       - ${KORE_DATA_PATH:-~/.kore/data}:/app/data
       - ${KORE_DB_PATH:-~/.kore/db}:/app/db
     command: ["bun", "run", "apps/core-api/src/worker-entry.ts"]
