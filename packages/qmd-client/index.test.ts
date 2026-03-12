@@ -1,10 +1,16 @@
-import { test, expect, describe, beforeEach, mock } from "bun:test";
+import { test, expect, describe, beforeEach, afterEach, mock, spyOn } from "bun:test";
+import * as fs from "node:fs";
 import type { QMDStore, UpdateResult, IndexStatus } from "@tobilu/qmd";
 
 // ── Mock Setup ─────────────────────────────────────────────────────────────
 // Mock createStore from @tobilu/qmd before importing qmd-client.
 
 const mockStore: Partial<QMDStore> = {
+  internal: {
+    db: {
+      loadExtension: mock(() => {}),
+    },
+  } as any,
   update: mock(() =>
     Promise.resolve({
       collections: 1,
@@ -66,6 +72,7 @@ const {
   addCollection,
   addContext,
   resetStore,
+  findSpatialite,
 } = await import("./index");
 
 const { createStore: mockCreateStore } = await import("@tobilu/qmd");
@@ -73,14 +80,29 @@ const { createStore: mockCreateStore } = await import("@tobilu/qmd");
 // ── Tests ──────────────────────────────────────────────────────────────────
 
 describe("qmd-client", () => {
+  let originalSpatialitePath: string | undefined;
+
   beforeEach(() => {
     resetStore();
+    originalSpatialitePath = process.env.SPATIALITE_PATH;
+    process.env.SPATIALITE_PATH = "/tmp/fake-spatialite.so";
+
     (mockCreateStore as ReturnType<typeof mock>).mockClear();
     // Clear all mock store method call counts
     for (const fn of Object.values(mockStore)) {
       if (typeof fn === "function" && "mockClear" in fn) {
         (fn as ReturnType<typeof mock>).mockClear();
       }
+    }
+    // Deep clear loadExtension
+    (mockStore.internal as any).db.loadExtension.mockClear();
+  });
+
+  afterEach(() => {
+    if (originalSpatialitePath === undefined) {
+      delete process.env.SPATIALITE_PATH;
+    } else {
+      process.env.SPATIALITE_PATH = originalSpatialitePath;
     }
   });
 
@@ -102,6 +124,15 @@ describe("qmd-client", () => {
           },
         },
       });
+    });
+
+    test("auto-detects and loads Spatialite extension", async () => {
+      process.env.SPATIALITE_PATH = "/custom/spatialite.so";
+      await initStore("/tmp/test.sqlite");
+
+      expect((mockStore.internal as any).db.loadExtension).toHaveBeenCalledWith(
+        "/custom/spatialite.so",
+      );
     });
 
     test("throws if called twice without closeStore()", async () => {
@@ -366,5 +397,90 @@ describe("qmd-client", () => {
       // But store is now null
       expect(update()).rejects.toThrow("not initialized");
     });
+  });
+});
+
+// ── findSpatialite() ───────────────────────────────────────────────────────
+
+describe("findSpatialite()", () => {
+  let existsSyncSpy: ReturnType<typeof spyOn>;
+  let originalSpatialitePath: string | undefined;
+
+  beforeEach(() => {
+    originalSpatialitePath = process.env.SPATIALITE_PATH;
+    delete process.env.SPATIALITE_PATH;
+    existsSyncSpy = spyOn(fs, "existsSync").mockReturnValue(false);
+  });
+
+  afterEach(() => {
+    existsSyncSpy.mockRestore();
+    if (originalSpatialitePath === undefined) {
+      delete process.env.SPATIALITE_PATH;
+    } else {
+      process.env.SPATIALITE_PATH = originalSpatialitePath;
+    }
+  });
+
+  test("returns SPATIALITE_PATH env var without checking filesystem", () => {
+    process.env.SPATIALITE_PATH = "/custom/mod_spatialite.so";
+    const result = findSpatialite();
+    expect(result).toBe("/custom/mod_spatialite.so");
+    expect(existsSyncSpy).not.toHaveBeenCalled();
+  });
+
+  test("returns macOS arm64 Homebrew path when it exists", () => {
+    existsSyncSpy.mockImplementation(
+      (p: unknown) => p === "/opt/homebrew/lib/mod_spatialite.dylib",
+    );
+    const result = findSpatialite();
+    expect(result).toBe("/opt/homebrew/lib/mod_spatialite.dylib");
+  });
+
+  test("returns macOS x86 Homebrew path when arm64 is absent", () => {
+    existsSyncSpy.mockImplementation(
+      (p: unknown) => p === "/usr/local/lib/mod_spatialite.dylib",
+    );
+    const result = findSpatialite();
+    expect(result).toBe("/usr/local/lib/mod_spatialite.dylib");
+  });
+
+  test("returns Linux x86_64 path when it exists", () => {
+    existsSyncSpy.mockImplementation(
+      (p: unknown) =>
+        p === "/usr/lib/x86_64-linux-gnu/mod_spatialite.so",
+    );
+    const result = findSpatialite();
+    expect(result).toBe("/usr/lib/x86_64-linux-gnu/mod_spatialite.so");
+  });
+
+  test("returns Linux aarch64 path when it exists", () => {
+    existsSyncSpy.mockImplementation(
+      (p: unknown) =>
+        p === "/usr/lib/aarch64-linux-gnu/mod_spatialite.so",
+    );
+    const result = findSpatialite();
+    expect(result).toBe("/usr/lib/aarch64-linux-gnu/mod_spatialite.so");
+  });
+
+  test("throws when no path found, listing all checked paths", () => {
+    expect(() => findSpatialite()).toThrow(
+      /Spatialite extension not found/,
+    );
+    expect(() => findSpatialite()).toThrow(
+      /\/opt\/homebrew\/lib\/mod_spatialite\.dylib/,
+    );
+    expect(() => findSpatialite()).toThrow(
+      /\/usr\/local\/lib\/mod_spatialite\.dylib/,
+    );
+    expect(() => findSpatialite()).toThrow(
+      /\/usr\/lib\/x86_64-linux-gnu\/mod_spatialite\.so/,
+    );
+    expect(() => findSpatialite()).toThrow(
+      /\/usr\/lib\/aarch64-linux-gnu\/mod_spatialite\.so/,
+    );
+  });
+
+  test("error includes install command", () => {
+    expect(() => findSpatialite()).toThrow(/Install it with:/);
   });
 });
