@@ -41,13 +41,13 @@ If we shift the Core Engine to Bun/TypeScript, the architecture immediately beco
 
 1.  **Code Reusability:** Every single interface, type definition (e.g., `MemoryItem`, `ExtractionResult`), and utility library can be shared across `apps/`, `packages/`, the Core Engine, and the UI.
 2.  **Native Integration with QMD:** Since QMD is an NPM package/Bun tool (`@tobilu/qmd`), a TypeScript Core Engine can import its types, interact directly with its APIs, or manage its background processes natively rather than treating it as a black-box subprocess.
-3.  **Simplified Infrastructure:** No need for a multi-language Docker Compose setup. The entire application (Ingestors + Engine + UI + Indexer) runs in a single Bun runtime environment.
+3.  **Simplified Infrastructure:** The entire application (Ingestors + Engine + UI + Indexer) runs in a single Bun runtime environment.
 4.  **Performance:** Bun's native SQLite driver (`bun:sqlite`) is notoriously fast, making Spatialite geofencing queries incredibly performant.
 
 ### Cons
 
 *   **Immature ML Libraries:** If Kore ever needs to run heavy, customized local PyTorch pipelines (beyond what `node-llama-cpp` or QMD provides), it is much harder in JS. However, since QMD handles the local GGUF models via C++ bindings, this is not a concern for Kore's current scope.
-*   **Spatialite Compilation:** Loading SQLite extensions in Node/Bun can occasionally be tricky depending on the host OS architecture (e.g., Apple Silicon vs Linux Docker). We must ensure `mod_spatialite` is properly available.
+*   **Spatialite Compilation:** Loading SQLite extensions in Node/Bun can occasionally be tricky depending on the host OS architecture (e.g., macOS vs Linux). We must ensure `mod_spatialite` is properly available.
 
 ---
 
