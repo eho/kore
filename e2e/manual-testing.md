@@ -16,12 +16,12 @@ bun run start
 
 **Single file:**
 ```sh
-bun run apps/cli/src/index.ts ingest e2e/dataset/tokyo-ramen.md --source "e2e/tokyo-ramen"
+kore ingest e2e/dataset/tokyo-ramen.md --source "e2e/tokyo-ramen"
 ```
 
 **All dataset files at once:**
 ```sh
-bun run apps/cli/src/index.ts ingest e2e/dataset/*.md
+kore ingest e2e/dataset/*.md
 ```
 
 The CLI blocks and polls until LLM extraction completes, then prints a confirmation. Recommended order for step-by-step validation:
@@ -44,30 +44,30 @@ The CLI blocks and polls until LLM extraction completes, then prints a confirmat
 
 **List all memories** — confirm each source label appears:
 ```sh
-bun run apps/cli/src/index.ts list
+kore list
 ```
 
 **Show full detail** (LLM-extracted title, tags, category, content):
 ```sh
-bun run apps/cli/src/index.ts show <id>
+kore show <id>
 ```
 
 **Search queries to validate recall and precision:**
 ```sh
 # Exact match
-bun run apps/cli/src/index.ts search "XYZZY_TEST_KEYWORD"
+kore search "XYZZY_TEST_KEYWORD"
 
 # Semantic — should return sydney-degustation + surry-hills-wine-bar, NOT japanese-learning
-bun run apps/cli/src/index.ts search "anniversary dinner ideas in Sydney"
+kore search "anniversary dinner ideas in Sydney"
 
 # Contextual — should return japanese-learning, NOT sydney results
-bun run apps/cli/src/index.ts search "I want to start learning Japanese"
+kore search "I want to start learning Japanese"
 
 # Cross-domain — should return docker-deployment + react-performance, NOT food results
-bun run apps/cli/src/index.ts search "tech deployment strategies"
+kore search "tech deployment strategies"
 
 # Intent flag
-bun run apps/cli/src/index.ts search "where should I eat in Tokyo" --intent "personal travel and food bookmarks"
+kore search "where should I eat in Tokyo" --intent "personal travel and food bookmarks"
 ```
 
 ---
@@ -76,7 +76,7 @@ bun run apps/cli/src/index.ts search "where should I eat in Tokyo" --intent "per
 
 Delete a specific memory:
 ```sh
-bun run apps/cli/src/index.ts delete <id> --force
+kore delete <id> --force
 ```
 
 Stop the server:
