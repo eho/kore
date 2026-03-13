@@ -36,6 +36,7 @@ const SearchRequestPayload = z.object({
   query: z.string().min(1, "query is required"),
   intent: z.string().optional(),
   limit: z.number().int().positive().optional(),
+  minScore: z.number().min(0).max(1).optional(),
   collection: z.string().optional(),
 });
 
@@ -224,7 +225,7 @@ export function createApp(deps: AppDeps = {}) {
         return { error: "Search index not available" };
       }
 
-      const { query, intent, limit, collection } = result.data;
+      const { query, intent, limit, collection, minScore } = result.data;
       const cappedLimit = Math.min(limit ?? 10, 20);
 
       try {
@@ -232,6 +233,7 @@ export function createApp(deps: AppDeps = {}) {
           intent: intent ?? DEFAULT_SEARCH_INTENT,
           limit: cappedLimit,
           collection,
+          minScore,
         });
 
         return results.map((r) => {

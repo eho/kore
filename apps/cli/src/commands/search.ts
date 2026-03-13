@@ -14,6 +14,7 @@ interface SearchOpts {
   intent?: string;
   limit?: string;
   collection?: string;
+  minScore?: string;
   json: boolean;
 }
 
@@ -42,6 +43,7 @@ export async function searchCommand(
   if (opts.intent) body.intent = opts.intent;
   if (opts.limit) body.limit = Number(opts.limit);
   if (opts.collection) body.collection = opts.collection;
+  if (opts.minScore !== undefined) body.minScore = Number(opts.minScore);
 
   const result = await apiFetch<SearchResult[]>("/api/v1/search", {
     method: "POST",

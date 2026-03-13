@@ -110,6 +110,7 @@ program
   .option("--intent <string>", "Hint for the reranker")
   .option("--limit <number>", "Max results to return", "10")
   .option("--collection <string>", "Filter by collection")
+  .option("--min-score <number>", "Minimum score threshold (0.0 to 1.0)")
   .option("--json", "Output results as JSON", false)
   .action(async (query, opts) => {
     await searchCommand(query, opts);
