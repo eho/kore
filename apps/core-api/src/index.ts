@@ -2,12 +2,15 @@ import { createApp, ensureDataDirectories } from "./app";
 import type { QmdHealthSummary } from "./app";
 import { QueueRepository } from "./queue";
 import { resolveDataPath, resolveQueueDbPath, resolveQmdDbPath, ensureKoreDirectories } from "./config";
+import { initLogger, closeLogger } from "./logger";
 import { startWorker } from "./worker";
 import { startWatcher } from "./watcher";
 import { startEmbedInterval } from "./embedder";
 import { MemoryIndex } from "./memory-index";
 import { EventDispatcher } from "./event-dispatcher";
 import * as qmdClient from "@kore/qmd-client";
+
+initLogger();
 
 const dataPath = resolveDataPath();
 
@@ -112,6 +115,7 @@ async function shutdown() {
   worker.stop();
   await qmdClient.closeStore();
   console.log("QMD store closed");
+  closeLogger();
   process.exit(0);
 }
 

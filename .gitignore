@@ -23,3 +23,5 @@ packages/an-export/node_modules # In case they are ever recreated
 .env
 .env.*
 !.env.example
+
+.kore/
