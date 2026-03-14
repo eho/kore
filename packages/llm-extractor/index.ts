@@ -55,15 +55,47 @@ function createProvider() {
 /**
  * Attempt to parse a MemoryExtraction from raw text response as a fallback
  * when structured output generation fails (e.g., model returns malformed JSON).
+ *
+ * Normalizes common model quirks before Zod validation:
+ * - Strips markdown code fences (```json ... ```)
+ * - Converts tags to lowercase kebab-case
+ * - Adds the qmd:// prefix if missing from qmd_category
  */
 export function fallbackParse(text: string): MemoryExtraction {
+  // Strip markdown code fences if present
+  const stripped = text.replace(/^```(?:json)?\s*/m, "").replace(/```\s*$/m, "").trim();
+
   // Try to find a JSON object in the text
-  const jsonMatch = text.match(/\{[\s\S]*\}/);
+  const jsonMatch = stripped.match(/\{[\s\S]*\}/);
   if (!jsonMatch) {
     throw new Error("Fallback parse failed: no JSON object found in response");
   }
 
   const raw = JSON.parse(jsonMatch[0]);
+
+  // Normalize tags: lowercase kebab-case, drop empties, truncate to max 5
+  if (Array.isArray(raw.tags)) {
+    raw.tags = raw.tags
+      .map((t: unknown) =>
+        String(t)
+          .toLowerCase()
+          .replace(/[\s_]+/g, "-")
+          .replace(/[^a-z0-9-]/g, "")
+      )
+      .filter((t: string) => /^[a-z0-9]+(-[a-z0-9]+)*$/.test(t))
+      .slice(0, 5);
+  }
+
+  // Truncate distilled_items to max 7
+  if (Array.isArray(raw.distilled_items)) {
+    raw.distilled_items = raw.distilled_items.slice(0, 7);
+  }
+
+  // Ensure qmd_category has the required prefix
+  if (typeof raw.qmd_category === "string" && !raw.qmd_category.startsWith("qmd://")) {
+    raw.qmd_category = `qmd://${raw.qmd_category}`;
+  }
+
   return MemoryExtractionSchema.parse(raw);
 }
 
@@ -106,8 +138,9 @@ export async function extract(
       });
 
       return fallbackParse(text);
-    } catch (_fallbackError) {
-      // Re-throw the original error if fallback also fails
+    } catch (fallbackError) {
+      // Log fallback error to aid debugging, re-throw original
+      console.warn("LLM extractor: fallback parse also failed:", fallbackError);
       throw primaryError;
     }
   }
