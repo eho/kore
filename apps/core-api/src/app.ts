@@ -356,42 +356,9 @@ export function createApp(deps: AppDeps = {}) {
 
       return memory;
     })
-    // ─── Delete Memory ────────────────────────────────────────────
-    .delete("/api/v1/memory/:id", async ({ params, set }) => {
-      const filePath = memoryIndex.get(params.id);
-      if (!filePath) {
-        set.status = 404;
-        return { error: "Memory not found", code: "NOT_FOUND" };
-      }
-
-      // Read frontmatter before deleting for the event payload
-      let frontmatter: Record<string, any> = {};
-      try {
-        const content = await readFile(filePath, "utf-8");
-        frontmatter = parseFrontmatter(content);
-      } catch {
-        // file may already be gone
-      }
-
-      try {
-        await unlink(filePath);
-      } catch {
-        set.status = 404;
-        return { error: "Memory not found", code: "NOT_FOUND" };
-      }
-
-      memoryIndex.delete(params.id);
-
-      await eventDispatcher.emit("memory.deleted", {
-        id: params.id,
-        filePath,
-        frontmatter,
-        timestamp: new Date().toISOString(),
-      });
-
-      return { status: "deleted", id: params.id };
-    })
     // ─── Delete All Memories (Reset) ────────────────────────────────
+    // NOTE: must be registered before DELETE /api/v1/memory/:id to avoid
+    // memoirist radix-trie shadowing (shared "memory" prefix).
     .delete("/api/v1/memories", async ({ set }) => {
       // Count memories before deletion
       let deletedMemories = 0;
@@ -433,6 +400,41 @@ export function createApp(deps: AppDeps = {}) {
         deleted_memories: deletedMemories,
         deleted_tasks: deletedTasks,
       };
+    })
+    // ─── Delete Memory ────────────────────────────────────────────
+    .delete("/api/v1/memory/:id", async ({ params, set }) => {
+      const filePath = memoryIndex.get(params.id);
+      if (!filePath) {
+        set.status = 404;
+        return { error: "Memory not found", code: "NOT_FOUND" };
+      }
+
+      // Read frontmatter before deleting for the event payload
+      let frontmatter: Record<string, any> = {};
+      try {
+        const content = await readFile(filePath, "utf-8");
+        frontmatter = parseFrontmatter(content);
+      } catch {
+        // file may already be gone
+      }
+
+      try {
+        await unlink(filePath);
+      } catch {
+        set.status = 404;
+        return { error: "Memory not found", code: "NOT_FOUND" };
+      }
+
+      memoryIndex.delete(params.id);
+
+      await eventDispatcher.emit("memory.deleted", {
+        id: params.id,
+        filePath,
+        frontmatter,
+        timestamp: new Date().toISOString(),
+      });
+
+      return { status: "deleted", id: params.id };
     })
     // ─── Update Memory ────────────────────────────────────────────
     .put("/api/v1/memory/:id", async ({ params, body, set }) => {
