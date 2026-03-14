@@ -451,3 +451,38 @@ describe("POST /api/v1/search", () => {
     expect(res.status).toBe(401);
   });
 });
+
+// ─── DELETE /api/v1/memories ─────────────────────────────────────────
+
+describe("DELETE /api/v1/memories", () => {
+  let originalKoreHome: string | undefined;
+
+  beforeAll(async () => {
+    originalKoreHome = process.env.KORE_HOME;
+    process.env.KORE_HOME = tempDir; // Use tempDir for resolveQmdDbPath
+    await require("node:fs/promises").mkdir(join(tempDir, "db"), { recursive: true });
+  });
+
+  afterAll(() => {
+    if (originalKoreHome !== undefined) {
+      process.env.KORE_HOME = originalKoreHome;
+    } else {
+      delete process.env.KORE_HOME;
+    }
+  });
+
+  test("resets all memories, queue, and index", async () => {
+    const app = makeApp();
+    queue.enqueue({ content: "test task" });
+    expect(queue.getQueueLength()).toBe(1);
+
+    const res = await req(app, "/api/v1/memories", { method: "DELETE" });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    
+    expect(body.status).toBe("reset");
+    expect(body.deleted_tasks).toBe(1);
+    
+    expect(queue.getQueueLength()).toBe(0);
+  });
+});
