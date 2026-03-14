@@ -144,6 +144,14 @@ export class QueueRepository {
     return this.db.query("SELECT * FROM tasks WHERE id = ?").get(id) as TaskRecord | null;
   }
 
+  /**
+   * Delete all tasks from the queue and return the number of rows deleted.
+   */
+  clearAll(): number {
+    this.db.run("DELETE FROM tasks");
+    return (this.db.query("SELECT changes() as n").get() as { n: number }).n;
+  }
+
   getQueueLength(): number {
     const row = this.db
       .query("SELECT COUNT(*) as count FROM tasks WHERE status = 'queued'")

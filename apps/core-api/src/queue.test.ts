@@ -295,6 +295,27 @@ describe("recoverStaleTasks", () => {
   });
 });
 
+// ─── clearAll ───────────────────────────────────────────────────────
+
+describe("clearAll", () => {
+  test("deletes all tasks and returns the count", () => {
+    queue.enqueue({ content: "1" });
+    queue.enqueue({ content: "2" });
+    queue.enqueue({ content: "3" });
+    queue.dequeueAndLock(); // one becomes processing
+
+    const deleted = queue.clearAll();
+    expect(deleted).toBe(3);
+    expect(queue.getQueueLength()).toBe(0);
+  });
+
+  test("returns 0 when queue is already empty", () => {
+    const deleted = queue.clearAll();
+    expect(deleted).toBe(0);
+    expect(queue.getQueueLength()).toBe(0);
+  });
+});
+
 // ─── getQueueLength ─────────────────────────────────────────────────
 
 describe("getQueueLength", () => {
