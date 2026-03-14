@@ -8,9 +8,10 @@ import type { BaseFrontmatter } from "@kore/shared-types";
 import { QueueRepository } from "./queue";
 import { slugify } from "./slugify";
 import { renderMarkdown } from "./markdown";
-import { mkdir, unlink, readFile } from "node:fs/promises";
+import { mkdir, unlink, readFile, rm } from "node:fs/promises";
 import { join } from "node:path";
-import { resolveDataPath } from "./config";
+import { resolveDataPath, resolveQmdDbPath } from "./config";
+import * as qmdClient from "@kore/qmd-client";
 import { MemoryIndex } from "./memory-index";
 import { EventDispatcher } from "./event-dispatcher";
 import type { HybridQueryResult, SearchOptions } from "@kore/qmd-client";
@@ -389,6 +390,49 @@ export function createApp(deps: AppDeps = {}) {
       });
 
       return { status: "deleted", id: params.id };
+    })
+    // ─── Delete All Memories (Reset) ────────────────────────────────
+    .delete("/api/v1/memories", async ({ set }) => {
+      // Count memories before deletion
+      let deletedMemories = 0;
+      for (const _ of memoryIndex.entries()) {
+        deletedMemories++;
+      }
+
+      // Delete and recreate data directories
+      for (const dir of Object.values(TYPE_DIRS)) {
+        const dirPath = join(dataPath, dir);
+        try {
+          await rm(dirPath, { recursive: true, force: true });
+        } catch (err) {
+          console.warn(`Warning: failed to delete directory ${dirPath}:`, err);
+        }
+      }
+      await ensureDataDirectories(dataPath);
+
+      // Rebuild in-memory index (now empty)
+      await memoryIndex.build(dataPath);
+
+      // Clear task queue
+      const deletedTasks = queue.clearAll();
+
+      // Reset QMD index
+      const qmdDbPath = resolveQmdDbPath();
+      try {
+        await qmdClient.closeStore();
+        await rm(qmdDbPath, { force: true });
+        await rm(`${qmdDbPath}-wal`, { force: true });
+        await rm(`${qmdDbPath}-shm`, { force: true });
+        await qmdClient.initStore(qmdDbPath);
+      } catch (err) {
+        console.warn("Warning: QMD store reset encountered an error:", err);
+      }
+
+      return {
+        status: "reset",
+        deleted_memories: deletedMemories,
+        deleted_tasks: deletedTasks,
+      };
     })
     // ─── Update Memory ────────────────────────────────────────────
     .put("/api/v1/memory/:id", async ({ params, body, set }) => {
