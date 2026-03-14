@@ -23,6 +23,8 @@ kore ingest e2e/dataset/tokyo-ramen.md --source "e2e/tokyo-ramen"
 
 **All dataset files at once:**
 ```sh
+# --wait is the default: blocks until each file's LLM extraction completes.
+# Use --no-wait to queue all files and return immediately.
 kore ingest e2e/dataset/*.md
 ```
 
@@ -63,6 +65,20 @@ kore search "where should I eat in Tokyo" --intent "personal travel and food boo
 Delete a specific memory:
 ```sh
 kore delete <id> --force
+```
+
+#### Resetting for a fresh test run
+
+To wipe all memories, the task queue, and the search index in one step:
+```sh
+kore reset --force
+```
+This deletes all `.md` files under `$KORE_HOME/data/`, clears all queue tasks, and reinitialises the QMD SQLite database. The server keeps running — no restart needed.
+
+After reset, confirm the slate is clean:
+```sh
+kore list   # should show 0 results
+kore health # queue_length should be 0
 ```
 
 Stop the server:
