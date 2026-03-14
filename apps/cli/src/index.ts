@@ -9,6 +9,7 @@ import { listCommand } from "./commands/list.ts";
 import { showCommand } from "./commands/show.ts";
 import { deleteCommand } from "./commands/delete.ts";
 import { searchCommand } from "./commands/search.ts";
+import { resetCommand } from "./commands/reset.ts";
 
 // Read version from package.json
 const pkg = await import("../package.json", { with: { type: "json" } });
@@ -114,6 +115,15 @@ program
   .option("--json", "Output results as JSON", false)
   .action(async (query, opts) => {
     await searchCommand(query, opts);
+  });
+
+// ─── reset ──────────────────────────────────────────────────────────────────
+program
+  .command("reset")
+  .description("Delete all memories, tasks, and the search index")
+  .option("--force", "Skip confirmation prompt", false)
+  .action(async (opts) => {
+    await resetCommand(opts);
   });
 
 // Unknown commands: print error + help, exit 1
