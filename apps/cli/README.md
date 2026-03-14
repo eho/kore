@@ -198,6 +198,31 @@ Exits with code `0` on success, `1` on failure or if not found.
 
 ---
 
+### `kore reset`
+
+Delete all memories, tasks, and the search index in one step. Useful for starting a fresh test session.
+
+```sh
+kore reset           # prompts for confirmation before proceeding
+kore reset --force   # skip confirmation (for scripting)
+```
+
+Example output:
+
+```
+✓ Reset complete. Deleted 12 memories and 3 tasks.
+```
+
+Options:
+
+| Flag      | Description                |
+| --------- | -------------------------- |
+| `--force` | Skip confirmation prompt   |
+
+Exits with code `1` on API error or network failure.
+
+---
+
 ### `kore search`
 
 Search memories using hybrid semantic search (BM25 + vector + LLM reranking).
