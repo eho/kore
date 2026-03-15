@@ -88,12 +88,29 @@ export interface MemoryEvent {
   filePath: string;
   frontmatter: Record<string, any>;
   timestamp: string;
+  taskId?: string;
+}
+
+// ─── Plugin Lifecycle Dependencies (prd-plugin-infrastructure §PLUG-001) ─
+
+export interface PluginStartDeps {
+  enqueue(
+    payload: { source: string; content: string; original_url?: string },
+    priority?: "low" | "normal" | "high"
+  ): string;
+  deleteMemory(id: string): Promise<boolean>;
+  getMemoryIdByExternalKey(externalKey: string): string | undefined;
+  setExternalKeyMapping(externalKey: string, memoryId: string): void;
+  removeExternalKeyMapping(externalKey: string): void;
+  clearRegistry(): void;
 }
 
 // ─── KorePlugin Interface (plugin_system.md §1) ────────────────────
 
 export interface KorePlugin {
   name: string;
+  start?: (deps: PluginStartDeps) => Promise<void>;
+  stop?: () => Promise<void>;
   routes?: (app: Elysia) => Elysia;
   onIngestEnrichment?: (
     context: IngestionContext
