@@ -65,6 +65,13 @@
         "ai": "^6.0.116",
       },
     },
+    "packages/plugin-test": {
+      "name": "@kore/plugin-test",
+      "version": "1.0.0",
+      "dependencies": {
+        "@kore/shared-types": "workspace:*",
+      },
+    },
     "packages/qmd-client": {
       "name": "@kore/qmd-client",
       "version": "2.0.0",
@@ -113,6 +120,8 @@
     "@kore/core-api": ["@kore/core-api@workspace:apps/core-api"],
 
     "@kore/llm-extractor": ["@kore/llm-extractor@workspace:packages/llm-extractor"],
+
+    "@kore/plugin-test": ["@kore/plugin-test@workspace:packages/plugin-test"],
 
     "@kore/qmd-client": ["@kore/qmd-client@workspace:packages/qmd-client"],
 
