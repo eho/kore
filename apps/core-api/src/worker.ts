@@ -1,6 +1,7 @@
 import { randomUUID } from "crypto";
 import { join } from "node:path";
 import { QueueRepository } from "./queue";
+import { EventDispatcher } from "./event-dispatcher";
 import { extract } from "@kore/llm-extractor";
 import { MemoryExtractionSchema } from "@kore/shared-types";
 import type { BaseFrontmatter } from "@kore/shared-types";
@@ -20,6 +21,7 @@ const CLEANUP_INTERVAL_MS = 60 * 60 * 1_000; // 1 hour
 export interface WorkerDeps {
   queue: QueueRepository;
   dataPath: string;
+  dispatcher?: EventDispatcher;
   extractFn?: typeof extract;
   pollIntervalMs?: number;
 }
@@ -46,6 +48,12 @@ async function resolveFilePath(
   return filePath;
 }
 
+interface ProcessTaskResult {
+  id: string;
+  filePath: string;
+  frontmatter: BaseFrontmatter;
+}
+
 /**
  * Process a single task: extract structured data via LLM, write the
  * canonical Markdown file to disk, and update the queue status.
@@ -54,7 +62,7 @@ async function processTask(
   taskId: string,
   payload: { source: string; content: string; original_url?: string },
   deps: WorkerDeps
-): Promise<string> {
+): Promise<ProcessTaskResult> {
   const extractFn = deps.extractFn || extract;
 
   // Call the LLM extractor
@@ -92,7 +100,7 @@ async function processTask(
   // Mark completed
   deps.queue.markCompleted(taskId);
 
-  return filePath;
+  return { id, filePath, frontmatter };
 }
 
 /**
@@ -106,8 +114,20 @@ export async function pollOnce(deps: WorkerDeps): Promise<boolean> {
   try {
     const payload = JSON.parse(task.payload);
     console.log(`Worker: processing task ${task.id} (source: ${payload.source}, attempt ${task.retries + 1})`);
-    await processTask(task.id, payload, deps);
+    const result = await processTask(task.id, payload, deps);
     console.log(`Worker: task ${task.id} completed`);
+
+    // Emit memory.indexed event after successful extraction
+    if (deps.dispatcher) {
+      await deps.dispatcher.emit("memory.indexed", {
+        id: result.id,
+        filePath: result.filePath,
+        frontmatter: result.frontmatter,
+        timestamp: new Date().toISOString(),
+        taskId: task.id,
+      });
+    }
+
     return true;
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
