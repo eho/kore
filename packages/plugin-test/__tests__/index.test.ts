@@ -24,8 +24,8 @@ const MOCK_EXTRACTION: MemoryExtraction = {
   tags: ["test"],
 };
 
-function mockExtract(): Promise<MemoryExtraction> {
-  return Promise.resolve(MOCK_EXTRACTION);
+function mockExtract() {
+  return Promise.resolve({ ...MOCK_EXTRACTION, _extractionPath: "structured" as const });
 }
 
 // ─── Per-test isolation ─────────────────────────────────────────────
