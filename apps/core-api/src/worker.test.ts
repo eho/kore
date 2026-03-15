@@ -3,6 +3,7 @@ import { pollOnce, startWorker, type WorkerDeps } from "./worker";
 import { QueueRepository } from "./queue";
 import { ensureDataDirectories } from "./app";
 import type { MemoryExtraction } from "@kore/shared-types";
+import { renderMarkdown } from "./markdown";
 import { join } from "node:path";
 import { mkdtemp, rm, readdir, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -304,5 +305,73 @@ describe("E2E: POST /ingest/raw → worker → .md file", () => {
     expect(statusBody.status).toBe("completed");
 
     e2eQueue.close();
+  });
+});
+
+// ─── Worker: intent/confidence handling ──────────────────────────
+
+describe("Worker: intent and confidence", () => {
+  test("defaults intent to 'reference' when absent from extraction result", async () => {
+    const extractNoIntent = () =>
+      Promise.resolve({ ...MOCK_EXTRACTION }); // no intent field
+
+    const payload = { source: "test", content: "Some text" };
+    queue.enqueue(payload);
+
+    await pollOnce(makeDeps({ extractFn: extractNoIntent }));
+
+    const files = await readdir(join(tempDir, "places"));
+    const content = await readFile(join(tempDir, "places", files[0]), "utf-8");
+    expect(content).toContain("intent: reference");
+  });
+
+  test("passes through intent and confidence to frontmatter when present", async () => {
+    const extractWithIntentAndConfidence = () =>
+      Promise.resolve({
+        ...MOCK_EXTRACTION,
+        intent: "recommendation" as const,
+        confidence: 0.92,
+      });
+
+    const payload = { source: "test", content: "Some text" };
+    queue.enqueue(payload);
+
+    await pollOnce(makeDeps({ extractFn: extractWithIntentAndConfidence }));
+
+    const files = await readdir(join(tempDir, "places"));
+    const content = await readFile(join(tempDir, "places", files[0]), "utf-8");
+    expect(content).toContain("intent: recommendation");
+    expect(content).toContain("confidence: 0.92");
+  });
+});
+
+// ─── renderMarkdown: intent/confidence ───────────────────────────
+
+describe("renderMarkdown: intent and confidence", () => {
+  const baseFrontmatter = {
+    id: "550e8400-e29b-41d4-a716-446655440000",
+    type: "place" as const,
+    category: "qmd://travel/food/japan",
+    date_saved: "2026-03-07T12:00:00Z",
+    source: "apple_notes",
+    tags: ["ramen", "tokyo"],
+  };
+
+  test("includes intent and confidence lines when present", () => {
+    const md = renderMarkdown({
+      frontmatter: { ...baseFrontmatter, intent: "recommendation" as const, confidence: 0.95 },
+      title: "Test",
+    });
+    expect(md).toContain("intent: recommendation");
+    expect(md).toContain("confidence: 0.95");
+  });
+
+  test("omits intent and confidence lines when absent", () => {
+    const md = renderMarkdown({
+      frontmatter: baseFrontmatter,
+      title: "Test",
+    });
+    expect(md).not.toContain("intent:");
+    expect(md).not.toContain("confidence:");
   });
 });

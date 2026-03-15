@@ -118,6 +118,8 @@ async function parseMemoryFile(id: string, filePath: string): Promise<MemorySumm
       source: fm.source || "",
       date_saved: fm.date_saved || "",
       tags: parseTagsArray(fm.tags || ""),
+      ...(fm.intent ? { intent: fm.intent } : {}),
+      ...(fm.confidence !== undefined ? { confidence: parseFloat(fm.confidence) } : {}),
     };
   } catch {
     return null;
@@ -137,6 +139,8 @@ async function parseMemoryFileFull(id: string, filePath: string): Promise<Memory
       source: fm.source || "",
       tags: parseTagsArray(fm.tags || ""),
       url: fm.url,
+      ...(fm.intent ? { intent: fm.intent } : {}),
+      ...(fm.confidence !== undefined ? { confidence: parseFloat(fm.confidence) } : {}),
       title: extractTitleFromMarkdown(content),
       content,
     };
@@ -152,6 +156,8 @@ interface MemorySummary {
   source: string;
   date_saved: string;
   tags: string[];
+  intent?: string;
+  confidence?: number;
 }
 
 interface MemoryFull extends MemorySummary {
