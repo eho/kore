@@ -4,6 +4,7 @@ import {
   BaseFrontmatterSchema,
   MemoryExtractionSchema,
 } from "./index";
+import type { KorePlugin, MemoryEvent } from "./index";
 
 // ─── MemoryTypeEnum ─────────────────────────────────────────────────
 
@@ -171,5 +172,60 @@ describe("MemoryExtractionSchema", () => {
     expect(() =>
       MemoryExtractionSchema.parse({ ...validExtraction, type: "bookmark" })
     ).toThrow();
+  });
+});
+
+// ─── KorePlugin Interface ────────────────────────────────────────
+
+describe("KorePlugin", () => {
+  test("hooks-only plugin (no start/stop) satisfies the interface", () => {
+    const plugin: KorePlugin = {
+      name: "hooks-only",
+      onMemoryIndexed: async () => {},
+    };
+    expect(plugin.name).toBe("hooks-only");
+    expect(plugin.start).toBeUndefined();
+    expect(plugin.stop).toBeUndefined();
+  });
+
+  test("plugin with start and stop satisfies the interface", () => {
+    const plugin: KorePlugin = {
+      name: "full-lifecycle",
+      start: async () => {},
+      stop: async () => {},
+      onMemoryIndexed: async () => {},
+    };
+    expect(plugin.start).toBeFunction();
+    expect(plugin.stop).toBeFunction();
+  });
+
+  test("minimal plugin (name only) satisfies the interface", () => {
+    const plugin: KorePlugin = { name: "minimal" };
+    expect(plugin.name).toBe("minimal");
+  });
+});
+
+// ─── MemoryEvent ─────────────────────────────────────────────────
+
+describe("MemoryEvent", () => {
+  test("accepts event without taskId", () => {
+    const event: MemoryEvent = {
+      id: "abc-123",
+      filePath: "/tmp/test.md",
+      frontmatter: { type: "note" },
+      timestamp: new Date().toISOString(),
+    };
+    expect(event.taskId).toBeUndefined();
+  });
+
+  test("accepts event with taskId", () => {
+    const event: MemoryEvent = {
+      id: "abc-123",
+      filePath: "/tmp/test.md",
+      frontmatter: { type: "note" },
+      timestamp: new Date().toISOString(),
+      taskId: "task-456",
+    };
+    expect(event.taskId).toBe("task-456");
   });
 });

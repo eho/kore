@@ -83,19 +83,22 @@ describe("fallbackParse", () => {
     expect(() => fallbackParse(JSON.stringify(invalid))).toThrow();
   });
 
-  test("throws when tags exceed max of 5", () => {
-    const invalid = { ...validJson, tags: ["a", "b", "c", "d", "e", "f"] };
-    expect(() => fallbackParse(JSON.stringify(invalid))).toThrow();
+  test("normalizes tags exceeding max of 5 by truncating", () => {
+    const input = { ...validJson, tags: ["a", "b", "c", "d", "e", "f"] };
+    const result = fallbackParse(JSON.stringify(input));
+    expect(result.tags).toEqual(["a", "b", "c", "d", "e"]);
   });
 
-  test("throws when qmd_category doesn't start with qmd://", () => {
-    const invalid = { ...validJson, qmd_category: "invalid://path" };
-    expect(() => fallbackParse(JSON.stringify(invalid))).toThrow();
+  test("normalizes qmd_category by adding qmd:// prefix when missing", () => {
+    const input = { ...validJson, qmd_category: "travel/food/japan" };
+    const result = fallbackParse(JSON.stringify(input));
+    expect(result.qmd_category).toBe("qmd://travel/food/japan");
   });
 
-  test("throws when tags are not kebab-case", () => {
-    const invalid = { ...validJson, tags: ["Not Kebab Case"] };
-    expect(() => fallbackParse(JSON.stringify(invalid))).toThrow();
+  test("normalizes non-kebab-case tags to kebab-case", () => {
+    const input = { ...validJson, tags: ["Not Kebab Case"] };
+    const result = fallbackParse(JSON.stringify(input));
+    expect(result.tags).toEqual(["not-kebab-case"]);
   });
 });
 
