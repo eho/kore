@@ -5,7 +5,7 @@
     "start": "bun run apps/core-api/src/index.ts",
     "dev": "bun --hot run apps/core-api/src/index.ts",
     "test": "bun test apps packages",
-    "test:e2e": "bun test e2e/run.e2e.ts",
+    "test:e2e": "bun test ./e2e/run.e2e.ts",
     "typecheck": "bunx tsc --noEmit --project tsconfig.json",
     "build:bin": "bun run --cwd apps/core-api build:bin && bun run --cwd apps/cli build:bin"
   },

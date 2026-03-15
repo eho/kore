@@ -34,13 +34,13 @@ export async function listCommand(opts: ListOpts): Promise<void> {
 
   const memories = result.data;
 
-  if (memories.length === 0) {
-    process.stdout.write("No memories found.\n");
+  if (opts.json) {
+    process.stdout.write(JSON.stringify(memories, null, 2) + "\n");
     return;
   }
 
-  if (opts.json) {
-    process.stdout.write(JSON.stringify(memories, null, 2) + "\n");
+  if (memories.length === 0) {
+    process.stdout.write("No memories found.\n");
     return;
   }
 
