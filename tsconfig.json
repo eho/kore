@@ -20,6 +20,9 @@
       ],
       "@kore/shared-types": [
         "packages/shared-types/index.ts"
+      ],
+      "@kore/plugin-test": [
+        "packages/plugin-test/index.ts"
       ]
     }
   },

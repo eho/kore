@@ -1,0 +1,8 @@
+{
+  "name": "@kore/plugin-test",
+  "version": "1.0.0",
+  "main": "index.ts",
+  "dependencies": {
+    "@kore/shared-types": "workspace:*"
+  }
+}
