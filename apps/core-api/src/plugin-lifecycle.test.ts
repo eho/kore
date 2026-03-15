@@ -26,11 +26,11 @@ const MOCK_EXTRACTION: MemoryExtraction = {
   tags: ["ramen", "tokyo"],
 };
 
-function mockExtract(): Promise<MemoryExtraction> {
-  return Promise.resolve(MOCK_EXTRACTION);
+function mockExtract() {
+  return Promise.resolve({ ...MOCK_EXTRACTION, _extractionPath: "structured" as const });
 }
 
-function failingExtract(): Promise<MemoryExtraction> {
+function failingExtract() {
   return Promise.reject(new Error("LLM connection refused"));
 }
 

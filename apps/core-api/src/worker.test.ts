@@ -22,11 +22,11 @@ const MOCK_EXTRACTION: MemoryExtraction = {
   tags: ["ramen", "tokyo", "ikebukuro"],
 };
 
-function mockExtract(_rawText: string, _source: string): Promise<MemoryExtraction> {
-  return Promise.resolve(MOCK_EXTRACTION);
+function mockExtract(_rawText: string, _source: string) {
+  return Promise.resolve({ ...MOCK_EXTRACTION, _extractionPath: "structured" as const });
 }
 
-function failingExtract(_rawText: string, _source: string): Promise<MemoryExtraction> {
+function failingExtract(_rawText: string, _source: string) {
   return Promise.reject(new Error("LLM connection refused"));
 }
 
@@ -158,6 +158,7 @@ describe("Worker: pollOnce", () => {
         qmd_category: "qmd://test",
         type: "note" as const,
         tags: ["valid"],
+        _extractionPath: "structured" as const,
       });
 
     const payload = { source: "test", content: "Some text" };
@@ -189,6 +190,7 @@ describe("Worker: pollOnce", () => {
     const noteExtract = () =>
       Promise.resolve({
         ...MOCK_EXTRACTION,
+        _extractionPath: "structured" as const,
         type: "note" as const,
         title: "Unique Note Title",
       });
@@ -313,7 +315,7 @@ describe("E2E: POST /ingest/raw → worker → .md file", () => {
 describe("Worker: intent and confidence", () => {
   test("defaults intent to 'reference' when absent from extraction result", async () => {
     const extractNoIntent = () =>
-      Promise.resolve({ ...MOCK_EXTRACTION }); // no intent field
+      Promise.resolve({ ...MOCK_EXTRACTION, _extractionPath: "structured" as const }); // no intent field
 
     const payload = { source: "test", content: "Some text" };
     queue.enqueue(payload);
@@ -329,6 +331,7 @@ describe("Worker: intent and confidence", () => {
     const extractWithIntentAndConfidence = () =>
       Promise.resolve({
         ...MOCK_EXTRACTION,
+        _extractionPath: "structured" as const,
         intent: "recommendation" as const,
         confidence: 0.92,
       });
