@@ -14,6 +14,7 @@ import { resolveDataPath, resolveQmdDbPath } from "./config";
 import * as qmdClient from "@kore/qmd-client";
 import { MemoryIndex } from "./memory-index";
 import { EventDispatcher } from "./event-dispatcher";
+import { deleteMemoryById } from "./delete-memory";
 import type { HybridQueryResult, SearchOptions } from "@kore/qmd-client";
 
 // ─── Zod Schemas for request validation ─────────────────────────────
@@ -403,37 +404,11 @@ export function createApp(deps: AppDeps = {}) {
     })
     // ─── Delete Memory ────────────────────────────────────────────
     .delete("/api/v1/memory/:id", async ({ params, set }) => {
-      const filePath = memoryIndex.get(params.id);
-      if (!filePath) {
+      const deleted = await deleteMemoryById(params.id, { memoryIndex, eventDispatcher });
+      if (!deleted) {
         set.status = 404;
         return { error: "Memory not found", code: "NOT_FOUND" };
       }
-
-      // Read frontmatter before deleting for the event payload
-      let frontmatter: Record<string, any> = {};
-      try {
-        const content = await readFile(filePath, "utf-8");
-        frontmatter = parseFrontmatter(content);
-      } catch {
-        // file may already be gone
-      }
-
-      try {
-        await unlink(filePath);
-      } catch {
-        set.status = 404;
-        return { error: "Memory not found", code: "NOT_FOUND" };
-      }
-
-      memoryIndex.delete(params.id);
-
-      await eventDispatcher.emit("memory.deleted", {
-        id: params.id,
-        filePath,
-        frontmatter,
-        timestamp: new Date().toISOString(),
-      });
-
       return { status: "deleted", id: params.id };
     })
     // ─── Update Memory ────────────────────────────────────────────

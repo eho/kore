@@ -159,6 +159,11 @@ export class QueueRepository {
     return row.count;
   }
 
+  /** Expose the underlying Database instance for sharing with other repositories. */
+  getDatabase(): Database {
+    return this.db;
+  }
+
   close(): void {
     this.db.close();
   }

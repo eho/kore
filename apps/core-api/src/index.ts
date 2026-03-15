@@ -1,6 +1,7 @@
 import { createApp, ensureDataDirectories } from "./app";
 import type { QmdHealthSummary } from "./app";
 import { QueueRepository } from "./queue";
+import { PluginRegistryRepository } from "./plugin-registry";
 import { resolveDataPath, resolveQueueDbPath, resolveQmdDbPath, ensureKoreDirectories } from "./config";
 import { initLogger, closeLogger } from "./logger";
 import { startWorker } from "./worker";
@@ -8,7 +9,9 @@ import { startWatcher } from "./watcher";
 import { startEmbedInterval } from "./embedder";
 import { MemoryIndex } from "./memory-index";
 import { EventDispatcher } from "./event-dispatcher";
+import { deleteMemoryById } from "./delete-memory";
 import * as qmdClient from "@kore/qmd-client";
+import type { KorePlugin, PluginStartDeps } from "@kore/shared-types";
 
 initLogger();
 
@@ -38,7 +41,7 @@ const qmdStatus = async (): Promise<QmdHealthSummary> => {
   try {
     const index = await qmdClient.getStatus();
     const health = await qmdClient.getIndexHealth();
-    
+
     return {
       status: bootstrapping ? "bootstrapping" : "ok",
       doc_count: index.totalDocuments,
@@ -58,6 +61,42 @@ await memoryIndex.build(dataPath);
 console.log(`Memory index built: ${memoryIndex.size} files indexed`);
 
 const eventDispatcher = new EventDispatcher();
+
+// ── Initialize plugins ──────────────────────────────────────────────────
+
+// Plugin modules are imported explicitly (code-driven, not config-driven).
+// To add a new plugin, import it here and add it to the plugins array.
+const plugins: KorePlugin[] = [
+  // plugins registered here
+];
+
+// Create plugin registry from the same database instance as QueueRepository
+const pluginRegistry = new PluginRegistryRepository(queue.getDatabase());
+
+// Build PluginStartDeps for each plugin and call start()
+for (const plugin of plugins) {
+  if (plugin.start) {
+    const deps: PluginStartDeps = {
+      enqueue: (payload, priority) => queue.enqueue(payload, priority),
+      deleteMemory: (id) => deleteMemoryById(id, { memoryIndex, eventDispatcher }),
+      getMemoryIdByExternalKey: (externalKey) => pluginRegistry.get(plugin.name, externalKey),
+      setExternalKeyMapping: (externalKey, memoryId) => pluginRegistry.set(plugin.name, externalKey, memoryId),
+      removeExternalKeyMapping: (externalKey) => pluginRegistry.remove(plugin.name, externalKey),
+      clearRegistry: () => pluginRegistry.clear(plugin.name),
+    };
+
+    try {
+      await plugin.start(deps);
+      console.log(`Plugin "${plugin.name}" started`);
+    } catch (err) {
+      console.error(`Plugin "${plugin.name}" failed to start (non-fatal):`, err);
+    }
+  }
+}
+
+// Register all plugins with EventDispatcher
+eventDispatcher.registerPlugins(plugins);
+
 const app = createApp({
   dataPath,
   queue,
@@ -97,7 +136,7 @@ try {
 
 // ── Start background services ───────────────────────────────────────────
 
-const worker = startWorker({ queue, dataPath });
+const worker = startWorker({ queue, dataPath, dispatcher: eventDispatcher });
 console.log("Kore extraction worker started (polling every 5s)");
 
 const watcher = startWatcher({ dataPath });
@@ -108,11 +147,34 @@ console.log("Kore embed interval started");
 
 // ── Graceful shutdown ───────────────────────────────────────────────────
 
+const PLUGIN_STOP_TIMEOUT_MS = 5_000;
+
 async function shutdown() {
   console.log("Shutting down...");
   watcher.stop();
   embedder.stop();
   worker.stop();
+
+  // Stop plugins gracefully with timeout
+  for (const plugin of plugins) {
+    if (plugin.stop) {
+      try {
+        await Promise.race([
+          plugin.stop(),
+          new Promise<void>((_, reject) =>
+            setTimeout(() => reject(new Error("timeout")), PLUGIN_STOP_TIMEOUT_MS)
+          ),
+        ]);
+        console.log(`Plugin "${plugin.name}" stopped`);
+      } catch (err) {
+        const msg = err instanceof Error && err.message === "timeout"
+          ? `Plugin "${plugin.name}" stop() timed out after ${PLUGIN_STOP_TIMEOUT_MS}ms, continuing shutdown`
+          : `Plugin "${plugin.name}" stop() failed: ${err}`;
+        console.warn(msg);
+      }
+    }
+  }
+
   await qmdClient.closeStore();
   console.log("QMD store closed");
   closeLogger();
