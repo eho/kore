@@ -6,6 +6,9 @@ import type { Elysia } from "elysia";
 export const MemoryTypeEnum = z.enum(["place", "media", "note", "person"]);
 export type MemoryType = z.infer<typeof MemoryTypeEnum>;
 
+export const IntentEnum = z.enum(["recommendation", "reference", "personal-experience", "aspiration", "how-to"]);
+export type Intent = z.infer<typeof IntentEnum>;
+
 export const BaseFrontmatterSchema = z.object({
   /** A stable UUIDv4 unique to this discrete memory */
   id: z.string().uuid(),
@@ -27,6 +30,12 @@ export const BaseFrontmatterSchema = z.object({
 
   /** The original URL if applicable (e.g. Safari Bookmark, Reddit thread) */
   url: z.string().url().optional(),
+
+  /** The intent/disposition of the memory */
+  intent: IntentEnum.optional(),
+
+  /** LLM extraction confidence score (0–1) */
+  confidence: z.number().min(0).max(1).optional(),
 });
 
 export type BaseFrontmatter = z.infer<typeof BaseFrontmatterSchema>;
@@ -62,6 +71,10 @@ export const MemoryExtractionSchema = z.object({
     .min(1)
     .max(5)
     .describe("Between 1 and 5 thematic tags. lowercase, kebab-case."),
+
+  intent: IntentEnum.optional().describe("The intent/disposition of the memory."),
+
+  confidence: z.number().min(0).max(1).optional().describe("Extraction confidence score between 0 and 1."),
 });
 
 export type MemoryExtraction = z.infer<typeof MemoryExtractionSchema>;

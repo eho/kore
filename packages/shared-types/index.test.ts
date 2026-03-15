@@ -3,6 +3,7 @@ import {
   MemoryTypeEnum,
   BaseFrontmatterSchema,
   MemoryExtractionSchema,
+  IntentEnum,
 } from "./index";
 import type { KorePlugin, MemoryEvent } from "./index";
 
@@ -172,6 +173,64 @@ describe("MemoryExtractionSchema", () => {
     expect(() =>
       MemoryExtractionSchema.parse({ ...validExtraction, type: "bookmark" })
     ).toThrow();
+  });
+});
+
+// ─── IntentEnum & MemoryExtractionSchema intent/confidence ───────
+
+describe("IntentEnum", () => {
+  test("accepts all five valid intent values", () => {
+    const values = ["recommendation", "reference", "personal-experience", "aspiration", "how-to"] as const;
+    for (const v of values) {
+      expect(IntentEnum.parse(v)).toBe(v);
+    }
+  });
+
+  test("rejects invalid intent", () => {
+    expect(() => IntentEnum.parse("bookmark")).toThrow();
+  });
+});
+
+describe("MemoryExtractionSchema intent/confidence", () => {
+  const base = {
+    title: "Test",
+    distilled_items: ["Fact one"],
+    qmd_category: "qmd://test",
+    type: "note" as const,
+    tags: ["test"],
+  };
+
+  test("accepts all five valid intent values", () => {
+    const values = ["recommendation", "reference", "personal-experience", "aspiration", "how-to"] as const;
+    for (const v of values) {
+      const result = MemoryExtractionSchema.parse({ ...base, intent: v });
+      expect(result.intent).toBe(v);
+    }
+  });
+
+  test("accepts missing intent (optional)", () => {
+    const result = MemoryExtractionSchema.parse(base);
+    expect(result.intent).toBeUndefined();
+  });
+
+  test("rejects an invalid intent string", () => {
+    expect(() => MemoryExtractionSchema.parse({ ...base, intent: "bookmark" })).toThrow();
+  });
+
+  test("accepts confidence within [0, 1]", () => {
+    expect(MemoryExtractionSchema.parse({ ...base, confidence: 0.85 }).confidence).toBe(0.85);
+    expect(MemoryExtractionSchema.parse({ ...base, confidence: 0 }).confidence).toBe(0);
+    expect(MemoryExtractionSchema.parse({ ...base, confidence: 1 }).confidence).toBe(1);
+  });
+
+  test("rejects confidence outside [0, 1]", () => {
+    expect(() => MemoryExtractionSchema.parse({ ...base, confidence: 1.5 })).toThrow();
+    expect(() => MemoryExtractionSchema.parse({ ...base, confidence: -0.1 })).toThrow();
+  });
+
+  test("accepts missing confidence (optional)", () => {
+    const result = MemoryExtractionSchema.parse(base);
+    expect(result.confidence).toBeUndefined();
   });
 });
 

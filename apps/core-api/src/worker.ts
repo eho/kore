@@ -71,6 +71,13 @@ async function processTask(
   // Validate against MemoryExtractionSchema
   const parsed = MemoryExtractionSchema.parse(raw);
 
+  // Determine intent (default to "reference" if absent)
+  let intent = parsed.intent;
+  if (!intent) {
+    console.warn(`Worker: intent not classified for task ${taskId}, defaulting to "reference"`);
+    intent = "reference";
+  }
+
   // Build frontmatter
   const id = randomUUID();
   const frontmatter: BaseFrontmatter = {
@@ -81,6 +88,8 @@ async function processTask(
     source: payload.source,
     tags: parsed.tags,
     ...(payload.original_url ? { url: payload.original_url } : {}),
+    intent,
+    ...(parsed.confidence !== undefined ? { confidence: parsed.confidence } : {}),
   };
 
   // Resolve file path with collision handling

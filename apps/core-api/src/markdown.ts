@@ -23,6 +23,12 @@ export function renderMarkdown(opts: {
   if (frontmatter.url) {
     yamlLines.push(`url: ${frontmatter.url}`);
   }
+  if (frontmatter.intent) {
+    yamlLines.push(`intent: ${frontmatter.intent}`);
+  }
+  if (frontmatter.confidence !== undefined) {
+    yamlLines.push(`confidence: ${frontmatter.confidence}`);
+  }
   yamlLines.push("---");
 
   const sections = [
