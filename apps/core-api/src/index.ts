@@ -66,9 +66,14 @@ const eventDispatcher = new EventDispatcher();
 
 // Plugin modules are imported explicitly (code-driven, not config-driven).
 // To add a new plugin, import it here and add it to the plugins array.
-const plugins: KorePlugin[] = [
-  // plugins registered here
-];
+const plugins: KorePlugin[] = [];
+
+// Conditionally load test plugin for end-to-end validation
+if (process.env.KORE_TEST_PLUGIN === "true") {
+  const { default: testPlugin } = await import("@kore/plugin-test");
+  plugins.push(testPlugin);
+  console.log("Test plugin loaded (KORE_TEST_PLUGIN=true)");
+}
 
 // Create plugin registry from the same database instance as QueueRepository
 const pluginRegistry = new PluginRegistryRepository(queue.getDatabase());
