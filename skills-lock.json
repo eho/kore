@@ -4,7 +4,7 @@
     "prd": {
       "source": "eho/agent-skills",
       "sourceType": "github",
-      "computedHash": "b1cae10bf8df3756a67b4e44a2bd6b70ed8d316d975156243955ce4b936b175f"
+      "computedHash": "029cff5134fa331dbf2fad89ac1fc060415d5032d04564e925f22dd317363962"
     },
     "prd-to-github-milestone": {
       "source": "eho/agent-skills",
