@@ -18,7 +18,10 @@
     "typescript": "^5.9.3"
   },
   "dependencies": {
+    "@ai-sdk/google": "^3.0.43",
+    "@ai-sdk/openai": "^3.0.41",
     "@tobilu/qmd": "^2.0.1",
+    "ai": "^6.0.116",
     "protobufjs": "^8.0.0"
   }
 }

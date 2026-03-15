@@ -8,6 +8,8 @@ const VALID_EXTRACTION: MemoryExtraction = {
   qmd_category: "qmd://tech/testing",
   type: "note",
   tags: ["testing", "unit-test"],
+  intent: "reference",
+  confidence: 0.9,
 };
 
 // ─── Mock AI SDK modules before importing extract ────────────────────
@@ -41,6 +43,8 @@ describe("fallbackParse", () => {
     qmd_category: "qmd://travel/food/japan",
     type: "place",
     tags: ["ramen", "ikebukuro"],
+    intent: "recommendation",
+    confidence: 0.95,
   };
 
   test("parses valid JSON from clean response", () => {
@@ -315,12 +319,20 @@ describe("fallbackParse: intent/confidence normalization", () => {
     qmd_category: "qmd://tech/testing",
     type: "note",
     tags: ["test"],
+    intent: "reference",
+    confidence: 0.8,
   };
 
-  test("strips invalid intent values rather than throwing", () => {
+  test("defaults invalid intent to 'reference' rather than throwing", () => {
     const input = { ...validJson, intent: "invalid-intent" };
     const result = fallbackParse(JSON.stringify(input));
-    expect(result.intent).toBeUndefined();
+    expect(result.intent).toBe("reference");
+  });
+
+  test("defaults missing intent to 'reference'", () => {
+    const { intent: _, ...withoutIntent } = validJson;
+    const result = fallbackParse(JSON.stringify(withoutIntent));
+    expect(result.intent).toBe("reference");
   });
 
   test("preserves valid intent values", () => {
@@ -345,6 +357,12 @@ describe("fallbackParse: intent/confidence normalization", () => {
     const input = { ...validJson, confidence: 0.85 };
     const result = fallbackParse(JSON.stringify(input));
     expect(result.confidence).toBe(0.85);
+  });
+
+  test("defaults missing confidence to 0.5", () => {
+    const { confidence: _, ...withoutConfidence } = validJson;
+    const result = fallbackParse(JSON.stringify(withoutConfidence));
+    expect(result.confidence).toBe(0.5);
   });
 });
 
