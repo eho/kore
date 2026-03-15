@@ -237,7 +237,7 @@ export async function search(
       return await s.search({ query, ...options });
     } catch (err) {
       console.warn("Hybrid search failed, falling back to BM25:", err instanceof Error ? err.message : err);
-      return s.searchLex(query, { limit: options?.limit, collection: options?.collection });
+      return s.searchLex(query, { limit: options?.limit, collection: options?.collection }) as any as HybridQueryResult[];
     }
   });
 }
