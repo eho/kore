@@ -720,8 +720,13 @@ Instead of a polling interval, the Notes database could be watched for changes. 
 12. Add `KORE_AN_*` env vars to `.env.example`
 
 ### Phase 4: Validation
-13. Manual E2E test: export a real Apple Notes account, verify memories created correctly
-14. Test delete sync: delete a note in Apple Notes, verify Kore memory is removed on next cycle
-15. Test update sync: modify a note, verify Kore memory is refreshed
-16. Test folder filtering: verify allowlist/blocklist work correctly
-17. Test failure recovery: revoke Full Disk Access mid-sync, verify graceful error and recovery
+13. **Automated integration test**: `packages/plugin-apple-notes/__tests__/integration.test.ts` runs against the real test database at `e2e/notes-testdata/group.com.apple.notes/` using `an-export`'s `dbDir` option. Covers:
+    - Full sync cycle: `syncNotes()` → content builder → verify output structure (folder prefix, title, body)
+    - Folder path extraction for nested folders (verifies " / " separator)
+    - Attachment reference stripping (no raw `![](../attachments/...)` in output)
+    - Temp staging directory cleanup
+14. Manual E2E test: export a real Apple Notes account, verify memories created correctly
+15. Test delete sync: delete a note in Apple Notes, verify Kore memory is removed on next cycle
+16. Test update sync: modify a note, verify Kore memory is refreshed
+17. Test folder filtering: verify allowlist/blocklist work correctly
+18. Test failure recovery: revoke Full Disk Access mid-sync, verify graceful error and recovery

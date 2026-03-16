@@ -110,7 +110,7 @@ for (const plugin of plugins) {
 // Register all plugins with EventDispatcher
 eventDispatcher.registerPlugins(plugins);
 
-const app = createApp({
+let app = createApp({
   dataPath,
   queue,
   memoryIndex,
@@ -118,6 +118,18 @@ const app = createApp({
   qmdStatus,
   searchFn: qmdClient.search,
 });
+
+// Mount plugin routes
+for (const plugin of plugins) {
+  if (plugin.routes) {
+    try {
+      plugin.routes(app as any);
+      console.log(`Plugin "${plugin.name}" routes mounted`);
+    } catch (err) {
+      console.error(`Plugin "${plugin.name}" routes failed (non-fatal):`, err);
+    }
+  }
+}
 
 app.listen(3000);
 console.log(`Kore Core API running on http://localhost:3000`);

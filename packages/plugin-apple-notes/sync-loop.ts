@@ -173,17 +173,32 @@ export async function runSyncCycle(
   return { newNotes, deletedNotes, updatedNotes, skipped };
 }
 
+export interface SyncLoopState {
+  lastSyncAt: string | null;
+  lastSyncResult: "success" | "error" | null;
+  nextSyncAt: number | null;
+}
+
+export interface SyncLoopHandle {
+  stop: () => void;
+  getState: () => SyncLoopState;
+  triggerSync: () => Promise<void>;
+}
+
 /**
- * Start the background sync loop. Returns a handle with a stop() function.
+ * Start the background sync loop. Returns a handle with stop(), getState(), and triggerSync().
  */
 export function startSyncLoop(
   deps: PluginStartDeps,
   opts: SyncLoopOpts,
-): { stop: () => void } {
+): SyncLoopHandle {
   const intervalMs = opts.intervalMs ?? DEFAULT_INTERVAL_MS;
   let running = false;
   let stopped = false;
   let timer: ReturnType<typeof setTimeout> | null = null;
+  let lastSyncAt: string | null = null;
+  let lastSyncResult: "success" | "error" | null = null;
+  let nextSyncAt: number | null = null;
 
   async function cycle() {
     if (stopped) return;
@@ -195,10 +210,14 @@ export function startSyncLoop(
     running = true;
     try {
       const result = await runSyncCycle(deps, opts);
+      lastSyncAt = new Date().toISOString();
+      lastSyncResult = "success";
       console.log(
         `[apple-notes] Sync complete: ${result.newNotes} new, ${result.updatedNotes} updated, ${result.deletedNotes} deleted, ${result.skipped} skipped`,
       );
     } catch (err) {
+      lastSyncAt = new Date().toISOString();
+      lastSyncResult = "error";
       console.error("[apple-notes] Sync cycle error (non-fatal):", err);
     } finally {
       running = false;
@@ -207,6 +226,7 @@ export function startSyncLoop(
 
   function scheduleNext() {
     if (stopped) return;
+    nextSyncAt = Date.now() + intervalMs;
     timer = setTimeout(async () => {
       await cycle();
       scheduleNext();
@@ -214,6 +234,7 @@ export function startSyncLoop(
   }
 
   // Initial delay before first cycle
+  nextSyncAt = Date.now() + INITIAL_DELAY_MS;
   timer = setTimeout(async () => {
     await cycle();
     scheduleNext();
@@ -222,9 +243,21 @@ export function startSyncLoop(
   return {
     stop() {
       stopped = true;
+      nextSyncAt = null;
       if (timer) {
         clearTimeout(timer);
         timer = null;
+      }
+    },
+    getState() {
+      return { lastSyncAt, lastSyncResult, nextSyncAt };
+    },
+    async triggerSync() {
+      await cycle();
+      // Reset the timer so the next scheduled cycle is a full interval away
+      if (!stopped && timer) {
+        clearTimeout(timer);
+        scheduleNext();
       }
     },
   };
