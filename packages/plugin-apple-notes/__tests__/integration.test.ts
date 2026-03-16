@@ -1,167 +1,103 @@
-import { describe, test, expect, afterEach } from "bun:test";
-import { syncNotes, type SyncManifest, type ManifestNoteEntry } from "@kore/an-export";
-import { buildIngestContent } from "../content-builder";
-import { mkdtemp, rm, readdir } from "node:fs/promises";
+/**
+ * Integration tests for the Apple Notes plugin content pipeline.
+ *
+ * Uses version-controlled fixture files that mirror real an-export output,
+ * so no database access or Full Disk Access is required.
+ *
+ * Fixture layout (packages/plugin-apple-notes/__tests__/fixtures/notes/):
+ *   an-export-manifest.json   — manifest as produced by an-export
+ *   Shopping List.md          — root-level note
+ *   Tasks/Learning Roadmap.md — single-folder note
+ *   Recipes/Baking/Chocolate Cake.md — nested-folder note with attachment
+ *   Empty Note.md             — empty note (should be skipped)
+ */
+import { describe, test, expect } from "bun:test";
 import { join, resolve } from "node:path";
-import { tmpdir } from "node:os";
+import { buildIngestContent } from "../content-builder";
+import type { SyncManifest } from "@kore/an-export";
 
-const TEST_DB_DIR = resolve(
-  import.meta.dir,
-  "../../../e2e/notes-testdata/group.com.apple.notes",
-);
+const FIXTURES_DIR = resolve(import.meta.dir, "fixtures/notes");
 
-let tmpDirs: string[] = [];
-
-async function createTempDir(): Promise<string> {
-  const dir = await mkdtemp(join(tmpdir(), "kore-integration-"));
-  tmpDirs.push(dir);
-  return dir;
+async function loadManifest(): Promise<SyncManifest> {
+  return Bun.file(join(FIXTURES_DIR, "an-export-manifest.json")).json();
 }
 
-afterEach(async () => {
-  for (const dir of tmpDirs) {
-    await rm(dir, { recursive: true, force: true });
-  }
-  tmpDirs = [];
-});
+describe("content pipeline (fixture-based)", () => {
+  test("root-level note: no folder prefix, correct title", async () => {
+    const manifest = await loadManifest();
+    const entry = manifest.notes[2]!;
 
-describe("Apple Notes integration (real database)", () => {
-  test("syncNotes exports notes from test database", async () => {
-    const dest = await createTempDir();
-
-    const result = await syncNotes({
-      dest,
-      omitFirstLine: false,
-      includeTrashed: false,
-      includeHandwriting: false,
-      dbDir: TEST_DB_DIR,
-    });
-
-    expect(result.exported).toBeGreaterThan(0);
-    expect(result.failed.length).toBe(0);
-
-    // Verify manifest was created
-    const manifestFile = Bun.file(join(dest, "an-export-manifest.json"));
-    expect(await manifestFile.exists()).toBe(true);
-
-    const manifest: SyncManifest = await manifestFile.json();
-    expect(manifest.version).toBe(1);
-    expect(Object.keys(manifest.notes).length).toBeGreaterThan(0);
-  });
-
-  test("full sync cycle: export, build content, verify output structure", async () => {
-    const dest = await createTempDir();
-
-    await syncNotes({
-      dest,
-      omitFirstLine: false,
-      includeTrashed: false,
-      includeHandwriting: false,
-      dbDir: TEST_DB_DIR,
-    });
-
-    const manifestFile = Bun.file(join(dest, "an-export-manifest.json"));
-    const manifest: SyncManifest = await manifestFile.json();
-
-    const entries = Object.values(manifest.notes);
-    expect(entries.length).toBeGreaterThan(0);
-
-    // Process each exported note through the content builder
-    let processedCount = 0;
-    for (const entry of entries) {
-      const absolutePath = join(dest, entry.path);
-      const relativePath = `notes/${entry.path}`;
-
-      const content = await buildIngestContent(absolutePath, relativePath, entry.title);
-      if (!content) continue; // empty files are skipped
-
-      processedCount++;
-
-      // Verify output structure
-      const lines = content.split("\n");
-
-      // Content should contain meaningful text
-      expect(content.trim().length).toBeGreaterThan(0);
-
-      // Title from manifest should be prepended as Title: header
-      const titleLine = lines.find((l) => l.startsWith("Title:"));
-      expect(titleLine).toBeDefined();
-      expect(titleLine).toContain(entry.title);
-
-      // If the note is in a folder (has path segments), should have folder prefix
-      const segments = entry.path.split("/");
-      if (segments.length > 1) {
-        const folderLine = lines.find((l) => l.startsWith("Apple Notes Folder:"));
-        expect(folderLine).toBeDefined();
-      }
-
-      // Content should not exceed 8000 characters
-      expect(content.length).toBeLessThanOrEqual(8000);
-    }
-
-    expect(processedCount).toBeGreaterThan(0);
-  });
-
-  test("folder path extraction for nested folders", async () => {
-    const dest = await createTempDir();
-
-    await syncNotes({
-      dest,
-      omitFirstLine: false,
-      includeTrashed: false,
-      includeHandwriting: false,
-      dbDir: TEST_DB_DIR,
-    });
-
-    const manifestFile = Bun.file(join(dest, "an-export-manifest.json"));
-    const manifest: SyncManifest = await manifestFile.json();
-
-    // Find notes that are in nested folders (path has 2+ directory segments)
-    const nestedNotes = Object.values(manifest.notes).filter(
-      (entry) => entry.path.split("/").length > 2,
+    const content = await buildIngestContent(
+      join(FIXTURES_DIR, entry.path),
+      `notes/${entry.path}`,
+      entry.title,
     );
 
-    for (const entry of nestedNotes) {
-      const absolutePath = join(dest, entry.path);
-      const relativePath = `notes/${entry.path}`;
-      const content = await buildIngestContent(absolutePath, relativePath, entry.title);
-      if (!content) continue;
-
-      const folderLine = content.split("\n").find((l) => l.startsWith("Apple Notes Folder:"));
-      expect(folderLine).toBeDefined();
-
-      // Nested folder should contain " / " separator
-      if (entry.path.split("/").length > 2) {
-        expect(folderLine).toContain(" / ");
-      }
-    }
+    expect(content).not.toBeNull();
+    expect(content).toContain("Title: Shopping List");
+    expect(content).not.toContain("Apple Notes Folder:");
+    expect(content).toContain("Milk");
   });
 
-  test("attachment references are stripped from content", async () => {
-    const dest = await createTempDir();
+  test("single-folder note: folder prefix and title prepended", async () => {
+    const manifest = await loadManifest();
+    const entry = manifest.notes[3]!;
 
-    await syncNotes({
-      dest,
-      omitFirstLine: false,
-      includeTrashed: false,
-      includeHandwriting: false,
-      dbDir: TEST_DB_DIR,
-    });
+    const content = await buildIngestContent(
+      join(FIXTURES_DIR, entry.path),
+      `notes/${entry.path}`,
+      entry.title,
+    );
 
-    const manifestFile = Bun.file(join(dest, "an-export-manifest.json"));
-    const manifest: SyncManifest = await manifestFile.json();
+    expect(content).not.toBeNull();
+    expect(content).toContain("Apple Notes Folder: Tasks");
+    expect(content).toContain("Title: Learning Roadmap");
+    expect(content).toContain("Andrew Ng");
+  });
+
+  test("nested-folder note: multi-level folder prefix and attachment stripped", async () => {
+    const manifest = await loadManifest();
+    const entry = manifest.notes[4]!;
+
+    const content = await buildIngestContent(
+      join(FIXTURES_DIR, entry.path),
+      `notes/${entry.path}`,
+      entry.title,
+    );
+
+    expect(content).not.toBeNull();
+    expect(content).toContain("Apple Notes Folder: Recipes / Baking");
+    expect(content).toContain("Title: Chocolate Cake");
+    expect(content).not.toMatch(/!\[.*?\]\(\.\.\/attachments\//);
+    expect(content).toContain("[Attachment: cake-photo.jpg]");
+    expect(content).toContain("cafedelites.com");
+  });
+
+  test("empty note: returns null and is skipped", async () => {
+    const manifest = await loadManifest();
+    const entry = manifest.notes[5]!;
+
+    const content = await buildIngestContent(
+      join(FIXTURES_DIR, entry.path),
+      `notes/${entry.path}`,
+      entry.title,
+    );
+
+    expect(content).toBeNull();
+  });
+
+  test("all non-empty notes are within 8000 character limit", async () => {
+    const manifest = await loadManifest();
 
     for (const entry of Object.values(manifest.notes)) {
-      const absolutePath = join(dest, entry.path);
-      const relativePath = `notes/${entry.path}`;
-      const content = await buildIngestContent(absolutePath, relativePath, entry.title);
-      if (!content) continue;
-
-      // No raw local attachment references should remain
-      expect(content).not.toMatch(/!\[.*?\]\(\.\.\/attachments\//);
-
-      // If the original had attachments, they should be replaced with [Attachment: ...]
-      // (We can't guarantee the test DB has attachments, but we verify the pattern doesn't leak)
+      const content = await buildIngestContent(
+        join(FIXTURES_DIR, entry.path),
+        `notes/${entry.path}`,
+        entry.title,
+      );
+      if (content !== null) {
+        expect(content.length).toBeLessThanOrEqual(8000);
+      }
     }
   });
 });
