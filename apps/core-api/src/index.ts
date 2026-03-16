@@ -85,9 +85,10 @@ for (const plugin of plugins) {
       enqueue: (payload, priority) => queue.enqueue(payload, priority),
       deleteMemory: (id) => deleteMemoryById(id, { memoryIndex, eventDispatcher }),
       getMemoryIdByExternalKey: (externalKey) => pluginRegistry.get(plugin.name, externalKey),
-      setExternalKeyMapping: (externalKey, memoryId) => pluginRegistry.set(plugin.name, externalKey, memoryId),
+      setExternalKeyMapping: (externalKey, memoryId, metadata?) => pluginRegistry.set(plugin.name, externalKey, memoryId, metadata),
       removeExternalKeyMapping: (externalKey) => pluginRegistry.remove(plugin.name, externalKey),
       clearRegistry: () => pluginRegistry.clear(plugin.name),
+      listExternalKeys: () => pluginRegistry.listByPlugin(plugin.name),
     };
 
     try {

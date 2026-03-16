@@ -67,6 +67,7 @@ describe("Test plugin: end-to-end integration", () => {
       setExternalKeyMapping: (key, memId) => pluginRegistry.set("test-plugin", key, memId),
       removeExternalKeyMapping: (key) => pluginRegistry.remove("test-plugin", key),
       clearRegistry: () => pluginRegistry.clear("test-plugin"),
+      listExternalKeys: () => pluginRegistry.listByPlugin("test-plugin"),
     };
 
     await testPlugin.start!(deps);
@@ -143,6 +144,7 @@ describe("Test plugin: end-to-end integration", () => {
       setExternalKeyMapping: (key, memId) => pluginRegistry.set("test-plugin", key, memId),
       removeExternalKeyMapping: (key) => pluginRegistry.remove("test-plugin", key),
       clearRegistry: () => pluginRegistry.clear("test-plugin"),
+      listExternalKeys: () => pluginRegistry.listByPlugin("test-plugin"),
     };
 
     await testPlugin.start!(deps);
@@ -169,6 +171,7 @@ describe("Test plugin: end-to-end integration", () => {
       setExternalKeyMapping: (key, memId) => pluginRegistry.set("test-plugin", key, memId),
       removeExternalKeyMapping: (key) => pluginRegistry.remove("test-plugin", key),
       clearRegistry: () => pluginRegistry.clear("test-plugin"),
+      listExternalKeys: () => pluginRegistry.listByPlugin("test-plugin"),
     };
 
     // start() should not throw

@@ -113,9 +113,10 @@ export interface PluginStartDeps {
   ): string;
   deleteMemory(id: string): Promise<boolean>;
   getMemoryIdByExternalKey(externalKey: string): string | undefined;
-  setExternalKeyMapping(externalKey: string, memoryId: string): void;
+  setExternalKeyMapping(externalKey: string, memoryId: string, metadata?: string): void;
   removeExternalKeyMapping(externalKey: string): void;
   clearRegistry(): void;
+  listExternalKeys(): Array<{ externalKey: string; memoryId: string; metadata?: string }>;
 }
 
 // ─── KorePlugin Interface (plugin_system.md §1) ────────────────────

@@ -126,9 +126,10 @@ describe("Plugin lifecycle", () => {
       enqueue: (payload, priority) => queue.enqueue(payload, priority),
       deleteMemory: (id) => deleteMemoryById(id, { memoryIndex, eventDispatcher: dispatcher }),
       getMemoryIdByExternalKey: (key) => registry.get(plugin.name, key),
-      setExternalKeyMapping: (key, memId) => registry.set(plugin.name, key, memId),
+      setExternalKeyMapping: (key, memId, metadata?) => registry.set(plugin.name, key, memId, metadata),
       removeExternalKeyMapping: (key) => registry.remove(plugin.name, key),
       clearRegistry: () => registry.clear(plugin.name),
+      listExternalKeys: () => registry.listByPlugin(plugin.name),
     };
 
     await plugin.start!(deps);
@@ -236,9 +237,10 @@ describe("PluginStartDeps: registry scoping", () => {
       enqueue: (payload, priority) => queue.enqueue(payload, priority),
       deleteMemory: async () => false,
       getMemoryIdByExternalKey: (key) => registry.get("plugin-a", key),
-      setExternalKeyMapping: (key, memId) => registry.set("plugin-a", key, memId),
+      setExternalKeyMapping: (key, memId, metadata?) => registry.set("plugin-a", key, memId, metadata),
       removeExternalKeyMapping: (key) => registry.remove("plugin-a", key),
       clearRegistry: () => registry.clear("plugin-a"),
+      listExternalKeys: () => registry.listByPlugin("plugin-a"),
     };
 
     // Build deps for plugin B
@@ -246,9 +248,10 @@ describe("PluginStartDeps: registry scoping", () => {
       enqueue: (payload, priority) => queue.enqueue(payload, priority),
       deleteMemory: async () => false,
       getMemoryIdByExternalKey: (key) => registry.get("plugin-b", key),
-      setExternalKeyMapping: (key, memId) => registry.set("plugin-b", key, memId),
+      setExternalKeyMapping: (key, memId, metadata?) => registry.set("plugin-b", key, memId, metadata),
       removeExternalKeyMapping: (key) => registry.remove("plugin-b", key),
       clearRegistry: () => registry.clear("plugin-b"),
+      listExternalKeys: () => registry.listByPlugin("plugin-b"),
     };
 
     // Plugin A sets a mapping
@@ -259,6 +262,78 @@ describe("PluginStartDeps: registry scoping", () => {
 
     // Plugin B cannot see it
     expect(depsB.getMemoryIdByExternalKey("note-123")).toBeUndefined();
+  });
+});
+
+// ─── PluginStartDeps: listExternalKeys ───────────────────────────────
+
+describe("PluginStartDeps: listExternalKeys", () => {
+  test("listExternalKeys returns correct entries scoped by plugin", () => {
+    const registry = new PluginRegistryRepository(queue.getDatabase());
+    const memoryIndex = new MemoryIndex();
+
+    const deps: PluginStartDeps = {
+      enqueue: (payload, priority) => queue.enqueue(payload, priority),
+      deleteMemory: (id) => deleteMemoryById(id, { memoryIndex, eventDispatcher: dispatcher }),
+      getMemoryIdByExternalKey: (key) => registry.get("apple-notes", key),
+      setExternalKeyMapping: (key, memId, metadata?) => registry.set("apple-notes", key, memId, metadata),
+      removeExternalKeyMapping: (key) => registry.remove("apple-notes", key),
+      clearRegistry: () => registry.clear("apple-notes"),
+      listExternalKeys: () => registry.listByPlugin("apple-notes"),
+    };
+
+    // Set some mappings with metadata
+    deps.setExternalKeyMapping("100", "memory-abc", JSON.stringify({ mtime: 1234567890 }));
+    deps.setExternalKeyMapping("200", "pending:task-xyz");
+
+    const entries = deps.listExternalKeys();
+    expect(entries).toHaveLength(2);
+    expect(entries[0]).toEqual({
+      externalKey: "100",
+      memoryId: "memory-abc",
+      metadata: JSON.stringify({ mtime: 1234567890 }),
+    });
+    expect(entries[1]).toEqual({
+      externalKey: "200",
+      memoryId: "pending:task-xyz",
+    });
+  });
+
+  test("listExternalKeys is isolated from other plugins", () => {
+    const registry = new PluginRegistryRepository(queue.getDatabase());
+
+    registry.set("plugin-a", "key-1", "mem-1");
+    registry.set("plugin-b", "key-2", "mem-2");
+
+    const entriesA = registry.listByPlugin("plugin-a");
+    expect(entriesA).toHaveLength(1);
+    expect(entriesA[0].externalKey).toBe("key-1");
+
+    const entriesB = registry.listByPlugin("plugin-b");
+    expect(entriesB).toHaveLength(1);
+    expect(entriesB[0].externalKey).toBe("key-2");
+  });
+
+  test("metadata column stores and retrieves JSON correctly", () => {
+    const registry = new PluginRegistryRepository(queue.getDatabase());
+
+    const meta = JSON.stringify({ mtime: 9999999 });
+    registry.set("test-plugin", "zpk-42", "mem-42", meta);
+
+    const entries = registry.listByPlugin("test-plugin");
+    expect(entries).toHaveLength(1);
+    expect(entries[0].metadata).toBe(meta);
+    expect(JSON.parse(entries[0].metadata!)).toEqual({ mtime: 9999999 });
+  });
+
+  test("set() without metadata stores null", () => {
+    const registry = new PluginRegistryRepository(queue.getDatabase());
+
+    registry.set("test-plugin", "zpk-99", "mem-99");
+
+    const entries = registry.listByPlugin("test-plugin");
+    expect(entries).toHaveLength(1);
+    expect(entries[0].metadata).toBeUndefined();
   });
 });
 
