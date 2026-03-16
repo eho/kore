@@ -1,10 +1,15 @@
 import { describe, test, expect, beforeEach, afterEach } from "bun:test";
 import type { PluginStartDeps } from "@kore/shared-types";
-import appleNotesPlugin from "../index";
+import type { ExportResult } from "@kore/an-export";
+import { createAppleNotesPlugin } from "../index";
 import { Elysia } from "elysia";
 import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
+
+const noopSyncNotes = async (): Promise<ExportResult> => ({
+  exported: 0, skipped: 0, deleted: 0, failed: [],
+});
 
 let tmpHome: string;
 
@@ -27,9 +32,6 @@ describe("AppleNotesPlugin routes", () => {
   });
 
   afterEach(async () => {
-    if (appleNotesPlugin.stop) {
-      await appleNotesPlugin.stop();
-    }
     delete process.env.KORE_HOME;
     await rm(tmpHome, { recursive: true, force: true });
   });
@@ -40,11 +42,11 @@ describe("AppleNotesPlugin routes", () => {
       { externalKey: "2", memoryId: "pending:task-1" },
       { externalKey: "3", memoryId: "mem-b" },
     ];
-    const deps = createMockDeps(entries);
-    await appleNotesPlugin.start!(deps);
+    const plugin = createAppleNotesPlugin({ _syncNotesFn: noopSyncNotes });
+    await plugin.start!(createMockDeps(entries));
 
     const app = new Elysia();
-    appleNotesPlugin.routes!(app);
+    plugin.routes!(app);
 
     const res = await app.handle(new Request("http://localhost/api/v1/plugins/apple-notes/status"));
     expect(res.status).toBe(200);
@@ -58,28 +60,32 @@ describe("AppleNotesPlugin routes", () => {
     expect(typeof body.next_sync_in_seconds).toBe("number");
     expect(body).toHaveProperty("staging_path");
     expect(body.staging_path).toContain("staging/apple-notes");
+
+    await plugin.stop!();
   });
 
   test("GET /api/v1/plugins/apple-notes/status returns null sync state before first sync", async () => {
-    const deps = createMockDeps();
-    await appleNotesPlugin.start!(deps);
+    const plugin = createAppleNotesPlugin({ _syncNotesFn: noopSyncNotes });
+    await plugin.start!(createMockDeps());
 
     const app = new Elysia();
-    appleNotesPlugin.routes!(app);
+    plugin.routes!(app);
 
     const res = await app.handle(new Request("http://localhost/api/v1/plugins/apple-notes/status"));
     const body = await res.json();
 
     expect(body.last_sync_at).toBeNull();
     expect(body.last_sync_result).toBeNull();
+
+    await plugin.stop!();
   });
 
   test("POST /api/v1/plugins/apple-notes/sync returns 202", async () => {
-    const deps = createMockDeps();
-    await appleNotesPlugin.start!(deps);
+    const plugin = createAppleNotesPlugin({ _syncNotesFn: noopSyncNotes });
+    await plugin.start!(createMockDeps());
 
     const app = new Elysia();
-    appleNotesPlugin.routes!(app);
+    plugin.routes!(app);
 
     const res = await app.handle(
       new Request("http://localhost/api/v1/plugins/apple-notes/sync", { method: "POST" })
@@ -89,5 +95,7 @@ describe("AppleNotesPlugin routes", () => {
     const body = await res.json();
     expect(body).toHaveProperty("status", "sync_triggered");
     expect(body).toHaveProperty("message");
+
+    await plugin.stop!();
   });
 });
