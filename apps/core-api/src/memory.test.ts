@@ -42,8 +42,10 @@ async function createMemoryFile(opts: {
   title: string;
   type?: string;
   category?: string;
+  intent?: string;
+  confidence?: number;
 }): Promise<string> {
-  const { id, title, type = "note", category = "qmd://tech/programming" } = opts;
+  const { id, title, type = "note", category = "qmd://tech/programming", intent, confidence } = opts;
   const typeDir = { place: "places", media: "media", note: "notes", person: "people" }[type] || "notes";
   const slug = title.toLowerCase().replace(/\s+/g, "_");
   const filePath = join(tempDir, typeDir, `${slug}.md`);
@@ -56,6 +58,8 @@ async function createMemoryFile(opts: {
       date_saved: "2026-03-07T12:00:00Z",
       source: "test",
       tags: ["test"],
+      ...(intent !== undefined ? { intent: intent as any } : {}),
+      ...(confidence !== undefined ? { confidence } : {}),
     },
     title,
     distilledItems: ["A test fact."],
@@ -182,6 +186,30 @@ describe("GET /api/v1/memory/:id", () => {
     expect(res.status).toBe(404);
     const body = await res.json();
     expect(body.code).toBe("NOT_FOUND");
+  });
+
+  test("returns intent and confidence when present in frontmatter", async () => {
+    const id = randomUUID();
+    await createMemoryFile({ id, title: "Intent Confidence Test", intent: "recommendation", confidence: 0.87 });
+
+    const app = makeApp();
+    const res = await req(app, `/api/v1/memory/${id}`);
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.intent).toBe("recommendation");
+    expect(body.confidence).toBe(0.87);
+  });
+
+  test("omits intent and confidence when absent from frontmatter", async () => {
+    const id = randomUUID();
+    await createMemoryFile({ id, title: "No Intent Test" });
+
+    const app = makeApp();
+    const res = await req(app, `/api/v1/memory/${id}`);
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.intent).toBeUndefined();
+    expect(body.confidence).toBeUndefined();
   });
 });
 

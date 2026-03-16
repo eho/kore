@@ -83,7 +83,10 @@ async function processTask(
     ...(payload.original_url ? { url: payload.original_url } : {}),
     ...(payload.date_created ? { date_created: payload.date_created } : {}),
     ...(payload.date_modified ? { date_modified: payload.date_modified } : {}),
-    intent: parsed.intent ?? "reference",
+    intent: parsed.intent ?? (() => {
+      console.warn(`Worker: intent not classified for task ${taskId}, defaulting to "reference"`);
+      return "reference" as const;
+    })(),
     confidence: parsed.confidence,
   };
 
