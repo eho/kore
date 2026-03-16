@@ -23,6 +23,9 @@
       ],
       "@kore/plugin-test": [
         "packages/plugin-test/index.ts"
+      ],
+      "@kore/plugin-apple-notes": [
+        "packages/plugin-apple-notes/index.ts"
       ]
     }
   },
