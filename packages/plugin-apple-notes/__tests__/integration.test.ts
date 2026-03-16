@@ -1,5 +1,5 @@
 import { describe, test, expect, afterEach } from "bun:test";
-import { syncNotes, type SyncManifest } from "@kore/an-export";
+import { syncNotes, type SyncManifest, type ManifestNoteEntry } from "@kore/an-export";
 import { buildIngestContent } from "../content-builder";
 import { mkdtemp, rm, readdir } from "node:fs/promises";
 import { join, resolve } from "node:path";
@@ -72,7 +72,7 @@ describe("Apple Notes integration (real database)", () => {
       const absolutePath = join(dest, entry.path);
       const relativePath = `notes/${entry.path}`;
 
-      const content = await buildIngestContent(absolutePath, relativePath);
+      const content = await buildIngestContent(absolutePath, relativePath, entry.title);
       if (!content) continue; // empty files are skipped
 
       processedCount++;
@@ -83,12 +83,10 @@ describe("Apple Notes integration (real database)", () => {
       // Content should contain meaningful text
       expect(content.trim().length).toBeGreaterThan(0);
 
-      // If the note has a # heading, content builder should extract it as Title:
-      const hasHeading = content.match(/^#\s+.+$/m);
-      if (hasHeading) {
-        const titleLine = lines.find((l) => l.startsWith("Title:"));
-        expect(titleLine).toBeDefined();
-      }
+      // Title from manifest should be prepended as Title: header
+      const titleLine = lines.find((l) => l.startsWith("Title:"));
+      expect(titleLine).toBeDefined();
+      expect(titleLine).toContain(entry.title);
 
       // If the note is in a folder (has path segments), should have folder prefix
       const segments = entry.path.split("/");
@@ -126,7 +124,7 @@ describe("Apple Notes integration (real database)", () => {
     for (const entry of nestedNotes) {
       const absolutePath = join(dest, entry.path);
       const relativePath = `notes/${entry.path}`;
-      const content = await buildIngestContent(absolutePath, relativePath);
+      const content = await buildIngestContent(absolutePath, relativePath, entry.title);
       if (!content) continue;
 
       const folderLine = content.split("\n").find((l) => l.startsWith("Apple Notes Folder:"));
@@ -156,7 +154,7 @@ describe("Apple Notes integration (real database)", () => {
     for (const entry of Object.values(manifest.notes)) {
       const absolutePath = join(dest, entry.path);
       const relativePath = `notes/${entry.path}`;
-      const content = await buildIngestContent(absolutePath, relativePath);
+      const content = await buildIngestContent(absolutePath, relativePath, entry.title);
       if (!content) continue;
 
       // No raw local attachment references should remain

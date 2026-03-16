@@ -85,6 +85,8 @@ export type ResolvedFolder = {
 export type ManifestNoteEntry = {
   /** Relative path from export root, e.g. "Work/Meeting Notes.md" */
   path: string;
+  /** Note title from ZTITLE1 */
+  title: string;
   /** Apple Note ZMODIFICATIONDATE1 decoded to Unix ms */
   mtime: number;
   /** ZIDENTIFIER UUID */

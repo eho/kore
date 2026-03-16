@@ -109,7 +109,7 @@ export async function runSyncCycle(
     if (!existing) {
       // NEW note — not in registry
       const absolutePath = join(stagingNotesDir, entry.path);
-      const content = await buildIngestContent(absolutePath, `notes/${entry.path}`);
+      const content = await buildIngestContent(absolutePath, `notes/${entry.path}`, entry.title);
       if (!content) {
         skipped++;
         continue;
@@ -138,7 +138,7 @@ export async function runSyncCycle(
         deps.removeExternalKeyMapping(zpk);
 
         const absolutePath = join(stagingNotesDir, entry.path);
-        const content = await buildIngestContent(absolutePath, `notes/${entry.path}`);
+        const content = await buildIngestContent(absolutePath, `notes/${entry.path}`, entry.title);
         if (!content) {
           skipped++;
           continue;

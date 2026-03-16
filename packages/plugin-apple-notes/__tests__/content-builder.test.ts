@@ -5,7 +5,6 @@ import { tmpdir } from "node:os";
 import {
   buildIngestContent,
   extractFolderHierarchy,
-  extractTitle,
   stripLocalAttachments,
 } from "../content-builder";
 
@@ -48,34 +47,6 @@ describe("extractFolderHierarchy", () => {
     expect(
       extractFolderHierarchy("notes/Work/Engineering/Backend/API Design.md"),
     ).toBe("Work / Engineering / Backend");
-  });
-});
-
-// --- extractTitle ---
-
-describe("extractTitle", () => {
-  test("extracts title from first heading", () => {
-    expect(extractTitle("# My Great Note\n\nSome content")).toBe(
-      "My Great Note",
-    );
-  });
-
-  test("extracts title from heading not on first line", () => {
-    expect(extractTitle("Some preamble\n\n# The Title\n\nBody")).toBe(
-      "The Title",
-    );
-  });
-
-  test("returns null when no heading found", () => {
-    expect(extractTitle("Just some text\nwithout headings")).toBeNull();
-  });
-
-  test("does not match ## headings", () => {
-    expect(extractTitle("## Subheading\n\nContent")).toBeNull();
-  });
-
-  test("trims whitespace from title", () => {
-    expect(extractTitle("#   Padded Title   \n\nContent")).toBe("Padded Title");
   });
 });
 
@@ -131,11 +102,12 @@ describe("buildIngestContent", () => {
   test("builds full content with folder and title", async () => {
     const path = await writeNote(
       "note1.md",
-      "# Meeting Notes\n\nDiscussed Q1 plans.",
+      "Meeting Notes\n\nDiscussed Q1 plans.",
     );
     const result = await buildIngestContent(
       path,
       "notes/Work/Projects/note1.md",
+      "Meeting Notes",
     );
 
     expect(result).not.toBeNull();
@@ -145,15 +117,15 @@ describe("buildIngestContent", () => {
   });
 
   test("builds content without folder for root-level note", async () => {
-    const path = await writeNote("root.md", "# Root Note\n\nContent here.");
-    const result = await buildIngestContent(path, "notes/root.md");
+    const path = await writeNote("root.md", "Root Note\n\nContent here.");
+    const result = await buildIngestContent(path, "notes/root.md", "Root Note");
 
     expect(result).not.toBeNull();
     expect(result).not.toContain("Apple Notes Folder:");
     expect(result).toContain("Title: Root Note");
   });
 
-  test("builds content without title if no heading", async () => {
+  test("builds content without title if none provided", async () => {
     const path = await writeNote("notitle.md", "Just some text without heading.");
     const result = await buildIngestContent(path, "notes/notitle.md");
 
@@ -164,13 +136,13 @@ describe("buildIngestContent", () => {
 
   test("returns null for empty file", async () => {
     const path = await writeNote("empty.md", "");
-    const result = await buildIngestContent(path, "notes/empty.md");
+    const result = await buildIngestContent(path, "notes/empty.md", "Empty");
     expect(result).toBeNull();
   });
 
   test("returns null for whitespace-only file", async () => {
     const path = await writeNote("whitespace.md", "   \n\n  \n  ");
-    const result = await buildIngestContent(path, "notes/whitespace.md");
+    const result = await buildIngestContent(path, "notes/whitespace.md", "Whitespace");
     expect(result).toBeNull();
   });
 
@@ -178,6 +150,7 @@ describe("buildIngestContent", () => {
     const result = await buildIngestContent(
       "/nonexistent/path/file.md",
       "notes/file.md",
+      "Missing File",
     );
     expect(result).toBeNull();
   });
@@ -185,9 +158,9 @@ describe("buildIngestContent", () => {
   test("strips local attachments in output", async () => {
     const path = await writeNote(
       "attach.md",
-      "# Note\n\n![](../attachments/photo.jpg)\n\nMore text.",
+      "Note body\n\n![](../attachments/photo.jpg)\n\nMore text.",
     );
-    const result = await buildIngestContent(path, "notes/attach.md");
+    const result = await buildIngestContent(path, "notes/attach.md", "Note");
 
     expect(result).not.toBeNull();
     expect(result).toContain("[Attachment: photo.jpg]");
@@ -197,9 +170,9 @@ describe("buildIngestContent", () => {
   test("preserves URL-based images in output", async () => {
     const path = await writeNote(
       "urlimg.md",
-      "# Note\n\n![alt](https://example.com/img.png)\n\nDone.",
+      "Note body\n\n![alt](https://example.com/img.png)\n\nDone.",
     );
-    const result = await buildIngestContent(path, "notes/urlimg.md");
+    const result = await buildIngestContent(path, "notes/urlimg.md", "Note");
 
     expect(result).not.toBeNull();
     expect(result).toContain("![alt](https://example.com/img.png)");
@@ -207,10 +180,11 @@ describe("buildIngestContent", () => {
 
   test("truncates content exceeding 8000 characters", async () => {
     const longBody = "x".repeat(9000);
-    const path = await writeNote("long.md", `# Long Note\n\n${longBody}`);
+    const path = await writeNote("long.md", `Long Note\n\n${longBody}`);
     const result = await buildIngestContent(
       path,
       "notes/Work/long.md",
+      "Long Note",
     );
 
     expect(result).not.toBeNull();
@@ -231,9 +205,9 @@ describe("buildIngestContent", () => {
   });
 
   test("preserves markdown tables", async () => {
-    const table = "# Data\n\n| Name | Value |\n|------|-------|\n| A | 1 |";
+    const table = "Data\n\n| Name | Value |\n|------|-------|\n| A | 1 |";
     const path = await writeNote("table.md", table);
-    const result = await buildIngestContent(path, "notes/table.md");
+    const result = await buildIngestContent(path, "notes/table.md", "Data");
 
     expect(result).toContain("| Name | Value |");
   });
@@ -241,9 +215,9 @@ describe("buildIngestContent", () => {
   test("preserves internal links", async () => {
     const path = await writeNote(
       "links.md",
-      "# Links\n\nSee [[Other Note]] for more.",
+      "Links\n\nSee [[Other Note]] for more.",
     );
-    const result = await buildIngestContent(path, "notes/links.md");
+    const result = await buildIngestContent(path, "notes/links.md", "Links");
 
     expect(result).toContain("[[Other Note]]");
   });

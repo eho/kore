@@ -106,7 +106,7 @@ KORE_AN_FOLDER_BLOCKLIST=Archive
 Before a note is sent to the LLM for extraction, the content builder transforms it:
 
 1. **Folder context** — Prepends `Apple Notes Folder: Work / Projects` based on the note's folder path
-2. **Title extraction** — Extracts the first `# heading` and prepends `Title: ...`
+2. **Title** — Uses the note's title from the Apple Notes database (ZTITLE1, carried via the sync manifest) and prepends `Title: ...`
 3. **Attachment handling** — Local attachment references (`![](../attachments/photo.jpg)`) are replaced with `[Attachment: photo.jpg]`. URL-based images, Markdown tables, and `[[internal links]]` are preserved
 4. **Truncation** — Content exceeding 8,000 characters is truncated with a `[Content truncated for extraction]` notice
 

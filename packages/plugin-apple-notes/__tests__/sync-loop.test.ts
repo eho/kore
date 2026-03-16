@@ -136,7 +136,7 @@ describe("runSyncCycle", () => {
       version: 1,
       exportedAt: new Date().toISOString(),
       notes: {
-        100: { path: "Work/Project Plan.md", mtime: 1710000000000, identifier: "uuid-100" },
+        100: { path: "Work/Project Plan.md", title: "Project Plan", mtime: 1710000000000, identifier: "uuid-100" },
       },
       attachments: {},
     });
@@ -164,7 +164,7 @@ describe("runSyncCycle", () => {
       version: 1,
       exportedAt: new Date().toISOString(),
       notes: {
-        100: { path: "Work/Note.md", mtime: 1710000000000, identifier: "uuid-100" },
+        100: { path: "Work/Note.md", title: "Note", mtime: 1710000000000, identifier: "uuid-100" },
       },
       attachments: {},
     });
@@ -203,7 +203,7 @@ describe("runSyncCycle", () => {
       version: 1,
       exportedAt: new Date().toISOString(),
       notes: {
-        100: { path: "Work/Note.md", mtime: 1710099999999, identifier: "uuid-100" },
+        100: { path: "Work/Note.md", title: "Note", mtime: 1710099999999, identifier: "uuid-100" },
       },
       attachments: {},
     });
@@ -225,8 +225,8 @@ describe("runSyncCycle", () => {
       version: 1,
       exportedAt: new Date().toISOString(),
       notes: {
-        100: { path: "Archive/Old Note.md", mtime: 1710000000000, identifier: "uuid-100" },
-        200: { path: "Work/Good Note.md", mtime: 1710000000000, identifier: "uuid-200" },
+        100: { path: "Archive/Old Note.md", title: "Old Note", mtime: 1710000000000, identifier: "uuid-100" },
+        200: { path: "Work/Good Note.md", title: "Good Note", mtime: 1710000000000, identifier: "uuid-200" },
       },
       attachments: {},
     });
@@ -248,8 +248,8 @@ describe("runSyncCycle", () => {
       version: 1,
       exportedAt: new Date().toISOString(),
       notes: {
-        100: { path: "Work/Note.md", mtime: 1710000000000, identifier: "uuid-100" },
-        200: { path: "Personal/Note.md", mtime: 1710000000000, identifier: "uuid-200" },
+        100: { path: "Work/Note.md", title: "Note", mtime: 1710000000000, identifier: "uuid-100" },
+        200: { path: "Personal/Note.md", title: "Note", mtime: 1710000000000, identifier: "uuid-200" },
       },
       attachments: {},
     });
@@ -278,7 +278,7 @@ describe("runSyncCycle", () => {
       version: 1,
       exportedAt: new Date().toISOString(),
       notes: {
-        100: { path: "Missing/Note.md", mtime: 1710000000000, identifier: "uuid-100" },
+        100: { path: "Missing/Note.md", title: "Note", mtime: 1710000000000, identifier: "uuid-100" },
       },
       attachments: {},
     });
@@ -317,7 +317,7 @@ describe("runSyncCycle", () => {
       version: 1,
       exportedAt: new Date().toISOString(),
       notes: {
-        100: { path: "Work/Note.md", mtime: 1710000000000, identifier: "uuid-100" },
+        100: { path: "Work/Note.md", title: "Note", mtime: 1710000000000, identifier: "uuid-100" },
       },
       attachments: {},
     });

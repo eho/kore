@@ -16,14 +16,6 @@ export function extractFolderHierarchy(relativePath: string): string | null {
 }
 
 /**
- * Extracts the title from the first `# heading` in the markdown content.
- */
-export function extractTitle(content: string): string | null {
-  const match = content.match(/^#\s+(.+)$/m);
-  return match ? match[1].trim() : null;
-}
-
-/**
  * Strips local attachment image references and replaces with [Attachment: filename].
  * Preserves URL-based images.
  */
@@ -40,11 +32,13 @@ export function stripLocalAttachments(content: string): string {
  *
  * @param absoluteNotePath - Absolute filesystem path to the note file
  * @param relativeNotePath - Relative path from the staging directory (e.g., "notes/Work/Projects/Q1 Planning.md")
+ * @param title - Note title from the manifest (sourced from ZTITLE1 in Apple Notes DB)
  * @returns LLM-ready content string, or null if the file is empty/unreadable
  */
 export async function buildIngestContent(
   absoluteNotePath: string,
   relativeNotePath: string,
+  title?: string,
 ): Promise<string | null> {
   let raw: string;
   try {
@@ -66,7 +60,6 @@ export async function buildIngestContent(
     headerLines.push(`Apple Notes Folder: ${folder}`);
   }
 
-  const title = extractTitle(raw);
   if (title) {
     headerLines.push(`Title: ${title}`);
   }

@@ -36,7 +36,7 @@ import {
 } from './sync.ts';
 import { sanitizeFileName } from './utils.ts';
 
-export type { ExportOptions, SyncOptions, ExportResult, SyncManifest } from './types.ts';
+export type { ExportOptions, SyncOptions, ExportResult, SyncManifest, ManifestNoteEntry } from './types.ts';
 export { decodeTime, sanitizeFileName } from './utils.ts';
 
 // ─── Note Query ──────────────────────────────────────────────────────────────
