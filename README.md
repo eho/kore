@@ -60,10 +60,11 @@ kore/
 │   ├── core-api/          # REST API server + extraction worker + file watcher
 │   └── cli/               # Command-line interface for Kore
 ├── packages/
-│   ├── shared-types/      # Zod schemas and TypeScript interfaces (single source of truth)
-│   ├── llm-extractor/     # Vercel AI SDK + Ollama integration
-│   ├── qmd-client/        # Typed wrapper around the QMD CLI
-│   └── an-export/         # Apple Notes → Markdown exporter
+│   ├── shared-types/          # Zod schemas and TypeScript interfaces (single source of truth)
+│   ├── llm-extractor/         # Vercel AI SDK + Ollama integration
+│   ├── qmd-client/            # Typed wrapper around the QMD CLI
+│   ├── an-export/             # Apple Notes → Markdown exporter
+│   └── plugin-apple-notes/    # Apple Notes sync plugin (passive ingestion)
 ├── docs/                  # Architecture docs and guides
 │   └── manual-e2e-testing.md
 ├── tasks/                 # PRDs and design docs
@@ -146,6 +147,44 @@ See `docs/manual-e2e-testing.md` for a complete walkthrough of all scenarios.
 
 ---
 
+## Plugins
+
+Kore supports plugins for passive ingestion from external sources. Plugins run as background processes within the Kore server and are enabled via environment variables.
+
+### Apple Notes
+
+Automatically syncs your Apple Notes into Kore's memory store. Notes are incrementally exported, transformed with folder context, and processed by the LLM extraction pipeline. Deletions in Apple Notes are reflected in Kore on the next sync cycle.
+
+**Quick start:**
+
+1. Grant **Full Disk Access** to your terminal (System Settings > Privacy & Security)
+2. Add to your `.env`:
+   ```bash
+   KORE_APPLE_NOTES_ENABLED=true
+   ```
+3. Restart Kore — the first sync runs 10 seconds after startup
+
+**CLI commands:**
+
+```sh
+kore sync            # trigger a manual sync
+kore sync --status   # check sync status
+```
+
+**Configuration:**
+
+| Variable | Default | Description |
+|---|---|---|
+| `KORE_APPLE_NOTES_ENABLED` | `false` | Enable the plugin |
+| `KORE_AN_SYNC_INTERVAL_MS` | `900000` (15 min) | Sync interval |
+| `KORE_AN_FOLDER_ALLOWLIST` | *(all)* | Comma-separated folders to include |
+| `KORE_AN_FOLDER_BLOCKLIST` | *(none)* | Comma-separated folders to exclude |
+| `KORE_AN_INCLUDE_HANDWRITING` | `false` | Include handwriting OCR text |
+
+See [`packages/plugin-apple-notes/README.md`](packages/plugin-apple-notes/README.md) for the full configuration reference, API endpoints, content transformation details, and troubleshooting.
+
+---
+
 ## Development
 
 ```sh
@@ -211,6 +250,7 @@ bun run --cwd apps/cli build:bin        # → apps/cli/bin/kore
 | [`packages/llm-extractor`](packages/llm-extractor/README.md) | LLM extraction via Vercel AI SDK + Ollama |
 | [`packages/qmd-client`](packages/qmd-client/README.md) | Typed QMD CLI wrapper |
 | [`packages/an-export`](packages/an-export/README.md) | Apple Notes → Markdown exporter |
+| [`packages/plugin-apple-notes`](packages/plugin-apple-notes/README.md) | Apple Notes sync plugin — passive ingestion |
 
 ## Roadmap
 
