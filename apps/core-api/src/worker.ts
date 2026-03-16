@@ -81,7 +81,7 @@ async function processTask(
     source: payload.source,
     tags: parsed.tags,
     ...(payload.original_url ? { url: payload.original_url } : {}),
-    intent: parsed.intent,
+    intent: parsed.intent ?? "reference",
     confidence: parsed.confidence,
   };
 

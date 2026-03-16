@@ -1,0 +1,9 @@
+{
+  "name": "@kore/plugin-apple-notes",
+  "version": "1.0.0",
+  "main": "index.ts",
+  "dependencies": {
+    "@kore/an-export": "workspace:*",
+    "@kore/shared-types": "workspace:*"
+  }
+}

@@ -69,6 +69,14 @@
         "ai": "^6.0.116",
       },
     },
+    "packages/plugin-apple-notes": {
+      "name": "@kore/plugin-apple-notes",
+      "version": "1.0.0",
+      "dependencies": {
+        "@kore/an-export": "workspace:*",
+        "@kore/shared-types": "workspace:*",
+      },
+    },
     "packages/plugin-test": {
       "name": "@kore/plugin-test",
       "version": "1.0.0",
@@ -126,6 +134,8 @@
     "@kore/core-api": ["@kore/core-api@workspace:apps/core-api"],
 
     "@kore/llm-extractor": ["@kore/llm-extractor@workspace:packages/llm-extractor"],
+
+    "@kore/plugin-apple-notes": ["@kore/plugin-apple-notes@workspace:packages/plugin-apple-notes"],
 
     "@kore/plugin-test": ["@kore/plugin-test@workspace:packages/plugin-test"],
 

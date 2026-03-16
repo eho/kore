@@ -72,9 +72,9 @@ export const MemoryExtractionSchema = z.object({
     .max(5)
     .describe("Between 1 and 5 thematic tags. lowercase, kebab-case."),
 
-  intent: IntentEnum.describe("The intent/disposition of the memory."),
+  intent: IntentEnum.optional().describe("The intent/disposition of the memory."),
 
-  confidence: z.number().min(0).max(1).describe("Extraction confidence score between 0 and 1."),
+  confidence: z.number().min(0).max(1).optional().describe("Extraction confidence score between 0 and 1."),
 });
 
 export type MemoryExtraction = z.infer<typeof MemoryExtractionSchema>;
