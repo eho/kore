@@ -22,6 +22,12 @@ export const BaseFrontmatterSchema = z.object({
   /** The ISO string date when this memory was initially saved/bookmarked */
   date_saved: z.string().datetime(),
 
+  /** The ISO string date when the original source content was created (e.g. Apple Note creation date) */
+  date_created: z.string().datetime().optional(),
+
+  /** The ISO string date when the original source content was last modified */
+  date_modified: z.string().datetime().optional(),
+
   /** The system that originally captured this (e.g. 'apple_notes', 'x_bookmark') */
   source: z.string(),
 
@@ -108,7 +114,7 @@ export interface MemoryEvent {
 
 export interface PluginStartDeps {
   enqueue(
-    payload: { source: string; content: string; original_url?: string },
+    payload: { source: string; content: string; original_url?: string; date_created?: string; date_modified?: string },
     priority?: "low" | "normal" | "high"
   ): string;
   deleteMemory(id: string): Promise<boolean>;

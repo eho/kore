@@ -60,7 +60,7 @@ interface ProcessTaskResult {
  */
 async function processTask(
   taskId: string,
-  payload: { source: string; content: string; original_url?: string },
+  payload: { source: string; content: string; original_url?: string; date_created?: string; date_modified?: string },
   deps: WorkerDeps
 ): Promise<ProcessTaskResult> {
   const extractFn = deps.extractFn || extract;
@@ -81,6 +81,8 @@ async function processTask(
     source: payload.source,
     tags: parsed.tags,
     ...(payload.original_url ? { url: payload.original_url } : {}),
+    ...(payload.date_created ? { date_created: payload.date_created } : {}),
+    ...(payload.date_modified ? { date_modified: payload.date_modified } : {}),
     intent: parsed.intent ?? "reference",
     confidence: parsed.confidence,
   };

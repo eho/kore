@@ -23,6 +23,8 @@ const RawIngestPayload = z.object({
   source: z.string(),
   content: z.string(),
   original_url: z.string().url().optional(),
+  date_created: z.string().datetime().optional(),
+  date_modified: z.string().datetime().optional(),
   priority: z.enum(["low", "normal", "high"]).default("normal"),
 });
 
@@ -117,6 +119,8 @@ async function parseMemoryFile(id: string, filePath: string): Promise<MemorySumm
       title: extractTitleFromMarkdown(content),
       source: fm.source || "",
       date_saved: fm.date_saved || "",
+      ...(fm.date_created ? { date_created: fm.date_created } : {}),
+      ...(fm.date_modified ? { date_modified: fm.date_modified } : {}),
       tags: parseTagsArray(fm.tags || ""),
       ...(fm.intent ? { intent: fm.intent } : {}),
       ...(fm.confidence !== undefined ? { confidence: parseFloat(fm.confidence) } : {}),
@@ -136,6 +140,8 @@ async function parseMemoryFileFull(id: string, filePath: string): Promise<Memory
       type: fm.type || "",
       category: fm.category || "",
       date_saved: fm.date_saved || "",
+      ...(fm.date_created ? { date_created: fm.date_created } : {}),
+      ...(fm.date_modified ? { date_modified: fm.date_modified } : {}),
       source: fm.source || "",
       tags: parseTagsArray(fm.tags || ""),
       url: fm.url,
@@ -155,6 +161,8 @@ interface MemorySummary {
   title: string;
   source: string;
   date_saved: string;
+  date_created?: string;
+  date_modified?: string;
   tags: string[];
   intent?: string;
   confidence?: number;
@@ -273,8 +281,8 @@ export function createApp(deps: AppDeps = {}) {
         };
       }
 
-      const { source, content, original_url, priority } = result.data;
-      const taskId = queue.enqueue({ source, content, original_url }, priority);
+      const { source, content, original_url, date_created, date_modified, priority } = result.data;
+      const taskId = queue.enqueue({ source, content, original_url, date_created, date_modified }, priority);
 
       set.status = 202;
       return {
@@ -390,16 +398,26 @@ export function createApp(deps: AppDeps = {}) {
       // Clear task queue
       const deletedTasks = queue.clearAll();
 
-      // Reset QMD index
+      // Reset QMD index (with timeout to avoid hanging if background ops are in-flight)
       const qmdDbPath = resolveQmdDbPath();
       try {
-        await qmdClient.closeStore();
+        await Promise.race([
+          qmdClient.closeStore(),
+          new Promise<void>((_, reject) =>
+            setTimeout(() => reject(new Error("closeStore timeout")), 5_000)
+          ),
+        ]);
+      } catch (err) {
+        console.warn("Warning: QMD closeStore timed out or failed, force-resetting:", err instanceof Error ? err.message : err);
+        qmdClient.resetStore();
+      }
+      try {
         await rm(qmdDbPath, { force: true });
         await rm(`${qmdDbPath}-wal`, { force: true });
         await rm(`${qmdDbPath}-shm`, { force: true });
         await qmdClient.initStore(qmdDbPath);
       } catch (err) {
-        console.warn("Warning: QMD store reset encountered an error:", err);
+        console.warn("Warning: QMD store re-init encountered an error:", err);
       }
 
       return {

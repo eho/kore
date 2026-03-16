@@ -15,7 +15,6 @@ Thumbs.db
 
 # Project specific
 e2e/notes-testdata
-notes
 notes-export
 packages/an-export/node_modules # In case they are ever recreated
 

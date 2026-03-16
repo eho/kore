@@ -17,6 +17,8 @@ export function renderMarkdown(opts: {
     `type: ${frontmatter.type}`,
     `category: ${frontmatter.category}`,
     `date_saved: ${frontmatter.date_saved}`,
+    ...(frontmatter.date_created ? [`date_created: ${frontmatter.date_created}`] : []),
+    ...(frontmatter.date_modified ? [`date_modified: ${frontmatter.date_modified}`] : []),
     `source: ${frontmatter.source}`,
     `tags: [${frontmatter.tags.map((t) => `"${t}"`).join(", ")}]`,
   ];

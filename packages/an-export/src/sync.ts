@@ -209,6 +209,7 @@ export function buildNoteManifestEntry(
   return {
     path: relative(exportDest, filePath),
     title: noteRow.ZTITLE1 || 'Untitled',
+    ctime: decodeTime(noteRow.ZCREATIONDATE3 ?? noteRow.ZCREATIONDATE1),
     mtime: decodeTime(noteRow.ZMODIFICATIONDATE1),
     identifier: noteRow.ZIDENTIFIER ?? '',
   };

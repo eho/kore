@@ -49,6 +49,7 @@ const NOTES_QUERY = `
     zcso.ztitle1 AS ZTITLE1,
     zcso.zfolder AS ZFOLDER,
     zcso.zcreationdate1 AS ZCREATIONDATE1,
+    zcso.zcreationdate3 AS ZCREATIONDATE3,
     zcso.zmodificationdate1 AS ZMODIFICATIONDATE1,
     zcso.zispasswordprotected AS ZISPASSWORDPROTECTED,
     zcso.zidentifier AS ZIDENTIFIER

@@ -119,7 +119,12 @@ export async function runSyncCycle(
       }
 
       const taskId = deps.enqueue(
-        { source: "apple_notes", content },
+        {
+          source: "apple_notes",
+          content,
+          ...(entry.ctime ? { date_created: new Date(entry.ctime).toISOString() } : {}),
+          ...(entry.mtime ? { date_modified: new Date(entry.mtime).toISOString() } : {}),
+        },
         "low",
       );
       const metadata = JSON.stringify({ mtime: entry.mtime });
@@ -148,7 +153,12 @@ export async function runSyncCycle(
         }
 
         const taskId = deps.enqueue(
-          { source: "apple_notes", content },
+          {
+            source: "apple_notes",
+            content,
+            ...(entry.ctime ? { date_created: new Date(entry.ctime).toISOString() } : {}),
+            ...(entry.mtime ? { date_modified: new Date(entry.mtime).toISOString() } : {}),
+          },
           "low",
         );
         const metadata = JSON.stringify({ mtime: entry.mtime });

@@ -87,6 +87,8 @@ export type ManifestNoteEntry = {
   path: string;
   /** Note title from ZTITLE1 */
   title: string;
+  /** Apple Note creation date (ZCREATIONDATE3 preferred, ZCREATIONDATE1 fallback) decoded to Unix ms */
+  ctime: number;
   /** Apple Note ZMODIFICATIONDATE1 decoded to Unix ms */
   mtime: number;
   /** ZIDENTIFIER UUID */

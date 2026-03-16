@@ -287,6 +287,7 @@ describe('exportNotes orchestration', () => {
     manifest.notes[1] = {
       path: 'My Test Note.md',
       title: 'My Test Note',
+      ctime: 1678307200000,
       mtime: 1678307200000,
       identifier: 'note-uuid-1',
     };
@@ -415,6 +416,7 @@ describe('syncNotes orchestration', () => {
     manifest.notes[1] = {
       path: 'Note.md',
       title: 'Note',
+      ctime: decodeTime(700000000),
       mtime: decodeTime(700000000),
       identifier: 'note-1',
     };
@@ -449,6 +451,7 @@ describe('syncNotes orchestration', () => {
     manifest.notes[1] = {
       path: 'Note.md',
       title: 'Note',
+      ctime: decodeTime(mtime),
       mtime: decodeTime(mtime),
       identifier: 'note-1',
     };
@@ -491,6 +494,7 @@ describe('syncNotes orchestration', () => {
     manifest.notes[99] = {
       path: 'Deleted Note.md',
       title: 'Deleted Note',
+      ctime: 900,
       mtime: 1000,
       identifier: 'deleted-uuid',
     };
@@ -528,8 +532,8 @@ describe('syncNotes orchestration', () => {
     writeFileSync(note1Path, '# Note A');
     writeFileSync(note2Path, '# Note B');
 
-    manifest.notes[1] = { path: 'Note A.md', title: 'Note A', mtime: decodeTime(700000000), identifier: 'a' };
-    manifest.notes[2] = { path: 'Note B.md', title: 'Note B', mtime: decodeTime(700000000), identifier: 'b' };
+    manifest.notes[1] = { path: 'Note A.md', title: 'Note A', ctime: decodeTime(700000000), mtime: decodeTime(700000000), identifier: 'a' };
+    manifest.notes[2] = { path: 'Note B.md', title: 'Note B', ctime: decodeTime(700000000), mtime: decodeTime(700000000), identifier: 'b' };
     saveManifest(exportDest, manifest);
 
     // Step 2: Simulate DB changes — Note A updated, Note B deleted, Note C added

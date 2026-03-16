@@ -131,7 +131,7 @@ for (const plugin of plugins) {
   }
 }
 
-app.listen(3000);
+app.listen({ port: 3000, reusePort: false });
 console.log(`Kore Core API running on http://localhost:3000`);
 
 // ── Background bootstrap (if index is empty) ───────────────────────────
