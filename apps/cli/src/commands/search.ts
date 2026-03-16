@@ -85,9 +85,10 @@ export async function searchCommand(
         ? r.snippet.slice(0, 200) + "..."
         : r.snippet ?? "";
 
+    const scoreStr = pc.dim(`score: ${r.score.toFixed(3)}`);
     process.stdout.write(
       [
-        pc.bold(pc.cyan(r.title)),
+        pc.bold(pc.cyan(r.title)) + "  " + scoreStr,
         pc.dim(r.path),
         snippet,
       ].join("\n") + "\n"
