@@ -90,7 +90,7 @@ describe('loadManifest', () => {
   test('loads an existing manifest from disk', () => {
     const existing: SyncManifest = makeManifest({
       notes: {
-        1: { path: 'Note.md', mtime: 1000, identifier: 'abc-123' },
+        1: { path: 'Note.md', title: 'Note', mtime: 1000, identifier: 'abc-123' },
       },
     });
     writeFileSync(join(testDir, MANIFEST_FILENAME), JSON.stringify(existing));
@@ -115,7 +115,7 @@ describe('loadManifest', () => {
 describe('saveManifest', () => {
   test('writes manifest to disk as JSON', () => {
     const manifest = makeManifest({
-      notes: { 5: { path: 'Work/Note.md', mtime: 2000, identifier: 'xyz' } },
+      notes: { 5: { path: 'Work/Note.md', title: 'Note', mtime: 2000, identifier: 'xyz' } },
     });
 
     saveManifest(testDir, manifest);
@@ -129,10 +129,10 @@ describe('saveManifest', () => {
   });
 
   test('overwrites existing manifest', () => {
-    const first = makeManifest({ notes: { 1: { path: 'a.md', mtime: 1, identifier: 'a' } } });
+    const first = makeManifest({ notes: { 1: { path: 'a.md', title: 'a', mtime: 1, identifier: 'a' } } });
     saveManifest(testDir, first);
 
-    const second = makeManifest({ notes: { 2: { path: 'b.md', mtime: 2, identifier: 'b' } } });
+    const second = makeManifest({ notes: { 2: { path: 'b.md', title: 'b', mtime: 2, identifier: 'b' } } });
     saveManifest(testDir, second);
 
     const loaded = loadManifest(testDir);
@@ -163,6 +163,7 @@ describe('computeNoteSyncDecisions', () => {
       notes: {
         1: {
           path: 'Note.md',
+          title: 'Note',
           mtime: decodeTime(700000000), // earlier than 800000000
           identifier: 'abc',
         },
@@ -184,6 +185,7 @@ describe('computeNoteSyncDecisions', () => {
       notes: {
         1: {
           path: 'Note.md',
+          title: 'Note',
           mtime: decodeTime(mtime), // same timestamp
           identifier: 'abc',
         },
@@ -199,7 +201,7 @@ describe('computeNoteSyncDecisions', () => {
   test('deleted note: in manifest but not in DB', () => {
     const manifest = makeManifest({
       notes: {
-        99: { path: 'Old Note.md', mtime: 1000, identifier: 'old' },
+        99: { path: 'Old Note.md', title: 'Old Note', mtime: 1000, identifier: 'old' },
       },
     });
 
@@ -219,9 +221,9 @@ describe('computeNoteSyncDecisions', () => {
     ];
     const manifest = makeManifest({
       notes: {
-        1: { path: 'Note1.md', mtime: decodeTime(700000000), identifier: '1' },
-        2: { path: 'Note2.md', mtime: decodeTime(700000000), identifier: '2' },
-        4: { path: 'Deleted.md', mtime: 1000, identifier: '4' }, // deleted
+        1: { path: 'Note1.md', title: 'Note1', mtime: decodeTime(700000000), identifier: '1' },
+        2: { path: 'Note2.md', title: 'Note2', mtime: decodeTime(700000000), identifier: '2' },
+        4: { path: 'Deleted.md', title: 'Deleted', mtime: 1000, identifier: '4' }, // deleted
       },
     });
 
@@ -340,7 +342,7 @@ describe('applyDeletions', () => {
 
     const manifest = makeManifest({
       notes: {
-        99: { path: 'OldNote.md', mtime: 1000, identifier: 'old-id' },
+        99: { path: 'OldNote.md', title: 'OldNote', mtime: 1000, identifier: 'old-id' },
       },
     });
 
@@ -358,7 +360,7 @@ describe('applyDeletions', () => {
   test('handles already-deleted files gracefully', () => {
     const manifest = makeManifest({
       notes: {
-        99: { path: 'Gone.md', mtime: 1000, identifier: 'gone' },
+        99: { path: 'Gone.md', title: 'Gone', mtime: 1000, identifier: 'gone' },
       },
     });
 
@@ -376,7 +378,7 @@ describe('applyDeletions', () => {
   test('skips non-deleted decisions', () => {
     const manifest = makeManifest({
       notes: {
-        1: { path: 'Keep.md', mtime: 1000, identifier: 'keep' },
+        1: { path: 'Keep.md', title: 'Keep', mtime: 1000, identifier: 'keep' },
       },
     });
     writeFileSync(join(testDir, 'Keep.md'), '# Keep');
@@ -420,8 +422,8 @@ describe('applyDeletions', () => {
 
     const manifest = makeManifest({
       notes: {
-        1: { path: 'a.md', mtime: 1000, identifier: 'a' },
-        2: { path: 'b.md', mtime: 2000, identifier: 'b' },
+        1: { path: 'a.md', title: 'a', mtime: 1000, identifier: 'a' },
+        2: { path: 'b.md', title: 'b', mtime: 2000, identifier: 'b' },
       },
     });
 

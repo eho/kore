@@ -34,6 +34,7 @@ const appleNotesPlugin: KorePlugin = {
     const folderBlocklist = process.env.KORE_AN_FOLDER_BLOCKLIST
       ? process.env.KORE_AN_FOLDER_BLOCKLIST.split(",").map((s) => s.trim())
       : undefined;
+    const dbDir = process.env.KORE_AN_DB_DIR || undefined;
 
     const opts: SyncLoopOpts = {
       stagingDir,
@@ -41,6 +42,7 @@ const appleNotesPlugin: KorePlugin = {
       includeHandwriting,
       folderAllowlist,
       folderBlocklist,
+      dbDir,
     };
 
     syncHandle = startSyncLoop(deps, opts);

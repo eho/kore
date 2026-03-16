@@ -16,6 +16,8 @@ export interface SyncLoopOpts {
   folderAllowlist?: string[];
   /** Comma-separated folder blocklist (e.g. "Archive,Old") */
   folderBlocklist?: string[];
+  /** Override Apple Notes database directory (default: ~/Library/Group Containers/group.com.apple.notes) */
+  dbDir?: string;
   /** Override syncNotes for testing */
   _syncNotesFn?: SyncNotesFn;
 }
@@ -69,6 +71,7 @@ export async function runSyncCycle(
     omitFirstLine: false,
     includeTrashed: false,
     includeHandwriting: opts.includeHandwriting ?? false,
+    ...(opts.dbDir ? { dbDir: opts.dbDir } : {}),
   });
 
   // 2. Load the manifest

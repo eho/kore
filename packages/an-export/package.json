@@ -1,5 +1,6 @@
 {
   "name": "@kore/an-export",
+  "main": "src/index.ts",
   "module": "src/index.ts",
   "type": "module",
   "private": true,

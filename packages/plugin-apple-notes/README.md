@@ -60,6 +60,7 @@ All configuration is via environment variables. Only `KORE_APPLE_NOTES_ENABLED` 
 | `KORE_AN_INCLUDE_HANDWRITING` | `false` | Include OCR text from handwritten drawings |
 | `KORE_AN_FOLDER_ALLOWLIST` | *(empty — all folders)* | Comma-separated list of top-level folders to sync |
 | `KORE_AN_FOLDER_BLOCKLIST` | *(empty — none excluded)* | Comma-separated list of top-level folders to exclude |
+| `KORE_AN_DB_DIR` | *(system default)* | Override Apple Notes database directory — useful for testing with a copied database (no Full Disk Access required) |
 
 ### Folder Filtering
 
