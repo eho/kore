@@ -36,7 +36,8 @@ Too often, implementations miss subtle acceptance criteria, lack meaningful test
    - Only proceed to step 6 once all gaps are resolved.
 6. **Sign off (Approve or Merge PR)**: Determine if you are the author of the PR. GitHub prevents users from approving their own PRs. If you are the author, leave a comment and merge it. If you are not, formally approve the PR. The bundled script handles this logic automatically.
    ```bash
-   ./scripts/approve_or_merge_pr.sh <pr-number>
+   SCRIPT_PATH=$(find . ~ -type f -path "*/user-story-reviewer/scripts/approve_or_merge_pr.sh" -not -path "*/.git/*" -not -path "*/node_modules/*" 2>/dev/null | head -n 1)
+   $SCRIPT_PATH <pr-number>
    ```
 
 ## Review Dimensions
@@ -72,5 +73,6 @@ Too often, implementations miss subtle acceptance criteria, lack meaningful test
 8. Commit and push: `git add TaskEdit.test.tsx README.md && git commit -m "test: add immediate save test"` and `git push`.
 9. Approve or Merge the PR:
    ```bash
-   ./scripts/approve_or_merge_pr.sh 13
+   SCRIPT_PATH=$(find . ~ -type f -path "*/user-story-reviewer/scripts/approve_or_merge_pr.sh" -not -path "*/.git/*" -not -path "*/node_modules/*" 2>/dev/null | head -n 1)
+   $SCRIPT_PATH 13
    ```

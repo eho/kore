@@ -9,7 +9,7 @@
     "prd-to-github-milestone": {
       "source": "eho/agent-skills",
       "sourceType": "github",
-      "computedHash": "09ee461e0738c61ee2e39bdd1e79547d31ffd9c92fa40c31dcc7e3df77dab866"
+      "computedHash": "e9a4c84ec45ae1ce2a200050582aa9f65372fdc2be3abe563f0d3466726e4981"
     },
     "public-repo-explorer": {
       "source": "eho/agent-skills",
@@ -19,12 +19,12 @@
     "user-story-implementer": {
       "source": "eho/agent-skills",
       "sourceType": "github",
-      "computedHash": "14100b9593fe29aa7aa92f512df9b83f653871086c0cd6458c62e95a3bcf6412"
+      "computedHash": "3869dca608bc894f5f9d80a6eac47682ae95870eaf3aed015e3d87702f286fb7"
     },
     "user-story-reviewer": {
       "source": "eho/agent-skills",
       "sourceType": "github",
-      "computedHash": "0c7885be6ef19d21b1b34c3248a360d2c45fa299bc7a12c76a312a090347e3e5"
+      "computedHash": "2ebedf9ee3687a0a69aa1db2d65eed27f962ac6d06c3f68698fac34375c434a7"
     }
   }
 }
