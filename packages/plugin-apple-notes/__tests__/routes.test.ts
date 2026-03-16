@@ -98,4 +98,23 @@ describe("AppleNotesPlugin routes", () => {
 
     await plugin.stop!();
   });
+
+  test("POST /api/v1/plugins/apple-notes/sync returns 503 when plugin stopped", async () => {
+    const plugin = createAppleNotesPlugin({ _syncNotesFn: noopSyncNotes });
+    await plugin.start!(createMockDeps());
+
+    const app = new Elysia();
+    plugin.routes!(app);
+
+    // Stop the plugin before sending the request
+    await plugin.stop!();
+
+    const res = await app.handle(
+      new Request("http://localhost/api/v1/plugins/apple-notes/sync", { method: "POST" })
+    );
+    expect(res.status).toBe(503);
+
+    const body = await res.json();
+    expect(body).toHaveProperty("error");
+  });
 });

@@ -134,6 +134,15 @@ describe("buildIngestContent", () => {
     expect(result).toContain("Just some text without heading.");
   });
 
+  test("builds content without title if empty string provided", async () => {
+    const path = await writeNote("emptytitle.md", "Body content here.");
+    const result = await buildIngestContent(path, "notes/emptytitle.md", "");
+
+    expect(result).not.toBeNull();
+    expect(result).not.toContain("Title:");
+    expect(result).toContain("Body content here.");
+  });
+
   test("returns null for empty file", async () => {
     const path = await writeNote("empty.md", "");
     const result = await buildIngestContent(path, "notes/empty.md", "Empty");

@@ -306,6 +306,7 @@ describe('buildNoteManifestEntry', () => {
     const entry = buildNoteManifestEntry(testDir, filePath, noteRow);
 
     expect(entry.path).toBe('Work/Meeting.md');
+    expect(entry.title).toBe('Test Note');
     expect(entry.mtime).toBe(decodeTime(700000000));
     expect(entry.identifier).toBe('mock-uuid-123');
   });
@@ -317,6 +318,16 @@ describe('buildNoteManifestEntry', () => {
     const entry = buildNoteManifestEntry(testDir, filePath, noteRow);
 
     expect(entry.path).toBe('Note.md');
+    expect(entry.title).toBe('Test Note');
+  });
+
+  test('uses Untitled when ZTITLE1 is empty', () => {
+    const noteRow = makeNoteRow({ Z_PK: 3, ZTITLE1: '', ZMODIFICATIONDATE1: 700000000 });
+    const filePath = join(testDir, 'Untitled.md');
+
+    const entry = buildNoteManifestEntry(testDir, filePath, noteRow);
+
+    expect(entry.title).toBe('Untitled');
   });
 });
 
