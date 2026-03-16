@@ -4,6 +4,7 @@ export interface PluginKeyRecord {
   plugin_name: string;
   external_key: string;
   memory_id: string;
+  metadata: string | null;
   created_at: string;
 }
 
@@ -22,10 +23,18 @@ export class PluginRegistryRepository {
         plugin_name TEXT NOT NULL,
         external_key TEXT NOT NULL,
         memory_id TEXT NOT NULL,
+        metadata TEXT,
         created_at DATETIME NOT NULL DEFAULT (datetime('now')),
         PRIMARY KEY (plugin_name, external_key)
       );
     `);
+
+    // Migration: add metadata column if missing (existing databases)
+    try {
+      this.db.exec(`ALTER TABLE plugin_key_registry ADD COLUMN metadata TEXT`);
+    } catch {
+      // Column already exists — ignore
+    }
   }
 
   get(pluginName: string, externalKey: string): string | undefined {
@@ -37,12 +46,12 @@ export class PluginRegistryRepository {
     return row?.memory_id;
   }
 
-  set(pluginName: string, externalKey: string, memoryId: string): void {
+  set(pluginName: string, externalKey: string, memoryId: string, metadata?: string): void {
     this.db.run(
-      `INSERT INTO plugin_key_registry (plugin_name, external_key, memory_id)
-       VALUES (?, ?, ?)
-       ON CONFLICT (plugin_name, external_key) DO UPDATE SET memory_id = excluded.memory_id`,
-      [pluginName, externalKey, memoryId]
+      `INSERT INTO plugin_key_registry (plugin_name, external_key, memory_id, metadata)
+       VALUES (?, ?, ?, ?)
+       ON CONFLICT (plugin_name, external_key) DO UPDATE SET memory_id = excluded.memory_id, metadata = excluded.metadata`,
+      [pluginName, externalKey, memoryId, metadata ?? null]
     );
   }
 
@@ -60,12 +69,16 @@ export class PluginRegistryRepository {
     );
   }
 
-  listByPlugin(pluginName: string): Array<{ externalKey: string; memoryId: string }> {
+  listByPlugin(pluginName: string): Array<{ externalKey: string; memoryId: string; metadata?: string }> {
     const rows = this.db
       .query(
-        "SELECT external_key, memory_id FROM plugin_key_registry WHERE plugin_name = ? ORDER BY created_at ASC"
+        "SELECT external_key, memory_id, metadata FROM plugin_key_registry WHERE plugin_name = ? ORDER BY created_at ASC"
       )
-      .all(pluginName) as Array<{ external_key: string; memory_id: string }>;
-    return rows.map((r) => ({ externalKey: r.external_key, memoryId: r.memory_id }));
+      .all(pluginName) as Array<{ external_key: string; memory_id: string; metadata: string | null }>;
+    return rows.map((r) => ({
+      externalKey: r.external_key,
+      memoryId: r.memory_id,
+      ...(r.metadata != null ? { metadata: r.metadata } : {}),
+    }));
   }
 }
