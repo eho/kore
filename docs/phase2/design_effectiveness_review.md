@@ -99,28 +99,20 @@ Specific issues:
 
 **Key dependency**: Consolidation quality is bounded by extraction quality (Weakness #1). The synthesis LLM receives only distilled items, not raw text. Poor extraction → poor insights. These two workstreams should be developed in parallel, with extraction improvements deployed first so that newly extracted memories are higher quality before they are consolidated.
 
-### 3. Plugin System is "Design-Only" (Medium Priority)
+### 3. Plugin System ~~is "Design-Only"~~ Infrastructure Complete (Medium Priority → ✅ Done)
 
-**Problem**: Architectural documents describe a plugin system with enrichment hooks, lifecycle events, and plugin-specific storage. The codebase only has a basic `EventDispatcher` that emits `memory.indexed` and `memory.deleted` events. There is no mechanism to register plugins, start background work, track external identity mappings, or mount plugin routes.
+**Status**: The plugin infrastructure has been fully implemented. All capabilities required by the Apple Notes integration are in place:
 
-Specific gaps vs. what the Apple Notes integration requires:
+| Required Capability | Current State | Implemented In |
+|---------------------|--------------|----------------|
+| `KorePlugin.start()` / `stop()` lifecycle | ✅ Implemented | `shared-types/index.ts` |
+| `PluginStartDeps.enqueue()` | ✅ Wired | `core-api/src/index.ts:85` |
+| `PluginStartDeps.deleteMemory()` | ✅ Wired | `core-api/src/index.ts:86` |
+| Plugin Identity Registry (SQLite table) | ✅ Implemented | `core-api/src/plugin-registry.ts` |
+| Plugin startup wiring in core-api | ✅ Implemented | `core-api/src/index.ts:82–99` |
+| `task_id` in `MemoryEvent` payload | ✅ Emitted | `core-api/src/worker.ts:129` |
 
-| Required Capability | Current State | Needed For |
-|---------------------|--------------|------------|
-| `KorePlugin.start()` / `stop()` lifecycle | Not implemented | Apple Notes sync loop, future source plugins |
-| `PluginStartDeps.enqueue()` | Not wired | Plugins submitting content to the extraction queue |
-| `PluginStartDeps.deleteMemory()` | Not wired | Plugins removing memories when source content is deleted |
-| Plugin Identity Registry (SQLite table) | Not implemented | Mapping external IDs (Apple Notes Z_PK) → Kore UUIDs |
-| `registerPlugin()` in core-api startup | Not implemented | Loading plugins into the event dispatcher |
-| `task_id` in `MemoryEvent` payload | Not emitted | Plugins matching queued tasks to created memories |
-
-**Recommendation**: Build the plugin infrastructure as a prerequisite to Apple Notes integration. The required additions are:
-
-1. Extend `KorePlugin` interface with `start(deps)` / `stop()` — defined in `shared-types`
-2. Define `PluginStartDeps` with `enqueue`, `deleteMemory`, and identity registry methods
-3. Add `plugin_key_registry` table to `kore-queue.db` (or a new `PluginRegistry` class)
-4. Add `task_id` to the `MemoryEvent` payload emitted by the worker after writing a memory file
-5. Update `core-api/src/index.ts` to call `plugin.start()` at startup and `plugin.stop()` at shutdown
+**Remaining gap**: `listExternalKeys()` is not yet exposed in `PluginStartDeps`. `PluginRegistryRepository.listByPlugin()` exists but needs to be wired through the deps closure. Required for Apple Notes delete detection and pending-key resolution.
 
 Note: The consolidation system does **not** depend on the plugin system. It is a core service with direct access to QMD and the file system.
 
@@ -138,9 +130,9 @@ Note: The consolidation system does **not** depend on the plugin system. It is a
 - **Folder path as LLM context.** The Apple Notes folder hierarchy (e.g., `Work / Projects`) is prepended to the content sent to the LLM extractor, providing high-value categorization signal.
 - **V1 attachment strategy**: text-only. Images stripped and replaced with `[Attachment: filename]`. Tables and URL cards preserved as Markdown.
 
-**Key dependency**: This feature depends on the plugin infrastructure (Weakness #3). Specifically: `KorePlugin.start()`, `PluginStartDeps.enqueue()`, and the Plugin Identity Registry for Z_PK → koreId tracking.
+**Key dependency**: Plugin infrastructure (Weakness #3) is now ✅ complete. The remaining prerequisite is wiring `listExternalKeys()` into `PluginStartDeps` (a one-line addition in `core-api/src/index.ts`).
 
-**Known design debt in the companion doc**: The `onMemoryIndexed` handler for resolving pending `task_id → koreId` mappings uses time-window matching — acknowledged as fragile. The fix is adding `task_id` to `MemoryEvent` (listed as prerequisite in Weakness #3).
+**Design debt resolved**: The `onMemoryIndexed` handler uses exact `taskId` matching — the worker already emits `taskId` in the `MemoryEvent` payload (`worker.ts:129`). The earlier time-window matching concern is no longer applicable.
 
 **Content deduplication**: Re-ingesting the same text creates duplicate memories. A content hash check at ingestion time (hash the raw content, check against existing memories before queueing) would eliminate exact duplicates cheaply. This applies to all ingestion paths, not just Apple Notes.
 
@@ -174,7 +166,7 @@ Note: The consolidation system does **not** depend on the plugin system. It is a
 | **Passive Ingestion** | Partial | API works, but `an-export` is not yet wired as a background service. Detailed design exists. |
 | **LLM Distillation** | Working but fragile | Functional pipeline, but missing `intent` field and prone to extraction loss. |
 | **Agentic Retrieval (Pull)** | Strong | QMD hybrid search is genuinely good. This is the most realized pillar. |
-| **Proactive Nudges (Push)** | Not started | Plugin architecture is currently just an internal event dispatcher. |
+| **Proactive Nudges (Push)** | Not started | Plugin architecture is now implemented; nudges are deferred until pull channel is mature. |
 | **Consolidation/Synthesis** | Design only | Detailed architecture exists. No code. `insight` type missing from schema. |
 
 ---
@@ -187,17 +179,17 @@ The weaknesses form three parallel tracks with explicit dependencies:
 Track A: Extraction Quality               Track B: Consolidation           Track C: Plugin Infra → Apple Notes
 ─────────────────────────                  ─────────────────────            ──────────────────────────────────
 
-A1. Add intent/disposition                 B1. Extend MemoryTypeEnum        C1. KorePlugin start()/stop()
-    field to MemoryExtractionSchema            to include "insight"         C2. PluginStartDeps interface
-                                           B2. Add insights/ to TYPE_DIRS   C3. Plugin Identity Registry table
-A2. Add confidence score                   B3. Implement seed selection      C4. task_id in MemoryEvent
-    to extraction output                   B4. QMD candidate finder              ─── prerequisite gate ───
-                                           B5. Insight type classifier       C5. plugin-apple-notes package
-A3. Test constrained decoding              B6. Synthesis LLM prompts         C6. Content builder + tests
-    vs fallback parsing                    B7. Insight file writer            C7. Sync loop + manifest diffing
-                                           B8. Source frontmatter updater    C8. CLI: kore sync
-A4. Prompt engineering:                    B9. Wire into startup sequence    C9. E2E validation
-    improve category accuracy              B10. CLI: kore consolidate
+A1. ✅ Add intent/disposition              B1. Extend MemoryTypeEnum        C1. ✅ KorePlugin start()/stop()
+    field to MemoryExtractionSchema            to include "insight"         C2. ✅ PluginStartDeps interface
+                                           B2. Add insights/ to TYPE_DIRS   C3. ✅ Plugin Identity Registry table
+A2. ✅ Add confidence score                B3. Implement seed selection      C4. ✅ task_id in MemoryEvent
+    to extraction output                   B4. QMD candidate finder         C4b. Wire listExternalKeys into deps
+                                           B5. Insight type classifier           ─── prerequisite gate ───
+A3. Test constrained decoding              B6. Synthesis LLM prompts         C5. plugin-apple-notes package
+    vs fallback parsing                    B7. Insight file writer            C6. Content builder + tests
+                                           B8. Source frontmatter updater    C7. Sync loop + manifest diffing
+A4. Prompt engineering:                    B9. Wire into startup sequence    C8. CLI: kore sync
+    improve category accuracy              B10. CLI: kore consolidate        C9. E2E validation
                                            B11. Tuning & calibration
          │                                          │
          │                                          │
@@ -209,19 +201,18 @@ A4. Prompt engineering:                    B9. Wire into startup sequence    C9.
 
 ### Track Dependencies
 
-- **A → B**: Consolidation quality is bounded by extraction quality. Better distilled items produce better insights. Deploy extraction improvements (A1–A4) before or alongside consolidation (B1–B11). Consolidation can start on infrastructure (B1–B2) immediately, but synthesis quality (B6) benefits from A1 being done first.
-- **C1–C4 → C5–C9**: Apple Notes integration cannot start until the plugin infrastructure is built. C1–C4 are small, scoped changes to core-api and shared-types.
+- **A → B**: Consolidation quality is bounded by extraction quality. Better distilled items produce better insights. Deploy extraction improvements (A3–A4) before or alongside consolidation (B1–B11). Consolidation can start on infrastructure (B1–B2) immediately, but synthesis quality (B6) benefits from A1 being done first.
+- **C4b → C5–C9**: Apple Notes integration requires `listExternalKeys()` to be wired into `PluginStartDeps`. This is a one-line addition in `core-api/src/index.ts`. All other plugin infrastructure is complete.
 - **A, B, C are independent of each other** at the infrastructure level. They can be developed in parallel by different efforts or sequentially by one.
 
 ### Recommended Sequence (Solo Developer)
 
-If working sequentially, the highest-value order is:
+Given completed work (A1, A2, C1–C4), the updated priority order is:
 
-1. **A1 + B1–B2**: Schema changes (intent field, insight type). Small, unlock everything downstream.
-2. **A2–A4**: Extraction quality. Immediate improvement to every new memory.
-3. **B3–B11**: Consolidation system. Biggest new capability.
-4. **C1–C4**: Plugin infrastructure. Small core changes.
-5. **C5–C9**: Apple Notes integration. First passive source.
+1. **C4b + C5–C9**: Apple Notes integration. Plugin infra is ready; only `listExternalKeys` wiring remains. First passive source.
+2. **B1–B2**: Schema changes (insight type). Small, unlock consolidation downstream.
+3. **A3–A4**: Extraction quality refinement. Incremental improvement.
+4. **B3–B11**: Consolidation system. Biggest new capability.
 
 ### Deferred
 
@@ -238,4 +229,4 @@ The architecture is sound and the infrastructure choices (file-system storage, Q
 
 The consolidation system is the largest missing capability. Its design is complete and architecturally consistent with the existing system (file-system native, QMD-indexed, append-only). Building it will transform Kore from a search engine over isolated notes into a system that synthesizes evolving personal knowledge.
 
-The Apple Notes integration is the proof of concept for passive ingestion — the first source that runs without user action. It requires a small but real investment in plugin infrastructure that will pay dividends for every future source integration.
+The Apple Notes integration is the proof of concept for passive ingestion — the first source that runs without user action. The plugin infrastructure investment is now complete (C1–C4); the remaining work is the plugin package itself (C5–C9) plus wiring `listExternalKeys()` into `PluginStartDeps`.

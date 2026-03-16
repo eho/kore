@@ -34,29 +34,18 @@ This document specifies how `@kore/an-export` should be integrated into Kore's i
 
 ## 3. Plugin Interface Extension
 
-The current `KorePlugin` interface in `packages/shared-types/index.ts` gains two optional lifecycle methods:
+The `KorePlugin` interface in `packages/shared-types/index.ts` already has `start()`/`stop()` lifecycle methods and the `PluginStartDeps` interface. These were implemented as part of the plugin infrastructure track (C1–C4). The current interface:
 
 ```typescript
 export interface KorePlugin {
   name: string;
+  start?: (deps: PluginStartDeps) => Promise<void>;
+  stop?: () => Promise<void>;
   routes?: (app: Elysia) => Elysia;
   onIngestEnrichment?: (context: IngestionContext) => Promise<EnrichmentResult | void>;
   onMemoryIndexed?: (event: MemoryEvent) => Promise<void>;
   onMemoryDeleted?: (event: MemoryEvent) => Promise<void>;
   onMemoryUpdated?: (event: MemoryEvent) => Promise<void>;
-
-  /**
-   * Optional: Called once during server startup, after QMD is initialized.
-   * Plugins that need to run background work (timers, file watchers) start
-   * them here. Should be non-blocking — start the work and return.
-   */
-  start?: (deps: PluginStartDeps) => Promise<void>;
-
-  /**
-   * Optional: Called during graceful shutdown. Must stop any timers/watchers
-   * started in start(). Returns a promise that resolves when cleanup is done.
-   */
-  stop?: () => Promise<void>;
 }
 
 export interface PluginStartDeps {
@@ -67,19 +56,26 @@ export interface PluginStartDeps {
   deleteMemory: (id: string) => Promise<boolean>;
 
   /** Look up a Kore memory ID by an arbitrary external key (plugin-scoped). */
-  getMemoryIdByExternalKey: (pluginName: string, externalKey: string) => string | undefined;
+  getMemoryIdByExternalKey: (externalKey: string) => string | undefined;
 
   /** Register a mapping from external key → Kore memory ID. */
-  setExternalKeyMapping: (pluginName: string, externalKey: string, memoryId: string) => void;
+  setExternalKeyMapping: (externalKey: string, memoryId: string) => void;
 
   /** Remove an external key mapping. */
-  removeExternalKeyMapping: (pluginName: string, externalKey: string) => void;
+  removeExternalKeyMapping: (externalKey: string) => void;
+
+  /** Remove all external key mappings for this plugin. */
+  clearRegistry: () => void;
 }
 ```
 
+> **Note:** Registry methods are **plugin-scoped** — the `pluginName` is captured in a closure by `core-api/src/index.ts` when constructing `PluginStartDeps` for each plugin. Plugins never pass their own name.
+
+> **Gap: `listExternalKeys` is not yet exposed.** `PluginRegistryRepository.listByPlugin()` exists in `core-api/src/plugin-registry.ts` but is not wired into `PluginStartDeps`. The Apple Notes plugin requires this for delete detection and pending-key resolution in `onMemoryIndexed`. **This must be added before implementing the plugin.**
+
 The `PluginStartDeps.enqueue` is a thin wrapper over `QueueRepository.enqueue()`, giving plugins access to the task queue without depending directly on the queue implementation.
 
-The `getMemoryIdByExternalKey` / `setExternalKeyMapping` / `removeExternalKeyMapping` trio is the key addition: it gives plugins a way to maintain their own `externalId → koreMemoryId` mappings, stored in a plugin registry managed by the core engine (see §7).
+The `getMemoryIdByExternalKey` / `setExternalKeyMapping` / `removeExternalKeyMapping` trio gives plugins a way to maintain their own `externalId → koreMemoryId` mappings, stored in a plugin registry managed by the core engine (see §7).
 
 ---
 
@@ -247,14 +243,17 @@ async function syncCycle(deps: PluginStartDeps, opts: SyncLoopOptions) {
 
   // 3. Build set of keys currently tracked in the Plugin Identity Registry
   //    (keys previously registered via setExternalKeyMapping)
+  //    Note: Object.keys(anManifest.notes) returns string keys even though
+  //    SyncManifest.notes is Record<number, ManifestNoteEntry>.
+  //    The registry stores these as string external keys consistently.
   const trackedKeys = new Set(
     currentKeys
-      .map(k => deps.getMemoryIdByExternalKey(PLUGIN_NAME, k))
+      .map(k => deps.getMemoryIdByExternalKey(k))
       .filter(Boolean)
       .map((_, i) => currentKeys[i])
   );
   // More precisely: iterate all known external keys for this plugin
-  // (requires a listExternalKeys method or scanning the registry)
+  // (requires listExternalKeys — see §3 gap note)
 
   // 4. Apply folder filters
   const shouldInclude = (notePath: string) => {
@@ -268,7 +267,7 @@ async function syncCycle(deps: PluginStartDeps, opts: SyncLoopOptions) {
     const noteEntry = anManifest.notes[key];
     if (!shouldInclude(noteEntry.path)) continue;
 
-    const existingKoreId = deps.getMemoryIdByExternalKey(PLUGIN_NAME, key);
+    const existingKoreId = deps.getMemoryIdByExternalKey(key);
 
     if (!existingKoreId) {
       // NEW note — queue for extraction
@@ -280,7 +279,7 @@ async function syncCycle(deps: PluginStartDeps, opts: SyncLoopOptions) {
       const taskId = deps.enqueue({ source: "apple_notes", content }, "low");
       // koreId will be set by onMemoryIndexed when the worker completes (see §5.5)
       // Store a pending marker so we know this key is in-flight
-      deps.setExternalKeyMapping(PLUGIN_NAME, key, `pending:${taskId}`);
+      deps.setExternalKeyMapping(key, `pending:${taskId}`);
 
     } else if (existingKoreId.startsWith("pending:")) {
       // Still waiting for worker to process — skip
@@ -306,7 +305,7 @@ async function syncCycle(deps: PluginStartDeps, opts: SyncLoopOptions) {
 
 After a task is enqueued, the Kore memory file is created asynchronously by the worker. The plugin needs to learn the resulting `koreId` to update the Plugin Identity Registry. This is done via the `onMemoryIndexed` plugin hook, matching on the `task_id` field in `MemoryEvent`.
 
-**Prerequisite**: The worker must include `task_id` in the `MemoryEvent` payload it emits after writing a memory file. This is a small change to `apps/core-api/src/worker.ts` — see [Design Effectiveness Review §3](./design_effectiveness_review.md) for the full list of plugin infrastructure prerequisites.
+**Status**: The worker already includes `taskId` in the `MemoryEvent` payload (see `worker.ts:129`). This prerequisite is satisfied.
 
 ```typescript
 // packages/plugin-apple-notes/index.ts
@@ -349,13 +348,12 @@ export class AppleNotesPlugin implements KorePlugin {
     const pendingKey = `pending:${event.taskId}`;
 
     // Scan registry for the matching pending entry and resolve it
-    // (requires listExternalKeys or a reverse lookup — see §7)
-    const externalKeys = this.deps.listExternalKeys?.(PLUGIN_NAME) ?? [];
-    for (const key of externalKeys) {
-      const value = this.deps.getMemoryIdByExternalKey(PLUGIN_NAME, key);
-      if (value === pendingKey) {
-        this.deps.setExternalKeyMapping(PLUGIN_NAME, key, event.id);
-        console.log(`[apple-notes] Resolved ${key} → ${event.id}`);
+    // (requires listExternalKeys — see §3 gap note)
+    const entries = this.deps.listExternalKeys?.() ?? [];
+    for (const { externalKey, memoryId } of entries) {
+      if (memoryId === pendingKey) {
+        this.deps.setExternalKeyMapping(externalKey, event.id);
+        console.log(`[apple-notes] Resolved ${externalKey} → ${event.id}`);
         break;
       }
     }
@@ -517,14 +515,15 @@ CREATE TABLE IF NOT EXISTS plugin_key_registry (
 CREATE INDEX idx_plugin_key_memory ON plugin_key_registry(plugin_name, memory_id);
 ```
 
-Exposed to plugins via `PluginStartDeps` (§3) with these methods:
+**Implementation status:** `PluginRegistryRepository` is implemented in `core-api/src/plugin-registry.ts` with full CRUD plus `listByPlugin()`. The `PluginStartDeps` closure in `core-api/src/index.ts` scopes all calls to `plugin.name` automatically. Plugin-facing methods (no `pluginName` arg):
 
 | Method | Purpose |
 |--------|---------|
-| `getMemoryIdByExternalKey(plugin, key)` | Look up Kore ID by external key |
-| `setExternalKeyMapping(plugin, key, memoryId)` | Create or update a mapping |
-| `removeExternalKeyMapping(plugin, key)` | Remove a mapping |
-| `listExternalKeys(plugin)` | Return all external keys for a plugin (needed for delete/update detection and pending resolution) |
+| `getMemoryIdByExternalKey(key)` | Look up Kore ID by external key |
+| `setExternalKeyMapping(key, memoryId)` | Create or update a mapping |
+| `removeExternalKeyMapping(key)` | Remove a mapping |
+| `clearRegistry()` | Remove all mappings for this plugin |
+| `listExternalKeys()` | **Not yet wired** — must be added to `PluginStartDeps` before implementing Apple Notes plugin (maps to `PluginRegistryRepository.listByPlugin()`) |
 
 For the Apple Notes plugin:
 - `plugin_name` = `"apple-notes"`
@@ -701,11 +700,12 @@ Instead of a polling interval, the Notes database could be watched for changes. 
 
 ## 15. Implementation Phases
 
-### Phase 1: Core Infrastructure
-1. Add `start()`/`stop()` lifecycle methods to `KorePlugin` interface in `shared-types`
-2. Add `PluginStartDeps` interface with `enqueue`, `deleteMemory`, `getMemoryIdByExternalKey`, `setExternalKeyMapping`, `removeExternalKeyMapping`
-3. Add `plugin_key_registry` table to `QueueRepository`
-4. Update `core-api/src/index.ts` to call `plugin.start(deps)` and `plugin.stop()` in startup/shutdown
+### Phase 1: Core Infrastructure ✅ (Complete)
+1. ~~Add `start()`/`stop()` lifecycle methods to `KorePlugin` interface in `shared-types`~~ — done
+2. ~~Add `PluginStartDeps` interface with `enqueue`, `deleteMemory`, registry methods~~ — done
+3. ~~Add `plugin_key_registry` table to `QueueRepository`~~ — done (`PluginRegistryRepository`)
+4. ~~Update `core-api/src/index.ts` to call `plugin.start(deps)` and `plugin.stop()` in startup/shutdown~~ — done
+5. **Add `listExternalKeys()` to `PluginStartDeps`** — remaining gap, wire to `PluginRegistryRepository.listByPlugin()`
 
 ### Phase 2: Plugin Package
 5. Create `packages/plugin-apple-notes/` with `package.json`
