@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "exportedAt": "2026-03-16T00:00:00.000Z",
+  "notes": {
+    "2": { "path": "Shopping List.md", "title": "Shopping List", "mtime": 1710000000000, "identifier": "uuid-2" },
+    "3": { "path": "Tasks/Learning Roadmap.md", "title": "Learning Roadmap", "mtime": 1710000000000, "identifier": "uuid-3" },
+    "4": { "path": "Recipes/Baking/Chocolate Cake.md", "title": "Chocolate Cake", "mtime": 1710000000000, "identifier": "uuid-4" },
+    "5": { "path": "Empty Note.md", "title": "Empty Note", "mtime": 1710000000000, "identifier": "uuid-5" }
+  },
+  "attachments": {}
+}
