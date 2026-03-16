@@ -200,8 +200,17 @@ async function shutdown() {
     }
   }
 
-  await qmdClient.closeStore();
-  console.log("QMD store closed");
+  try {
+    await Promise.race([
+      qmdClient.closeStore(),
+      new Promise<void>((_, reject) =>
+        setTimeout(() => reject(new Error("timeout")), 5_000)
+      ),
+    ]);
+    console.log("QMD store closed");
+  } catch {
+    console.warn("QMD store close timed out, forcing exit");
+  }
   closeLogger();
   process.exit(0);
 }
