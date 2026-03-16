@@ -10,6 +10,7 @@ import { showCommand } from "./commands/show.ts";
 import { deleteCommand } from "./commands/delete.ts";
 import { searchCommand } from "./commands/search.ts";
 import { resetCommand } from "./commands/reset.ts";
+import { syncCommand } from "./commands/sync.ts";
 
 // Read version from package.json
 const pkg = await import("../package.json", { with: { type: "json" } });
@@ -115,6 +116,16 @@ program
   .option("--json", "Output results as JSON", false)
   .action(async (query, opts) => {
     await searchCommand(query, opts);
+  });
+
+// ─── sync ───────────────────────────────────────────────────────────────────
+program
+  .command("sync")
+  .description("Trigger Apple Notes sync or check sync status")
+  .option("--status", "Show sync status instead of triggering a sync", false)
+  .option("--json", "Output raw JSON", false)
+  .action(async (opts) => {
+    await syncCommand(opts);
   });
 
 // ─── reset ──────────────────────────────────────────────────────────────────

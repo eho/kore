@@ -75,6 +75,7 @@
       "dependencies": {
         "@kore/an-export": "workspace:*",
         "@kore/shared-types": "workspace:*",
+        "elysia": "^1.2.25",
       },
     },
     "packages/plugin-test": {
