@@ -664,9 +664,12 @@ One optional endpoint for manual control:
 ### 8.4 CLI Addition
 
 ```
-kore consolidate           # Trigger one consolidation cycle manually
-kore list --type insight   # Already works with existing --type filter
+kore consolidate              # Trigger one consolidation cycle manually
+kore consolidate --dry-run    # Show what would be synthesized without writing to disk
+kore list --type insight      # Already works with existing --type filter
 ```
+
+The `--dry-run` flag runs the full pipeline (seed selection, candidate finding, cluster analysis, type classification) but stops before the LLM synthesis call. It prints the proposed cluster: seed memory, candidates with similarity scores, proposed insight type, and confidence estimate. Useful for calibrating thresholds and understanding system behavior without generating insight files.
 
 ### 8.5 Reset Integration
 
