@@ -13,6 +13,7 @@ const TYPE_DIRS: Record<string, string> = {
   media: "media",
   note: "notes",
   person: "people",
+  insight: "insights",
 };
 
 const DEFAULT_POLL_INTERVAL_MS = 5_000;
