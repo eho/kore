@@ -80,6 +80,7 @@ function renderInsightFrontmatter(fm: InsightFrontmatter): string {
 function renderInsightMarkdown(
   frontmatter: InsightFrontmatter,
   synthesis: InsightOutput,
+  cluster: Array<{ memoryId: string; frontmatter: Record<string, any> }>,
 ): string {
   const sections: string[] = [
     renderInsightFrontmatter(frontmatter),
@@ -96,8 +97,10 @@ function renderInsightMarkdown(
     sections.push("No direct connections identified.");
   } else {
     for (const conn of synthesis.connections) {
+      const sourceTitle = cluster.find((c) => c.memoryId === conn.source_id)?.frontmatter?.title ?? "Unknown";
+      const targetTitle = cluster.find((c) => c.memoryId === conn.target_id)?.frontmatter?.title ?? "Unknown";
       sections.push(
-        `- **${conn.source_id}** → **${conn.target_id}**: ${conn.relationship}`
+        `- **${conn.source_id}** ("${sourceTitle}") → **${conn.target_id}** ("${targetTitle}"): ${conn.relationship}`
       );
     }
   }
@@ -126,6 +129,7 @@ function renderInsightMarkdown(
  */
 export async function writeInsight(
   synthesis: InsightOutput,
+  cluster: Array<{ memoryId: string; frontmatter: Record<string, any> }>,
   dataPath: string,
   metadata: WriteInsightMetadata,
 ): Promise<WriteInsightResult> {
@@ -155,7 +159,7 @@ export async function writeInsight(
 
   const filename = buildInsightFilename(insightId, synthesis.title);
   const filePath = join(insightsDir, filename);
-  const content = renderInsightMarkdown(frontmatter, synthesis);
+  const content = renderInsightMarkdown(frontmatter, synthesis, cluster);
 
   await Bun.write(filePath, content);
 

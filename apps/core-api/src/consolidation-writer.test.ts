@@ -35,6 +35,14 @@ function makeSynthesis(overrides: Partial<InsightOutput> = {}): InsightOutput {
   };
 }
 
+function makeCluster() {
+  return [
+    { memoryId: "mem-001", frontmatter: { title: "React Hooks" } },
+    { memoryId: "mem-002", frontmatter: { title: "React Context" } },
+    { memoryId: "mem-003", frontmatter: { title: "Redux" } },
+  ];
+}
+
 function makeMetadata(overrides: Record<string, any> = {}) {
   return {
     category: "qmd://tech/programming/react",
@@ -91,7 +99,7 @@ afterEach(async () => {
 
 describe("writeInsight", () => {
   test("creates insights directory and writes file", async () => {
-    const result = await writeInsight(makeSynthesis(), tmpDir, makeMetadata());
+    const result = await writeInsight(makeSynthesis(), makeCluster(), tmpDir, makeMetadata());
 
     expect(result.insightId).toMatch(/^ins-[a-f0-9]{8}$/);
     expect(result.filePath).toContain("/insights/");
@@ -101,7 +109,7 @@ describe("writeInsight", () => {
   });
 
   test("generates valid InsightFrontmatter", async () => {
-    const result = await writeInsight(makeSynthesis(), tmpDir, makeMetadata());
+    const result = await writeInsight(makeSynthesis(), makeCluster(), tmpDir, makeMetadata());
     const content = await Bun.file(result.filePath).text();
     const fm = parseFrontmatter(content);
 
@@ -120,7 +128,7 @@ describe("writeInsight", () => {
   });
 
   test("frontmatter passes Zod validation", async () => {
-    const result = await writeInsight(makeSynthesis(), tmpDir, makeMetadata());
+    const result = await writeInsight(makeSynthesis(), makeCluster(), tmpDir, makeMetadata());
     const content = await Bun.file(result.filePath).text();
     const fm = parseFrontmatter(content);
 
@@ -130,7 +138,7 @@ describe("writeInsight", () => {
   });
 
   test("includes all required markdown sections", async () => {
-    const result = await writeInsight(makeSynthesis(), tmpDir, makeMetadata());
+    const result = await writeInsight(makeSynthesis(), makeCluster(), tmpDir, makeMetadata());
     const content = await Bun.file(result.filePath).text();
 
     expect(content).toContain("# React State Management Patterns");
@@ -146,17 +154,17 @@ describe("writeInsight", () => {
   });
 
   test("renders connections as structured entries", async () => {
-    const result = await writeInsight(makeSynthesis(), tmpDir, makeMetadata());
+    const result = await writeInsight(makeSynthesis(), makeCluster(), tmpDir, makeMetadata());
     const content = await Bun.file(result.filePath).text();
 
     expect(content).toContain(
-      "- **mem-001** → **mem-002**: both discuss state hooks"
+      `- **mem-001** ("React Hooks") → **mem-002** ("React Context"): both discuss state hooks`
     );
   });
 
   test("handles empty connections array", async () => {
     const synthesis = makeSynthesis({ connections: [] });
-    const result = await writeInsight(synthesis, tmpDir, makeMetadata());
+    const result = await writeInsight(synthesis, makeCluster(), tmpDir, makeMetadata());
     const content = await Bun.file(result.filePath).text();
 
     expect(content).toContain("No direct connections identified.");
@@ -165,7 +173,7 @@ describe("writeInsight", () => {
   test("filename truncated to 60 chars total", async () => {
     const longTitle = "A".repeat(200);
     const synthesis = makeSynthesis({ title: longTitle });
-    const result = await writeInsight(synthesis, tmpDir, makeMetadata());
+    const result = await writeInsight(synthesis, makeCluster(), tmpDir, makeMetadata());
 
     const filename = result.filePath.split("/").pop()!;
     // filename without .md extension should be <= 57 chars (60 - 3 for .md)
@@ -174,7 +182,7 @@ describe("writeInsight", () => {
 
   test("sets supersedes from metadata", async () => {
     const metadata = makeMetadata({ supersedes: ["ins-old12345"] });
-    const result = await writeInsight(makeSynthesis(), tmpDir, metadata);
+    const result = await writeInsight(makeSynthesis(), makeCluster(), tmpDir, metadata);
     const content = await Bun.file(result.filePath).text();
     const fm = parseFrontmatter(content);
 
@@ -182,7 +190,7 @@ describe("writeInsight", () => {
   });
 
   test("date_saved and last_synthesized_at are valid ISO timestamps", async () => {
-    const result = await writeInsight(makeSynthesis(), tmpDir, makeMetadata());
+    const result = await writeInsight(makeSynthesis(), makeCluster(), tmpDir, makeMetadata());
     const content = await Bun.file(result.filePath).text();
     const fm = parseFrontmatter(content);
 
@@ -268,7 +276,7 @@ describe("checkDedup", () => {
 describe("supersede", () => {
   test("sets superseded_by and status retired on old insight", async () => {
     // Write an initial insight file
-    const result = await writeInsight(makeSynthesis(), tmpDir, makeMetadata());
+    const result = await writeInsight(makeSynthesis(), makeCluster(), tmpDir, makeMetadata());
 
     // Supersede it
     await supersede(result.filePath, "ins-new12345");
@@ -281,7 +289,7 @@ describe("supersede", () => {
   });
 
   test("preserves existing frontmatter fields", async () => {
-    const result = await writeInsight(makeSynthesis(), tmpDir, makeMetadata());
+    const result = await writeInsight(makeSynthesis(), makeCluster(), tmpDir, makeMetadata());
 
     await supersede(result.filePath, "ins-new12345");
 
@@ -295,7 +303,7 @@ describe("supersede", () => {
   });
 
   test("preserves body content", async () => {
-    const result = await writeInsight(makeSynthesis(), tmpDir, makeMetadata());
+    const result = await writeInsight(makeSynthesis(), makeCluster(), tmpDir, makeMetadata());
 
     await supersede(result.filePath, "ins-new12345");
 
@@ -306,7 +314,7 @@ describe("supersede", () => {
   });
 
   test("does not duplicate superseded_by on repeated calls", async () => {
-    const result = await writeInsight(makeSynthesis(), tmpDir, makeMetadata());
+    const result = await writeInsight(makeSynthesis(), makeCluster(), tmpDir, makeMetadata());
 
     await supersede(result.filePath, "ins-new12345");
     await supersede(result.filePath, "ins-new12345");
