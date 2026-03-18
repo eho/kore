@@ -8,6 +8,10 @@ interface MemorySummary {
   source: string;
   date_saved: string;
   tags: string[];
+  // Insight-specific fields
+  insight_type?: string;
+  status?: string;
+  source_ids_count?: number;
 }
 
 interface ListOpts {
@@ -44,20 +48,45 @@ export async function listCommand(opts: ListOpts): Promise<void> {
     return;
   }
 
-  const table = new Table({
-    head: ["ID", "Type", "Title", "Source", "Date Saved"],
-    style: { head: ["cyan"] },
-  });
+  const isInsightList = opts.type === "insight";
 
-  for (const m of memories) {
-    table.push([
-      m.id.slice(0, 8),
-      m.type,
-      m.title.slice(0, 40) + (m.title.length > 40 ? "…" : ""),
-      m.source,
-      m.date_saved ? new Date(m.date_saved).toLocaleDateString() : "",
-    ]);
+  if (isInsightList) {
+    const table = new Table({
+      head: ["ID", "Title", "Insight Type", "Status", "Confidence", "Sources", "Tags", "Date Saved"],
+      style: { head: ["cyan"] },
+    });
+
+    for (const m of memories) {
+      const tags = m.tags.join(", ");
+      table.push([
+        m.id.slice(0, 12),
+        m.title.slice(0, 30) + (m.title.length > 30 ? "…" : ""),
+        m.insight_type ?? "",
+        m.status ?? "",
+        (m as any).confidence !== undefined ? String((m as any).confidence) : "",
+        m.source_ids_count !== undefined ? String(m.source_ids_count) : "",
+        tags.slice(0, 20) + (tags.length > 20 ? "…" : ""),
+        m.date_saved ? new Date(m.date_saved).toLocaleDateString() : "",
+      ]);
+    }
+
+    process.stdout.write(table.toString() + "\n");
+  } else {
+    const table = new Table({
+      head: ["ID", "Type", "Title", "Source", "Date Saved"],
+      style: { head: ["cyan"] },
+    });
+
+    for (const m of memories) {
+      table.push([
+        m.id.slice(0, 8),
+        m.type,
+        m.title.slice(0, 40) + (m.title.length > 40 ? "…" : ""),
+        m.source,
+        m.date_saved ? new Date(m.date_saved).toLocaleDateString() : "",
+      ]);
+    }
+
+    process.stdout.write(table.toString() + "\n");
   }
-
-  process.stdout.write(table.toString() + "\n");
 }

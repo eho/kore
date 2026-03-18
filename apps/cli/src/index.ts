@@ -78,7 +78,7 @@ program
 program
   .command("list")
   .description("List stored memories")
-  .option("--type <type>", "Filter by memory type (place, media, note, person)")
+  .option("--type <type>", "Filter by memory type (place, media, note, person, insight)")
   .option("--limit <n>", "Maximum number of results", "20")
   .option("--json", "Output raw JSON", false)
   .action(async (opts) => {
