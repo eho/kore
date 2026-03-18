@@ -1,6 +1,6 @@
 # Consolidation System: Detailed Architecture & Design
 
-_2026-03-14 · Updated 2026-03-17_
+_2026-03-14 · Updated 2026-03-18_
 
 This document specifies the design of Kore's background memory consolidation system — the mechanism by which isolated memories are connected, synthesized, and elevated into higher-order knowledge over time. It takes the conceptual insight from the always-on-memory-agent's "sleep cycle" and re-architects it for Kore's file-system-native, QMD-indexed, local-first environment.
 
@@ -1037,3 +1037,27 @@ See §10.5.3 for detailed analysis. Rejected because age alone is not a quality 
 31. Test with real memory corpus across different category distributions
 32. Verify confidence scores produce meaningful ranking differentiation
 33. Verify startup reconciliation correctly heals partial state
+
+---
+
+## 12. Implementation Status
+
+**Status: Complete** (as of 2026-03-18)
+
+All phases (1–5) have been implemented across CON-001 through CON-007. End-to-end integration tests in `e2e/consolidation/` verify the full pipeline including:
+
+- Happy path consolidation (seed → candidates → synthesis → insight file + source frontmatter updates)
+- Dry-run mode (candidate preview without LLM synthesis or file writes)
+- Cluster-too-small rejection (fewer than 3 candidates)
+- Reactive lifecycle transitions (source deletion → evolving at ≥50% integrity → degraded at <50%)
+- Retired insight filtering in search results
+- Insight visibility in list/show/search commands
+
+### Calibration Notes
+
+- **`minSimilarityScore = 0.45`**: Works well with QMD's BM25 fallback for memories with overlapping keywords. May need tuning upward if hybrid search with embeddings produces higher baseline scores.
+- **`minClusterSize = 3`**: Prevents low-quality synthesis from pairs. Empirically, clusters of 3–5 produce the most coherent insights; clusters of 6–8 tend toward overly broad summaries.
+- **`cooldownDays = 7`**: Appropriate for typical usage patterns (a few memories per day). Users ingesting large batches may want to lower this temporarily.
+- **`relevanceThreshold = 0.5`**: Controls reactive re-synthesis sensitivity. Lower values cause more frequent re-evaluation; higher values risk missing relevant new evidence.
+- **Confidence formula** (`§10.5.2`): The revised formula `(avgSimilarity * 0.5 + sizeFactor * 0.5) * reinforcement * sourceIntegrity` produces scores in the 0.3–0.8 range for typical clusters, with meaningful differentiation between strong and weak clusters.
+- **Source integrity thresholds** (50% for degraded, 0% for retired): Work well for clusters of 3–5 sources. For larger clusters (6–8), even 50% remaining sources may represent enough context for a valid insight — consider a sliding threshold in future iterations.
