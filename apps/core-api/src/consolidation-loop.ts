@@ -11,7 +11,7 @@ import {
   classifyCluster,
   buildConsolidationQuery,
 } from "./consolidation-candidate-finder";
-import type { SeedMemory, CandidateResult } from "./consolidation-candidate-finder";
+import type { SeedMemory, CandidateResult, CandidateDebugInfo } from "./consolidation-candidate-finder";
 import type { ClusterMember } from "./consolidation-synthesizer";
 import { synthesizeInsight, computeInsightConfidence } from "./consolidation-synthesizer";
 import {
@@ -46,6 +46,7 @@ export interface ConsolidationCycleResult {
   seed?: { id: string; title: string };
   clusterSize?: number;
   candidateCount?: number;
+  debug?: CandidateDebugInfo;
 }
 
 export interface DryRunResult {
@@ -55,6 +56,7 @@ export interface DryRunResult {
   proposedInsightType?: string;
   estimatedConfidence?: number;
   candidateCount?: number;
+  debug?: CandidateDebugInfo;
 }
 
 export interface ConsolidationHandle {
@@ -183,7 +185,11 @@ async function enrichCandidates(
   const enriched: CandidateResult[] = [];
   for (const c of candidates) {
     const id = memoryIndex.getIdByPath(c.filePath);
-    if (!id) continue;
+
+    if (!id) {
+      console.log(`[consolidation] Candidate dropped: no memoryIndex match for QMD path "${c.filePath}"`);
+      continue;
+    }
     try {
       const content = await Bun.file(c.filePath).text();
       const fm = parseFrontmatter(content);
@@ -322,6 +328,7 @@ export async function runConsolidationCycle(deps: ConsolidationDeps): Promise<Co
   // 1. Select seed
   const seedResult = tracker.selectSeed(cooldownDays, maxSynthesisAttempts);
   if (!seedResult) {
+    console.log("[consolidation] No eligible seed found in tracker");
     return { status: "no_seed" };
   }
 
@@ -330,17 +337,23 @@ export async function runConsolidationCycle(deps: ConsolidationDeps): Promise<Co
   // 2. Load seed memory
   const seedPath = memoryIndex.get(seedId);
   if (!seedPath) {
+    console.log(`[consolidation] Seed ${seedId} not found in memory index, marking failed`);
     tracker.markFailed(seedId, maxSynthesisAttempts);
     return { status: "no_seed" };
   }
 
   const seed = await loadSeedMemory(seedPath);
   if (!seed) {
+    console.log(`[consolidation] Failed to load seed file at ${seedPath}, marking failed`);
     tracker.markFailed(seedId, maxSynthesisAttempts);
     return { status: "no_seed" };
   }
 
+  console.log(`[consolidation] Selected seed: "${seed.title}" (${seedId}, isReeval=${isReeval})`);
+  console.log(`[consolidation] Seed has ${seed.distilledItems.length} distilled item(s), type=${seed.type}, category=${seed.category}`);
+
   let candidates: CandidateResult[];
+  let candidateDebug: CandidateDebugInfo | undefined;
   let existingInsightId: string | undefined;
   let reinforcementCount = 0;
 
@@ -369,12 +382,14 @@ export async function runConsolidationCycle(deps: ConsolidationDeps): Promise<Co
     }
 
     // Search QMD for additional candidates using insight's title + distilled items
-    const rawCandidates = await findCandidates(
+    const { candidates: rawCandidates, debug } = await findCandidates(
       { ...seed, id: seedId },
       qmdSearch,
       { maxClusterSize, minSimilarityScore },
     );
+    candidateDebug = debug;
     candidates = await enrichCandidates(rawCandidates, memoryIndex);
+    console.log(`[consolidation] Enriched ${rawCandidates.length} → ${candidates.length} candidate(s) (${rawCandidates.length - candidates.length} missing from memoryIndex)`);
 
     // Merge remaining known sources (if not already in candidates)
     const candidateIds = new Set(candidates.map((c) => c.memoryId));
@@ -390,16 +405,19 @@ export async function runConsolidationCycle(deps: ConsolidationDeps): Promise<Co
     }
   } else {
     // 3b. New seed path
-    const rawCandidates = await findCandidates(seed, qmdSearch, { maxClusterSize, minSimilarityScore });
+    const { candidates: rawCandidates, debug } = await findCandidates(seed, qmdSearch, { maxClusterSize, minSimilarityScore });
+    candidateDebug = debug;
     candidates = await enrichCandidates(rawCandidates, memoryIndex);
+    console.log(`[consolidation] Enriched ${rawCandidates.length} → ${candidates.length} candidate(s) (${rawCandidates.length - candidates.length} missing from memoryIndex)`);
   }
 
   // 4. Validate cluster size
   const validation = validateCluster(seed, candidates, { minClusterSize, maxClusterSize });
   if (!validation.valid) {
+    console.log(`[consolidation] Cluster validation failed: ${validation.reason}`);
     if (isReeval) {
       tracker.markRetired(seedId);
-      return { status: "retired_reeval", seed: { id: seedId, title: seed.title } };
+      return { status: "retired_reeval", seed: { id: seedId, title: seed.title }, debug: candidateDebug };
     }
     // cluster_too_small is not a synthesis failure — the memory just lacks
     // neighbors yet. Cool it down so it re-queues after cooldownDays rather
@@ -409,6 +427,7 @@ export async function runConsolidationCycle(deps: ConsolidationDeps): Promise<Co
       status: "cluster_too_small",
       seed: { id: seedId, title: seed.title },
       candidateCount: candidates.length,
+      debug: candidateDebug,
     };
   }
 
@@ -570,7 +589,7 @@ export async function runConsolidationDryRun(deps: ConsolidationDeps): Promise<D
   }
 
   // 2. Find candidates
-  const rawCandidates = await findCandidates(seed, qmdSearch, { maxClusterSize, minSimilarityScore });
+  const { candidates: rawCandidates, debug: candidateDebug } = await findCandidates(seed, qmdSearch, { maxClusterSize, minSimilarityScore });
   const candidates = await enrichCandidates(rawCandidates, memoryIndex);
 
   // 3. Validate cluster
@@ -580,6 +599,7 @@ export async function runConsolidationDryRun(deps: ConsolidationDeps): Promise<D
       status: "cluster_too_small",
       seed: { id: seedId, title: seed.title },
       candidateCount: candidates.length,
+      debug: candidateDebug,
     };
   }
 

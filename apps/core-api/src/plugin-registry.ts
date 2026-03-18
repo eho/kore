@@ -69,6 +69,10 @@ export class PluginRegistryRepository {
     );
   }
 
+  clearAll(): void {
+    this.db.run("DELETE FROM plugin_key_registry");
+  }
+
   listByPlugin(pluginName: string): Array<{ externalKey: string; memoryId: string; metadata?: string }> {
     const rows = this.db
       .query(

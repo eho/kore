@@ -18,20 +18,32 @@ export async function apiFetch<T>(
     headers["Authorization"] = `Bearer ${API_KEY}`;
   }
 
-  try {
-    const res = await fetch(url, { ...options, headers });
-    if (!res.ok) {
-      const text = await res.text().catch(() => res.statusText);
-      return { ok: false, status: res.status, message: text };
+  const MAX_RETRIES = 1;
+  let lastError: unknown;
+
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      const res = await fetch(url, { ...options, headers });
+      if (!res.ok) {
+        const text = await res.text().catch(() => res.statusText);
+        return { ok: false, status: res.status, message: text };
+      }
+      const data = (await res.json()) as T;
+      return { ok: true, data };
+    } catch (err: unknown) {
+      lastError = err;
+      if (attempt < MAX_RETRIES) {
+        // Brief delay before retry for transient errors
+        await new Promise((r) => setTimeout(r, 1000));
+      }
     }
-    const data = (await res.json()) as T;
-    return { ok: true, data };
-  } catch (err: unknown) {
-    // Treat any fetch/network error as a connection failure
-    return {
-      ok: false,
-      status: 0,
-      message: `Cannot reach Kore API at ${API_URL}. Is the server running?`,
-    };
   }
+
+  // All retries exhausted
+  const detail = lastError instanceof Error ? lastError.message : String(lastError);
+  return {
+    ok: false,
+    status: 0,
+    message: `Cannot reach Kore API at ${API_URL} (${detail}). Is the server running?`,
+  };
 }

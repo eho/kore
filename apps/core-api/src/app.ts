@@ -19,6 +19,7 @@ import type { HybridQueryResult, SearchOptions } from "@kore/qmd-client";
 import type { ConsolidationTracker } from "./consolidation-tracker";
 import type { ConsolidationDeps } from "./consolidation-loop";
 import { runConsolidationCycle, runConsolidationDryRun, buildConsolidationDeps } from "./consolidation-loop";
+import type { PluginRegistryRepository } from "./plugin-registry";
 
 // ─── Zod Schemas for request validation ─────────────────────────────
 
@@ -228,6 +229,7 @@ export interface AppDeps {
   memoryIndex?: MemoryIndex;
   eventDispatcher?: EventDispatcher;
   consolidationTracker?: ConsolidationTracker;
+  pluginRegistry?: PluginRegistryRepository;
 }
 
 export function createApp(deps: AppDeps = {}) {
@@ -451,8 +453,11 @@ export function createApp(deps: AppDeps = {}) {
         deps.consolidationTracker.truncateAll();
       }
 
-      // Clear task queue
+      // Clear task queue and plugin registry
       const deletedTasks = queue.clearAll();
+      if (deps.pluginRegistry) {
+        deps.pluginRegistry.clearAll();
+      }
 
       // Reset QMD index (with timeout to avoid hanging if background ops are in-flight)
       const qmdDbPath = resolveQmdDbPath();

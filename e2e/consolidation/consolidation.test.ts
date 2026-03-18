@@ -207,7 +207,7 @@ beforeAll(async () => {
   eventDispatcher = new EventDispatcher();
   const handlers = createConsolidationEventHandlers(
     tracker,
-    mockSearchFn,
+    mockSearchFn as any,
     memoryIndex,
     { relevanceThreshold: 0.5, cooldownDays: 0 },
   );
@@ -228,7 +228,7 @@ beforeAll(async () => {
   app = createApp({
     dataPath: tempDir,
     queue,
-    searchFn: mockSearchFn,
+    searchFn: mockSearchFn as any,
     memoryIndex,
     eventDispatcher,
     consolidationTracker: tracker,

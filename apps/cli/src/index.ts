@@ -135,9 +135,10 @@ program
   .description("Trigger a consolidation cycle to synthesize related memories into insights")
   .option("--dry-run", "Preview consolidation without running LLM synthesis", false)
   .option("--reset-failed", "Reset failed tracker entries before running", false)
+  .option("-v, --verbose", "Show detailed diagnostic info (query, scores, filter stats)", false)
   .option("--json", "Output raw JSON", false)
   .action(async (opts) => {
-    await consolidateCommand({ dryRun: opts.dryRun, resetFailed: opts.resetFailed, json: opts.json });
+    await consolidateCommand({ dryRun: opts.dryRun, resetFailed: opts.resetFailed, json: opts.json, verbose: opts.verbose });
   });
 
 // ─── reset ──────────────────────────────────────────────────────────────────

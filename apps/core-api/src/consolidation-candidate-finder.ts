@@ -20,6 +20,15 @@ export interface CandidateFinderOptions {
   minSimilarityScore?: number;  // default: 0.45
 }
 
+export interface CandidateDebugInfo {
+  query: string;
+  rawResultCount: number;
+  filteredOutSelf: number;
+  filteredOutInsights: number;
+  afterFilterCount: number;
+  topScores: number[];
+}
+
 export interface SeedMemory {
   id: string;
   title: string;
@@ -49,13 +58,20 @@ export async function findCandidates(
   seed: SeedMemory,
   qmdSearch: QmdSearchFn,
   options: CandidateFinderOptions = {}
-): Promise<CandidateResult[]> {
+): Promise<{ candidates: CandidateResult[]; debug: CandidateDebugInfo }> {
   const {
     maxClusterSize = 8,
     minSimilarityScore = 0.45,
   } = options;
 
   const query = buildConsolidationQuery(seed);
+
+  console.log(
+    `[consolidation] Search query for seed "${seed.title}": "${query.slice(0, 120)}${query.length > 120 ? "..." : ""}"`,
+  );
+  console.log(
+    `[consolidation] Search params: minScore=${minSimilarityScore}, limit=${maxClusterSize + 5}, collection=memories`,
+  );
 
   const results = await qmdSearch(query, {
     limit: maxClusterSize + 5,
@@ -64,12 +80,32 @@ export async function findCandidates(
     minScore: minSimilarityScore,
   });
 
-  return results
+  console.log(`[consolidation] QMD returned ${results.length} raw result(s)`);
+  if (results.length > 0) {
+    for (const r of results.slice(0, 5)) {
+      const basename = r.file.split("/").pop() ?? r.file;
+      console.log(`[consolidation]   - ${basename} (score: ${r.score.toFixed(3)}, title: "${r.title ?? "?"}"`);
+    }
+    if (results.length > 5) {
+      console.log(`[consolidation]   ... and ${results.length - 5} more`);
+    }
+  }
+
+  let filteredOutSelf = 0;
+  let filteredOutInsights = 0;
+
+  const candidates = results
     .filter((r) => {
-      // Exclude the seed itself (match by file path)
-      if (r.file === seed.filePath) return false;
+      // Exclude the seed itself
+      if (r.file === seed.filePath) {
+        filteredOutSelf++;
+        return false;
+      }
       // Exclude insight-type memories (no meta-synthesis)
-      if (r.file.includes("/insights/")) return false;
+      if (r.file.includes("/insights/")) {
+        filteredOutInsights++;
+        return false;
+      }
       return true;
     })
     .map((r) => ({
@@ -78,6 +114,23 @@ export async function findCandidates(
       score: r.score,
       frontmatter: {},
     }));
+
+  if (filteredOutSelf > 0 || filteredOutInsights > 0) {
+    console.log(
+      `[consolidation] Filtered out: ${filteredOutSelf} self, ${filteredOutInsights} insight(s) → ${candidates.length} candidate(s) remain`,
+    );
+  }
+
+  const debug: CandidateDebugInfo = {
+    query,
+    rawResultCount: results.length,
+    filteredOutSelf,
+    filteredOutInsights,
+    afterFilterCount: candidates.length,
+    topScores: results.slice(0, 5).map((r) => r.score),
+  };
+
+  return { candidates, debug };
 }
 
 /**

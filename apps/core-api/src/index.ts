@@ -147,6 +147,7 @@ let app = createApp({
   qmdStatus,
   searchFn: qmdClient.search,
   consolidationTracker,
+  pluginRegistry,
 });
 
 // Mount plugin routes

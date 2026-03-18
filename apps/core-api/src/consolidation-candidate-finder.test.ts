@@ -72,7 +72,7 @@ describe("findCandidates", () => {
       { file: "/data/notes/other.md", title: "Other", score: 0.8, bestChunk: "" },
     ] as HybridQueryResult[];
 
-    const results = await findCandidates(seed, mockSearch);
+    const { candidates: results } = await findCandidates(seed, mockSearch);
     expect(results).toHaveLength(1);
     expect(results[0].filePath).toBe("/data/notes/other.md");
   });
@@ -84,7 +84,7 @@ describe("findCandidates", () => {
       { file: "/data/notes/other.md", title: "Other", score: 0.7, bestChunk: "" },
     ] as HybridQueryResult[];
 
-    const results = await findCandidates(seed, mockSearch);
+    const { candidates: results } = await findCandidates(seed, mockSearch);
     expect(results).toHaveLength(1);
     expect(results[0].filePath).toBe("/data/notes/other.md");
   });
