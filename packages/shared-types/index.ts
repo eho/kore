@@ -3,7 +3,7 @@ import type { Elysia } from "elysia";
 
 // ─── Zod Schemas (data_schema.md §3.1) ─────────────────────────────
 
-export const MemoryTypeEnum = z.enum(["place", "media", "note", "person"]);
+export const MemoryTypeEnum = z.enum(["place", "media", "note", "person", "insight"]);
 export type MemoryType = z.infer<typeof MemoryTypeEnum>;
 
 export const IntentEnum = z.enum(["recommendation", "reference", "personal-experience", "aspiration", "how-to"]);
@@ -42,9 +42,56 @@ export const BaseFrontmatterSchema = z.object({
 
   /** LLM extraction confidence score (0–1) */
   confidence: z.number().min(0).max(1).optional(),
+
+  /** ISO timestamp — added to source memories after consolidation */
+  consolidated_at: z.string().datetime().optional(),
+
+  /** Insight IDs that reference this source memory */
+  insight_refs: z.array(z.string()).optional(),
 });
 
 export type BaseFrontmatter = z.infer<typeof BaseFrontmatterSchema>;
+
+// ─── Insight Schemas (consolidation_system_design.md §3.2, §5.4, §10.7) ─
+
+export const InsightTypeEnum = z.enum(["cluster_summary", "evolution", "contradiction", "connection"]);
+export type InsightType = z.infer<typeof InsightTypeEnum>;
+
+export const InsightStatusEnum = z.enum(["active", "evolving", "degraded", "retired", "failed"]);
+export type InsightStatus = z.infer<typeof InsightStatusEnum>;
+
+export const InsightFrontmatterSchema = z.object({
+  id: z.string(),
+  type: z.literal("insight"),
+  category: z.string().startsWith("qmd://"),
+  date_saved: z.string().datetime(),
+  source: z.literal("kore_synthesis"),
+  tags: z.array(z.string()).max(5),
+  insight_type: InsightTypeEnum,
+  source_ids: z.array(z.string()),
+  supersedes: z.array(z.string()),
+  superseded_by: z.array(z.string()),
+  confidence: z.number().min(0).max(1),
+  status: InsightStatusEnum.default("active"),
+  reinforcement_count: z.number().default(0),
+  re_eval_reason: z.enum(["new_evidence", "source_deleted"]).nullable().default(null),
+  last_synthesized_at: z.string().datetime(),
+});
+export type InsightFrontmatter = z.infer<typeof InsightFrontmatterSchema>;
+
+export const InsightOutputSchema = z.object({
+  title: z.string(),
+  insight_type: InsightTypeEnum,
+  synthesis: z.string(),
+  connections: z.array(z.object({
+    source_id: z.string(),
+    target_id: z.string(),
+    relationship: z.string(),
+  })),
+  distilled_items: z.array(z.string()).min(1).max(7),
+  tags: z.array(z.string()).min(1).max(5),
+});
+export type InsightOutput = z.infer<typeof InsightOutputSchema>;
 
 // ─── LLM Extraction Schema (data_schema.md §3.2) ───────────────────
 

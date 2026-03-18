@@ -54,6 +54,7 @@ const TYPE_DIRS: Record<string, string> = {
   media: "media",
   note: "notes",
   person: "people",
+  insight: "insights",
 };
 
 export async function ensureDataDirectories(dataPath: string): Promise<void> {

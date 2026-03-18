@@ -1,7 +1,7 @@
 import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 
-const TYPE_DIRS = ["places", "media", "notes", "people"];
+const TYPE_DIRS = ["places", "media", "notes", "people", "insights"];
 
 /**
  * In-memory Map<id, filePath> index built by scanning all .md files
