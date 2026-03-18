@@ -10,6 +10,14 @@ import { startEmbedInterval } from "./embedder";
 import { MemoryIndex } from "./memory-index";
 import { EventDispatcher } from "./event-dispatcher";
 import { deleteMemoryById } from "./delete-memory";
+import { ConsolidationTracker } from "./consolidation-tracker";
+import { createConsolidationEventHandlers } from "./consolidation-event-handlers";
+import {
+  startConsolidationLoop,
+  buildConsolidationDeps,
+  reconcileOnStartup,
+} from "./consolidation-loop";
+import type { ConsolidationHandle } from "./consolidation-loop";
 import * as qmdClient from "@kore/qmd-client";
 import type { KorePlugin, PluginStartDeps } from "@kore/shared-types";
 
@@ -62,6 +70,27 @@ console.log(`Memory index built: ${memoryIndex.size} files indexed`);
 
 const eventDispatcher = new EventDispatcher();
 
+// ── Initialize consolidation tracker & event handlers ───────────────
+const consolidationTracker = new ConsolidationTracker(queue.getDatabase());
+
+const consolidationHandlers = createConsolidationEventHandlers(
+  consolidationTracker,
+  qmdClient.search,
+  memoryIndex,
+  {
+    relevanceThreshold: 0.5,
+    cooldownDays: Number(process.env.CONSOLIDATION_COOLDOWN_DAYS) || 7,
+  },
+);
+
+// Register consolidation handlers as a pseudo-plugin
+const consolidationPlugin: KorePlugin = {
+  name: "consolidation",
+  onMemoryIndexed: (event) => consolidationHandlers.onMemoryIndexed(event),
+  onMemoryDeleted: (event) => consolidationHandlers.onMemoryDeleted(event),
+  onMemoryUpdated: (event) => consolidationHandlers.onMemoryUpdated(event),
+};
+
 // ── Initialize plugins ──────────────────────────────────────────────────
 
 // Plugin modules are imported explicitly (code-driven, not config-driven).
@@ -107,8 +136,8 @@ for (const plugin of plugins) {
   }
 }
 
-// Register all plugins with EventDispatcher
-eventDispatcher.registerPlugins(plugins);
+// Register all plugins (including consolidation pseudo-plugin) with EventDispatcher
+eventDispatcher.registerPlugins([consolidationPlugin, ...plugins]);
 
 let app = createApp({
   dataPath,
@@ -170,6 +199,22 @@ console.log("Kore file watcher started (watching for .md changes)");
 const embedder = startEmbedInterval();
 console.log("Kore embed interval started");
 
+// ── Start consolidation loop (step 10, after embedder) ──────────────
+
+const consolidationDeps = buildConsolidationDeps({
+  dataPath,
+  qmdSearch: qmdClient.search,
+  tracker: consolidationTracker,
+  memoryIndex,
+  eventDispatcher,
+});
+
+// Run startup reconciliation before starting loop
+await reconcileOnStartup({ dataPath, tracker: consolidationTracker, memoryIndex });
+
+const consolidation = startConsolidationLoop(consolidationDeps);
+console.log("Kore consolidation loop started");
+
 // ── Graceful shutdown ───────────────────────────────────────────────────
 
 const PLUGIN_STOP_TIMEOUT_MS = 5_000;
@@ -179,6 +224,7 @@ async function shutdown() {
   watcher.stop();
   embedder.stop();
   worker.stop();
+  await consolidation.stop();
 
   // Stop plugins gracefully with timeout
   for (const plugin of plugins) {
