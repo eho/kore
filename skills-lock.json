@@ -24,7 +24,7 @@
     "user-story-reviewer": {
       "source": "eho/agent-skills",
       "sourceType": "github",
-      "computedHash": "bb57f3c74e524e224973d5d35f2c6a435cd272227b287ec03d270215700dd827"
+      "computedHash": "e8bb2235fa93462bd3ce4d8f92e432bb1d22644c8fb30a1cf5dbda7e369a69bd"
     }
   }
 }
