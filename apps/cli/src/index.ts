@@ -11,6 +11,7 @@ import { deleteCommand } from "./commands/delete.ts";
 import { searchCommand } from "./commands/search.ts";
 import { resetCommand } from "./commands/reset.ts";
 import { syncCommand } from "./commands/sync.ts";
+import { consolidateCommand } from "./commands/consolidate.ts";
 
 // Read version from package.json
 const pkg = await import("../package.json", { with: { type: "json" } });
@@ -126,6 +127,16 @@ program
   .option("--json", "Output raw JSON", false)
   .action(async (opts) => {
     await syncCommand(opts);
+  });
+
+// ─── consolidate ────────────────────────────────────────────────────────────
+program
+  .command("consolidate")
+  .description("Trigger a consolidation cycle to synthesize related memories into insights")
+  .option("--dry-run", "Preview consolidation without running LLM synthesis", false)
+  .option("--json", "Output raw JSON", false)
+  .action(async (opts) => {
+    await consolidateCommand({ dryRun: opts.dryRun, json: opts.json });
   });
 
 // ─── reset ──────────────────────────────────────────────────────────────────
