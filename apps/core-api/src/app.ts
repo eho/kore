@@ -16,6 +16,9 @@ import { MemoryIndex } from "./memory-index";
 import { EventDispatcher } from "./event-dispatcher";
 import { deleteMemoryById } from "./delete-memory";
 import type { HybridQueryResult, SearchOptions } from "@kore/qmd-client";
+import type { ConsolidationTracker } from "./consolidation-tracker";
+import type { ConsolidationDeps } from "./consolidation-loop";
+import { runConsolidationCycle, runConsolidationDryRun, buildConsolidationDeps } from "./consolidation-loop";
 
 // ─── Zod Schemas for request validation ─────────────────────────────
 
@@ -193,6 +196,7 @@ export interface AppDeps {
   dataPath?: string;
   memoryIndex?: MemoryIndex;
   eventDispatcher?: EventDispatcher;
+  consolidationTracker?: ConsolidationTracker;
 }
 
 export function createApp(deps: AppDeps = {}) {
@@ -435,6 +439,37 @@ export function createApp(deps: AppDeps = {}) {
         return { error: "Memory not found", code: "NOT_FOUND" };
       }
       return { status: "deleted", id: params.id };
+    })
+    // ─── Consolidate ──────────────────────────────────────────────
+    .post("/api/v1/consolidate", async ({ query, set }) => {
+      const tracker = deps.consolidationTracker;
+      if (!tracker || !searchFn) {
+        set.status = 503;
+        return { error: "Consolidation service not available" };
+      }
+
+      const resetFailed = query.reset_failed === "true";
+      const dryRun = query.dry_run === "true";
+
+      if (resetFailed) {
+        tracker.resetFailed();
+      }
+
+      const consolidationDeps = buildConsolidationDeps({
+        dataPath,
+        qmdSearch: searchFn,
+        tracker,
+        memoryIndex,
+        eventDispatcher,
+      });
+
+      if (dryRun) {
+        const result = await runConsolidationDryRun(consolidationDeps);
+        return result;
+      }
+
+      const result = await runConsolidationCycle(consolidationDeps);
+      return result;
     })
     // ─── Update Memory ────────────────────────────────────────────
     .put("/api/v1/memory/:id", async ({ params, body, set }) => {
