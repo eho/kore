@@ -52,18 +52,20 @@ export async function listCommand(opts: ListOpts): Promise<void> {
 
   if (isInsightList) {
     const table = new Table({
-      head: ["ID", "Title", "Insight Type", "Status", "Confidence", "Sources", "Date Saved"],
+      head: ["ID", "Title", "Insight Type", "Status", "Confidence", "Sources", "Tags", "Date Saved"],
       style: { head: ["cyan"] },
     });
 
     for (const m of memories) {
+      const tags = m.tags.join(", ");
       table.push([
         m.id.slice(0, 12),
-        m.title.slice(0, 40) + (m.title.length > 40 ? "…" : ""),
+        m.title.slice(0, 30) + (m.title.length > 30 ? "…" : ""),
         m.insight_type ?? "",
         m.status ?? "",
         (m as any).confidence !== undefined ? String((m as any).confidence) : "",
         m.source_ids_count !== undefined ? String(m.source_ids_count) : "",
+        tags.slice(0, 20) + (tags.length > 20 ? "…" : ""),
         m.date_saved ? new Date(m.date_saved).toLocaleDateString() : "",
       ]);
     }
