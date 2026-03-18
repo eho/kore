@@ -327,4 +327,44 @@ describe("reconcileOnStartup", () => {
     const status = tracker.getStatus("ins-missing1");
     expect(status?.status).toBe("retired");
   });
+
+  test("backfills pre-existing memories not yet in tracker", async () => {
+    // Write memories to disk and register in memoryIndex, but NOT in tracker
+    const notesDir = join(tempDir, "notes");
+    await mkdir(notesDir, { recursive: true });
+    for (const id of ["mem-backfill-1", "mem-backfill-2"]) {
+      const filePath = join(notesDir, `${id}.md`);
+      await Bun.write(filePath, makeMemoryContent(id, `Backfill ${id}`));
+      memoryIndex.set(id, filePath);
+    }
+
+    // Verify they are NOT in the tracker
+    expect(tracker.getStatus("mem-backfill-1")).toBeNull();
+    expect(tracker.getStatus("mem-backfill-2")).toBeNull();
+
+    await reconcileOnStartup({ dataPath: tempDir, tracker, memoryIndex });
+
+    // Now they should be in the tracker as pending
+    const s1 = tracker.getStatus("mem-backfill-1");
+    expect(s1).not.toBeNull();
+    expect(s1?.status).toBe("pending");
+    expect(s1?.memory_type).toBe("note");
+
+    const s2 = tracker.getStatus("mem-backfill-2");
+    expect(s2).not.toBeNull();
+    expect(s2?.status).toBe("pending");
+  });
+
+  test("backfill is a no-op for memories already tracked", async () => {
+    // Add a memory to both the index and tracker
+    const filePath = await writeTestMemory("mem-already-tracked", "Already Tracked");
+    tracker.upsertMemory("mem-already-tracked", "note");
+    tracker.markConsolidated("mem-already-tracked");
+
+    await reconcileOnStartup({ dataPath: tempDir, tracker, memoryIndex });
+
+    // Should still be active (not reset to pending)
+    const status = tracker.getStatus("mem-already-tracked");
+    expect(status?.status).toBe("active");
+  });
 });

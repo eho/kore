@@ -276,6 +276,28 @@ export async function reconcileOnStartup(deps: Pick<ConsolidationDeps, "dataPath
       console.log(`[consolidation] Reconciliation: added tracker entry for ${id}`);
     }
   }
+
+  // Backfill: ensure all indexed memories are in the tracker.
+  // Handles memories ingested before the consolidation system was added.
+  // upsertMemory is INSERT ... ON CONFLICT DO NOTHING, so this is a no-op
+  // for memories already tracked.
+  let backfilled = 0;
+  for (const [id, filePath] of memoryIndex.entries()) {
+    if (id.startsWith("ins-")) continue; // insights handled above
+    const existing = tracker.getStatus(id);
+    if (!existing) {
+      // Infer type from directory name
+      const type = filePath.includes("/people/") ? "person"
+        : filePath.includes("/places/") ? "place"
+        : filePath.includes("/media/") ? "media"
+        : "note";
+      tracker.upsertMemory(id, type);
+      backfilled++;
+    }
+  }
+  if (backfilled > 0) {
+    console.log(`[consolidation] Reconciliation: backfilled ${backfilled} memories into tracker`);
+  }
 }
 
 // ─── Consolidation Cycle ─────────────────────────────────────────────
