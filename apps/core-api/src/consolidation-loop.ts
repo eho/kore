@@ -401,7 +401,10 @@ export async function runConsolidationCycle(deps: ConsolidationDeps): Promise<Co
       tracker.markRetired(seedId);
       return { status: "retired_reeval", seed: { id: seedId, title: seed.title } };
     }
-    tracker.markFailed(seedId, maxSynthesisAttempts);
+    // cluster_too_small is not a synthesis failure — the memory just lacks
+    // neighbors yet. Cool it down so it re-queues after cooldownDays rather
+    // than burning a synthesis attempt and eventually dead-lettering.
+    tracker.markCooledDown(seedId);
     return {
       status: "cluster_too_small",
       seed: { id: seedId, title: seed.title },

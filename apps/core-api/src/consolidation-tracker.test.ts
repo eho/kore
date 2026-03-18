@@ -228,6 +228,27 @@ describe("markConsolidated", () => {
   });
 });
 
+describe("markCooledDown", () => {
+  test("sets consolidated_at without touching status or synthesis_attempts", () => {
+    tracker.upsertMemory("mem-1", "note");
+    tracker.markCooledDown("mem-1");
+    const row = tracker.getStatus("mem-1");
+    expect(row!.status).toBe("pending");
+    expect(row!.synthesis_attempts).toBe(0);
+    expect(row!.consolidated_at).not.toBeNull();
+    expect(row!.last_attempted_at).not.toBeNull();
+  });
+
+  test("cooled-down seed is excluded by selectSeed until cooldown expires", () => {
+    tracker.upsertMemory("mem-1", "note");
+    tracker.markCooledDown("mem-1");
+
+    // With a large cooldown the seed should not be selected
+    const result = tracker.selectSeed(999);
+    expect(result).toBeNull();
+  });
+});
+
 describe("markFailed", () => {
   test("increments synthesis_attempts", () => {
     tracker.upsertMemory("mem-1", "note");

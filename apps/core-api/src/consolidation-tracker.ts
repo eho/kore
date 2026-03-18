@@ -65,6 +65,20 @@ export class ConsolidationTracker {
     );
   }
 
+  /**
+   * Set consolidated_at=now() without changing status or synthesis_attempts.
+   * Used when cluster_too_small — the memory is not broken, it just lacks
+   * neighbors. Re-queues it after cooldownDays without burning an attempt.
+   */
+  markCooledDown(id: string): void {
+    this.db.run(
+      `UPDATE consolidation_tracker
+       SET consolidated_at = datetime('now'), last_attempted_at = datetime('now'), updated_at = datetime('now')
+       WHERE memory_id = ?`,
+      [id]
+    );
+  }
+
   /** Increment synthesis_attempts, set last_attempted_at=now(), set status='failed' if >= maxSynthesisAttempts. */
   markFailed(id: string, maxSynthesisAttempts: number = DEFAULT_MAX_SYNTHESIS_ATTEMPTS): void {
     const row = this.db.query(

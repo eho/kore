@@ -352,7 +352,9 @@ ORDER BY updated_at ASC
 LIMIT 1;
 ```
 
-**Failure throttling:** When synthesis fails (LLM produces invalid JSON, schema validation error), `synthesis_attempts` is incremented and `last_attempted_at` is set. After `maxSynthesisAttempts` (default: 3) failures, `status` is set to `'failed'`. Failed entries are skipped by the seed selection query. A manual `POST /api/v1/consolidate?reset_failed=true` endpoint can reset failed entries for retry.
+**Failure throttling:** `synthesis_attempts` is incremented only for genuine LLM synthesis failures (invalid JSON, schema validation error, unhandled exception). After `maxSynthesisAttempts` (default: 3) such failures, `status` is set to `'failed'` and the entry is skipped by seed selection. A manual `POST /api/v1/consolidate?reset_failed=true` endpoint can reset failed entries for retry.
+
+**Cluster-too-small cooldown:** When a seed produces fewer than `minClusterSize` candidates it is **not** a synthesis failure — the memory simply lacks neighbors yet. Instead of incrementing `synthesis_attempts`, `consolidated_at` is set to `now()` via `markCooledDown()`. This re-queues the seed after `cooldownDays` (same mechanism as successfully consolidated memories) without burning an attempt. If new related memories are ingested before the cooldown expires, the seed may form a valid cluster on the next attempt.
 
 ### 4.7 State Transition Matrix
 

@@ -84,7 +84,8 @@ Kore currently processes every memory in isolation: ingest → extract → write
   ```
 - [ ] `upsertMemory(id, type)` — insert with `status='pending'` if not exists, no-op if exists
 - [ ] `markConsolidated(id, insightId)` — set `status='active'`, `consolidated_at=now()`
-- [ ] `markFailed(id)` — increment `synthesis_attempts`, set `last_attempted_at=now()`, set `status='failed'` if `synthesis_attempts >= maxSynthesisAttempts` (default: 3)
+- [ ] `markCooledDown(id)` — set `consolidated_at=now()`, `last_attempted_at=now()`, leave `status` and `synthesis_attempts` unchanged. Used for `cluster_too_small` — re-queues the seed after `cooldownDays` without burning an attempt.
+- [ ] `markFailed(id)` — increment `synthesis_attempts`, set `last_attempted_at=now()`, set `status='failed'` if `synthesis_attempts >= maxSynthesisAttempts` (default: 3). Used only for genuine LLM synthesis errors and unhandled exceptions.
 - [ ] `markEvolving(id, reason: 'new_evidence' | 'source_deleted')` — set `status='evolving'`, `re_eval_reason`
 - [ ] `markDegraded(id)` — set `status='degraded'`
 - [ ] `markRetired(id)` — set `status='retired'`
@@ -283,7 +284,7 @@ Kore currently processes every memory in isolation: ingest → extract → write
     3. Load seed memory file from `memoryIndex`
     4. **If re-eval seed (isReeval=true):** load existing insight's `source_ids`, resolve which sources still exist, search QMD for additional candidates using insight's title + distilled items
     5. **If new seed:** find candidates via `findCandidates(seed)`
-    6. Validate cluster size (3–8); if invalid and new seed, call `tracker.markFailed(seed.id)` and exit. If re-eval and below `minClusterSize`, retire the insight.
+    6. Validate cluster size (3–8); if invalid and new seed, call `tracker.markCooledDown(seed.id)` and exit (seed re-queues after cooldown, attempt counter preserved). If re-eval and below `minClusterSize`, retire the insight.
     7. Classify insight type via `classifyCluster()`
     8. Check dedup — if existing insight found with >50% overlap, call `supersede()` on it
     9. Call `synthesizeInsight()`

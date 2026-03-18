@@ -161,18 +161,23 @@ describe("runConsolidationCycle", () => {
     expect(result.seed?.title).toBe("React Hooks");
   });
 
-  test("failed synthesis increments tracker attempts", async () => {
+  test("cluster_too_small cools down seed without burning synthesis attempts", async () => {
     await writeTestMemory("mem-001", "React Hooks");
     tracker.upsertMemory("mem-001", "note");
 
-    // QMD returns too few candidates, seed gets marked failed
     const qmdSearch = mockQmdSearch([]);
     const deps = makeDeps({ qmdSearch });
 
-    await runConsolidationCycle(deps);
+    const result = await runConsolidationCycle(deps);
+    expect(result.status).toBe("cluster_too_small");
 
     const status = tracker.getStatus("mem-001");
-    expect(status?.synthesis_attempts).toBe(1);
+    // Attempt counter must NOT be incremented — this is not a synthesis failure
+    expect(status?.synthesis_attempts).toBe(0);
+    // consolidated_at must be set so the cooldown mechanism re-queues it later
+    expect(status?.consolidated_at).not.toBeNull();
+    // Status must remain pending — memory is not broken
+    expect(status?.status).toBe("pending");
   });
 
   test("re-eval seeds are processed before new seeds", async () => {
