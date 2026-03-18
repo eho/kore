@@ -53,6 +53,7 @@ mock.module("../../apps/core-api/src/consolidation-synthesizer", () => ({
 // ─── Imports (after mock setup) ─────────────────────────────────────────
 
 import { createApp } from "../../apps/core-api/src/app";
+import { QueueRepository } from "../../apps/core-api/src/queue";
 import { MemoryIndex } from "../../apps/core-api/src/memory-index";
 import { EventDispatcher } from "../../apps/core-api/src/event-dispatcher";
 import { ConsolidationTracker } from "../../apps/core-api/src/consolidation-tracker";
@@ -145,6 +146,7 @@ const SYNTHETIC_MEMORIES: Array<{
 
 let tempDir: string;
 let db: Database;
+let queue: QueueRepository;
 let tracker: ConsolidationTracker;
 let memoryIndex: MemoryIndex;
 let eventDispatcher: EventDispatcher;
@@ -191,7 +193,8 @@ beforeAll(async () => {
     memoryFilePaths.set(mem.id, filePath);
   }
 
-  // 3. Initialize SQLite + ConsolidationTracker
+  // 3. Initialize SQLite + QueueRepository + ConsolidationTracker
+  queue = new QueueRepository(join(tempDir, "kore-queue.db"));
   db = new Database(join(tempDir, "consolidation-e2e.db"));
   db.exec("PRAGMA journal_mode = WAL;");
   tracker = new ConsolidationTracker(db);
@@ -224,6 +227,7 @@ beforeAll(async () => {
   // 7. Create the Elysia app with test deps
   app = createApp({
     dataPath: tempDir,
+    queue,
     searchFn: mockSearchFn,
     memoryIndex,
     eventDispatcher,
