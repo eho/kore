@@ -1,5 +1,4 @@
 import { describe, test, expect, beforeAll, afterAll, beforeEach, afterEach } from "bun:test";
-import { Database } from "bun:sqlite";
 import { createApp, ensureDataDirectories } from "./app";
 import { QueueRepository } from "./queue";
 import { ConsolidationTracker } from "./consolidation-tracker";
@@ -7,7 +6,7 @@ import { MemoryIndex } from "./memory-index";
 import { EventDispatcher } from "./event-dispatcher";
 import { deleteMemoryById } from "./delete-memory";
 import { join } from "node:path";
-import { mkdtemp, rm, readFile, writeFile } from "node:fs/promises";
+import { mkdtemp, rm, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import type { HybridQueryResult, SearchOptions } from "@kore/qmd-client";
 
