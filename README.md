@@ -47,6 +47,7 @@ SQLite Queue  ──── worker polls every 5s ────►  Ollama (local 
 4. **Write** — a structured `.md` file with YAML frontmatter is written to `$KORE_DATA_PATH`
 5. **Index** — a file watcher detects the new file and triggers `qmd update`
 6. **Query** — QMD serves the indexed memories to any MCP-compatible agent
+7. **Consolidate** — a background loop synthesizes clusters of related memories into higher-order **insight** files via LLM
 
 ---
 
@@ -57,7 +58,7 @@ This project is a **Bun monorepo**.
 ```
 kore/
 ├── apps/
-│   ├── core-api/          # REST API server + extraction worker + file watcher
+│   ├── core-api/          # REST API server + extraction worker + file watcher + consolidation loop
 │   └── cli/               # Command-line interface for Kore
 ├── packages/
 │   ├── shared-types/          # Zod schemas and TypeScript interfaces (single source of truth)
@@ -66,6 +67,7 @@ kore/
 │   ├── an-export/             # Apple Notes → Markdown exporter
 │   └── plugin-apple-notes/    # Apple Notes sync plugin (passive ingestion)
 ├── docs/                  # Architecture docs and guides
+│   ├── phase2/            # Phase 2 design docs (consolidation, MCP)
 │   └── manual-e2e-testing.md
 ├── tasks/                 # PRDs and design docs
 └── progress.md            # Project-wide progress tracker
@@ -112,6 +114,10 @@ OLLAMA_MODEL=qwen2.5:7b
 | `OLLAMA_BASE_URL` | `http://localhost:11434` | Ollama server URL |
 | `OLLAMA_MODEL` | `qwen2.5:7b` | Model used for LLM extraction |
 | `QMD_CACHE_PATH` | `~/.kore/qmd-cache` | Cache directory for QMD GGUF embedding models |
+| `KORE_SYNTHESIS_MODEL` | *(uses LLM_MODEL)* | Optional override model for insight synthesis |
+| `CONSOLIDATION_INTERVAL_MS` | `1800000` (30 min) | How often the consolidation loop runs |
+| `CONSOLIDATION_COOLDOWN_DAYS` | `7` | Days before a memory can be re-consolidated |
+| `CONSOLIDATION_MAX_ATTEMPTS` | `3` | Max synthesis attempts before marking as failed |
 
 ### 3. Start the API
 
@@ -185,6 +191,41 @@ See [`packages/plugin-apple-notes/README.md`](packages/plugin-apple-notes/README
 
 ---
 
+## Consolidation (Insights)
+
+Kore automatically synthesizes clusters of related memories into higher-order **insight** files. A background consolidation loop runs every 30 minutes, identifying groups of semantically similar memories via QMD hybrid search, classifying the cluster type, and generating a structured synthesis via LLM.
+
+### How it works
+
+1. A **seed memory** is selected from the consolidation tracker (prioritizing re-evaluation of existing insights over new seeds)
+2. **QMD hybrid search** finds 3-8 related candidate memories
+3. The cluster is **classified** deterministically: `cluster_summary`, `evolution` (>30 day span), or `connection` (cross-category)
+4. An **LLM synthesizes** the cluster into a structured insight with title, synthesis paragraph, connections, and distilled items. The LLM may override the type to `contradiction` if conflicting facts are detected.
+5. The insight is written to `$KORE_DATA_PATH/insights/` as a standard `.md` file and indexed by QMD
+6. Source memories receive `consolidated_at` and `insight_refs` frontmatter back-references
+
+### Reactive lifecycle
+
+- When a **new memory is indexed**, the system checks for related existing insights and flags them for re-evaluation
+- When a **source memory is deleted**, insights are transitioned based on remaining source integrity: `evolving` (>=50%), `degraded` (<50%), or `retired` (0%)
+- Insights can be **superseded** when re-synthesis produces a better version (old insight is `retired`, new one links via `supersedes`)
+
+### CLI commands
+
+```sh
+kore consolidate              # trigger one consolidation cycle
+kore consolidate --dry-run    # preview without LLM synthesis
+kore consolidate --reset-failed  # retry failed consolidations
+kore list --type insight      # list all insights
+kore show <insight-id>        # view full insight content
+kore delete <insight-id>      # delete an insight (cleans up source refs)
+kore search "topic"           # insights appear in search results (retired insights are filtered out)
+```
+
+See [`apps/core-api/README.md`](apps/core-api/README.md) for API endpoint details and the [Consolidation System Design](docs/phase2/consolidation_system_design.md) for the full specification.
+
+---
+
 ## Development
 
 ```sh
@@ -251,6 +292,18 @@ bun run --cwd apps/cli build:bin        # → apps/cli/bin/kore
 | [`packages/qmd-client`](packages/qmd-client/README.md) | Typed QMD CLI wrapper |
 | [`packages/an-export`](packages/an-export/README.md) | Apple Notes → Markdown exporter |
 | [`packages/plugin-apple-notes`](packages/plugin-apple-notes/README.md) | Apple Notes sync plugin — passive ingestion |
+
+## Design & Architecture
+
+See [`docs/README.md`](docs/README.md) for the full documentation index. Key documents:
+
+| Document | Description |
+|---|---|
+| [Vision](docs/vision/vision.md) | Strategic vision, design principles, real-world scenarios |
+| [System Architecture](docs/architecture/architecture.md) | High-level layers, technology stack, data flows |
+| [Data Schema](docs/architecture/data_schema.md) | Zod schemas, directory layout, frontmatter format |
+| [Consolidation System Design](docs/phase2/consolidation_system_design.md) | Background consolidation loop, insight lifecycle, synthesis |
+| [MCP Server Design](docs/phase2/mcp_server_design.md) | Agent-facing interface with 6 core tools |
 
 ## Roadmap
 

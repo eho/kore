@@ -132,7 +132,7 @@ List stored memories in a table view.
 
 ```sh
 kore list
-kore list --type note         # filter by type (place, media, note, person)
+kore list --type note         # filter by type (place, media, note, person, insight)
 kore list --limit 50          # set max results (default 20, max 100)
 kore list --json              # output raw JSON array
 ```
@@ -148,13 +148,23 @@ Example output:
 └──────────┴───────┴────────────────────┴─────────────┴────────────┘
 ```
 
+When listing insights (`--type insight`), the table shows insight-specific columns:
+
+```
+┌──────────────┬────────────────────┬─────────────────┬────────┬────────────┬─────────┬──────┬────────────┐
+│ ID           │ Title              │ Insight Type    │ Status │ Confidence │ Sources │ Tags │ Date Saved │
+├──────────────┼────────────────────┼─────────────────┼────────┼────────────┼─────────┼──────┼────────────┤
+│ ins-a1b2c3d4 │ React Patterns     │ cluster_summary │ active │ 0.72       │ 4       │ ...  │ 3/18/2026  │
+└──────────────┴────────────────────┴─────────────────┴────────┴────────────┴─────────┴──────┴────────────┘
+```
+
 Prints `No memories found.` if the result set is empty.
 
 Options:
 
 | Flag            | Description                                          |
 | --------------- | ---------------------------------------------------- |
-| `--type <type>` | Filter by type: `place`, `media`, `note`, `person`   |
+| `--type <type>` | Filter by type: `place`, `media`, `note`, `person`, `insight` |
 | `--limit <n>`   | Max number of results (default `20`, max `100`)      |
 | `--json`        | Output raw JSON array                                |
 
@@ -278,7 +288,52 @@ Options:
 | `--collection <string>` | Filter by a specific collection                  |
 | `--json`                | Output `{ query, results }` JSON envelope (each result includes `id`) |
 
+Insights appear alongside regular memories in search results. Retired insights are automatically filtered out.
+
 Exits with code `1` on API errors (e.g., search index unavailable).
+
+---
+
+### `kore consolidate`
+
+Trigger a consolidation cycle to synthesize related memories into insights.
+
+```sh
+kore consolidate                # run one consolidation cycle
+kore consolidate --dry-run      # preview without LLM synthesis
+kore consolidate --reset-failed # retry failed consolidations
+kore consolidate --json         # machine-readable JSON output
+```
+
+Example output:
+
+```
+Consolidation complete!
+Seed:         "React Hooks Guide" (abc-123)
+Cluster Size: 5
+Insight ID:   ins-a1b2c3d4
+```
+
+Example dry-run output:
+
+```
+Seed: "React Hooks Guide" (abc-123)
+Candidates (4):
+  - "useState Best Practices" (score: 0.72)
+  - "Custom Hooks Patterns" (score: 0.68)
+  - "React State Management" (score: 0.61)
+  - "Hook Testing Strategies" (score: 0.55)
+Proposed type: cluster_summary
+Estimated confidence: 0.68
+```
+
+Options:
+
+| Flag               | Description                                          |
+| ------------------ | ---------------------------------------------------- |
+| `--dry-run`        | Preview seed, candidates, and type without synthesis  |
+| `--reset-failed`   | Reset failed tracker entries before running           |
+| `--json`           | Output raw JSON                                      |
 
 ---
 

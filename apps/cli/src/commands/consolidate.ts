@@ -15,10 +15,12 @@ interface ConsolidateResponse {
 
 export async function consolidateCommand(opts: {
   dryRun: boolean;
+  resetFailed: boolean;
   json: boolean;
 }): Promise<void> {
   const params = new URLSearchParams();
   if (opts.dryRun) params.set("dry_run", "true");
+  if (opts.resetFailed) params.set("reset_failed", "true");
 
   const qs = params.toString();
   const path = `/api/v1/consolidate${qs ? `?${qs}` : ""}`;
