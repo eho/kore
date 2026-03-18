@@ -117,7 +117,7 @@ async function parseMemoryFile(id: string, filePath: string): Promise<MemorySumm
     const content = await readFile(filePath, "utf-8");
     const fm = parseFrontmatter(content);
     if (!fm.id) return null;
-    return {
+    const summary: MemorySummary = {
       id: fm.id,
       type: fm.type || "",
       title: extractTitleFromMarkdown(content),
@@ -129,6 +129,14 @@ async function parseMemoryFile(id: string, filePath: string): Promise<MemorySumm
       ...(fm.intent ? { intent: fm.intent } : {}),
       ...(fm.confidence !== undefined ? { confidence: parseFloat(fm.confidence) } : {}),
     };
+    // Add insight-specific fields
+    if (fm.type === "insight") {
+      if (fm.insight_type) summary.insight_type = fm.insight_type;
+      if (fm.status) summary.status = fm.status;
+      const sourceIds = parseTagsArray(fm.source_ids || "");
+      summary.source_ids_count = sourceIds.length;
+    }
+    return summary;
   } catch {
     return null;
   }
@@ -139,7 +147,7 @@ async function parseMemoryFileFull(id: string, filePath: string): Promise<Memory
     const content = await readFile(filePath, "utf-8");
     const fm = parseFrontmatter(content);
     if (!fm.id) return null;
-    return {
+    const full: MemoryFull = {
       id: fm.id,
       type: fm.type || "",
       category: fm.category || "",
@@ -154,6 +162,17 @@ async function parseMemoryFileFull(id: string, filePath: string): Promise<Memory
       title: extractTitleFromMarkdown(content),
       content,
     };
+    // Add insight-specific fields
+    if (fm.type === "insight") {
+      if (fm.insight_type) full.insight_type = fm.insight_type;
+      if (fm.status) full.status = fm.status;
+      full.source_ids = parseTagsArray(fm.source_ids || "");
+      full.supersedes = parseTagsArray(fm.supersedes || "");
+      full.superseded_by = parseTagsArray(fm.superseded_by || "");
+      if (fm.reinforcement_count !== undefined) full.reinforcement_count = parseInt(fm.reinforcement_count);
+      if (fm.last_synthesized_at) full.last_synthesized_at = fm.last_synthesized_at;
+    }
+    return full;
   } catch {
     return null;
   }
@@ -170,12 +189,24 @@ interface MemorySummary {
   tags: string[];
   intent?: string;
   confidence?: number;
+  // Insight-specific fields
+  insight_type?: string;
+  status?: string;
+  source_ids_count?: number;
 }
 
 interface MemoryFull extends MemorySummary {
   category: string;
   url?: string;
   content: string;
+  // Insight-specific fields
+  insight_type?: string;
+  status?: string;
+  source_ids?: string[];
+  supersedes?: string[];
+  superseded_by?: string[];
+  reinforcement_count?: number;
+  last_synthesized_at?: string;
 }
 
 // ─── QMD Health Status ───────────────────────────────────────────────
@@ -257,7 +288,22 @@ export function createApp(deps: AppDeps = {}) {
           minScore,
         });
 
-        return results.map((r) => {
+        // Post-filter: exclude retired insights (§4.5)
+        const filtered: typeof results = [];
+        for (const r of results) {
+          if (r.file && r.file.includes("/insights/")) {
+            try {
+              const fileContent = await readFile(r.file, "utf-8");
+              const fm = parseFrontmatter(fileContent);
+              if (fm.status === "retired") continue;
+            } catch {
+              // file unreadable, include it
+            }
+          }
+          filtered.push(r);
+        }
+
+        return filtered.map((r) => {
           // Extract collection name from displayPath (qmd://collection-name/...)
           const dpMatch = r.displayPath?.match(/^qmd:\/\/([^/]+)/);
           return {
@@ -399,6 +445,11 @@ export function createApp(deps: AppDeps = {}) {
 
       // Rebuild in-memory index (now empty)
       await memoryIndex.build(dataPath);
+
+      // Truncate consolidation tracker if available
+      if (deps.consolidationTracker) {
+        deps.consolidationTracker.truncateAll();
+      }
 
       // Clear task queue
       const deletedTasks = queue.clearAll();

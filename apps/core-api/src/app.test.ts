@@ -55,12 +55,13 @@ afterAll(async () => {
 // ─── Data directory setup ────────────────────────────────────────────
 
 describe("ensureDataDirectories", () => {
-  test("creates type subdirectories", async () => {
+  test("creates type subdirectories including insights", async () => {
     const dirs = await readdir(tempDir);
     expect(dirs).toContain("places");
     expect(dirs).toContain("media");
     expect(dirs).toContain("notes");
     expect(dirs).toContain("people");
+    expect(dirs).toContain("insights");
   });
 });
 
