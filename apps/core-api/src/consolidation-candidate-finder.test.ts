@@ -77,6 +77,18 @@ describe("findCandidates", () => {
     expect(results[0].filePath).toBe("/data/notes/other.md");
   });
 
+  test("excludes seed when QMD returns virtual path (qmd://)", async () => {
+    const seed = makeSeed({ filePath: "/Users/eho/.kore/data/memories/react-state.md" });
+    const mockSearch = async () => [
+      { file: "qmd://memories/react-state.md", title: "Same file", score: 0.933, bestChunk: "" },
+      { file: "qmd://memories/other.md", title: "Other", score: 0.5, bestChunk: "" },
+    ] as HybridQueryResult[];
+
+    const { candidates: results, debug } = await findCandidates(seed, mockSearch);
+    expect(results).toHaveLength(1);
+    expect(debug.filteredOutSelf).toBe(1);
+  });
+
   test("excludes insight-type memories", async () => {
     const seed = makeSeed();
     const mockSearch = async () => [

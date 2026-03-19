@@ -94,10 +94,15 @@ export async function findCandidates(
   let filteredOutSelf = 0;
   let filteredOutInsights = 0;
 
+  // Extract seed basename for comparison (seed.filePath is filesystem path,
+  // r.file is a QMD virtual path like qmd://memories/foo.md — only basename matches)
+  const seedBasename = seed.filePath.split("/").pop() ?? "";
+
   const candidates = results
     .filter((r) => {
-      // Exclude the seed itself
-      if (r.file === seed.filePath) {
+      // Exclude the seed itself (compare by basename since paths differ in format)
+      const resultBasename = r.file.split("/").pop() ?? "";
+      if (resultBasename === seedBasename) {
         filteredOutSelf++;
         return false;
       }
