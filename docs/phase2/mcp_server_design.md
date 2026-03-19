@@ -78,33 +78,38 @@ Agents are strictly append-only or read-only. There is no `forget`, `delete`, or
 
 ### 3.1 Package Location
 
+The MCP implementation spans two locations — one for shared business logic, one for the standalone stdio proxy:
+
+**Core-api (tool logic + embedded MCP server):**
+```
+apps/core-api/src/
+├── operations/
+│   ├── recall.ts            # Shared recall() function
+│   ├── remember.ts          # Shared remember() function
+│   ├── inspect.ts           # Shared inspect() function
+│   ├── insights.ts          # Shared insights() function
+│   ├── health.ts            # Shared health() function
+│   └── consolidate.ts       # Shared consolidate() function
+└── mcp.ts                   # MCP server registration, tool dispatch, HTTP transport (/mcp route)
+```
+
+**MCP server package (stdio proxy only):**
 ```
 apps/mcp-server/
 ├── package.json
-├── index.ts                 # Server entry point (stdio + HTTP transport)
-├── tools/
-│   ├── recall.ts            # Memory search with structured results
-│   ├── remember.ts          # Save new memories
-│   ├── inspect.ts           # Get full memory details by ID
-│   ├── insights.ts          # Query insight layer specifically
-│   ├── status.ts            # System health
-│   └── consolidate.ts       # Trigger knowledge synthesis
-├── descriptions.ts          # Tool descriptions (centralized)
-├── instructions.ts          # Server-level instructions for agents
+├── index.ts                 # Standalone stdio-to-HTTP proxy for Claude Desktop
 └── __tests__/
-    ├── recall.test.ts
-    ├── remember.test.ts
-    └── ...
+    └── proxy.test.ts
 ```
 
-**`package.json` dependencies:**
+The `apps/mcp-server/` package contains no tool implementations. It is only the stdio proxy entry point (§3.6). All business logic lives in `apps/core-api/src/operations/` and is shared by both the MCP tools and the CLI.
+
+**`apps/mcp-server/package.json` dependencies:**
 ```json
 {
   "name": "@kore/mcp-server",
   "dependencies": {
-    "@modelcontextprotocol/sdk": "latest",
-    "@kore/qmd-client": "workspace:*",
-    "@kore/shared-types": "workspace:*"
+    "@modelcontextprotocol/sdk": "latest"
   }
 }
 ```
@@ -130,19 +135,11 @@ The MCP server needs access to Kore's internals. Two architectural options:
 
 The MCP server supports two transports:
 
-**stdio** (primary): For Claude Desktop, Claude Code, and other MCP clients that launch the server as a subprocess. Started via:
-```bash
-kore mcp          # starts stdio MCP server
-# or
-bun run apps/mcp-server/index.ts
-```
+**stdio** (primary): For Claude Desktop, Claude Code, and other MCP clients that launch the server as a subprocess. The standalone entry point (`apps/mcp-server/index.ts`) proxies stdio to the embedded HTTP endpoint.
 
-**Streamable HTTP** (secondary): For remote agents or web-based clients. Runs on a configurable port (default: `3001`, separate from core-api's `3000`). Started via:
-```bash
-kore mcp --http --port 3001
-```
+**Streamable HTTP** (secondary): For remote agents or web-based clients. Mounted on the existing core-api server at `/mcp` — no separate port or listener. The full MCP endpoint URL is `http://localhost:3000/mcp`.
 
-When embedded in core-api (Option C), the HTTP transport is mounted alongside the REST API. The stdio transport is available as a standalone entry point for Claude Desktop configuration.
+This keeps the deployment simple: one process, one port, one address to configure. The `/mcp` route is protected by the same `KORE_API_KEY` bearer token as the REST API (§3.4).
 
 ### 3.4 Authentication
 
@@ -384,7 +381,7 @@ Retrieves complete details of a specific memory by ID, including all metadata, d
   source: string;
   url?: string;
   distilled_items: string[];
-  raw_source: string;
+  content: string;            // Full Kore Markdown file content (frontmatter + distilled items + original source)
   // Consolidation metadata
   consolidated_at?: string;
   insight_refs?: string[];
@@ -398,7 +395,7 @@ Retrieves complete details of a specific memory by ID, including all metadata, d
 }
 ```
 
-**Implementation:** Reads the memory file from disk via `memoryIndex.get(id)`, parses frontmatter and body sections, returns the full structured representation.
+**Implementation:** Reads the memory file from disk via `memoryIndex.get(id)`, parses frontmatter and body sections, returns the full structured representation. The `distilled_items` field is parsed from the `## Distilled Memory Items` section in the Markdown body (bulleted list items). The `content` field is the full raw file content as read from disk. The shared `inspect()` operation in `apps/core-api/src/operations/inspect.ts` implements this body parsing; the same logic is reused by `recall`'s `extractDistilledItems()` helper.
 
 ### 4.4 `insights` — Query Synthesized Knowledge
 
@@ -441,9 +438,9 @@ Searches specifically in the insight layer — synthesized documents that captur
 
 When `query` is provided: search QMD with the query, filter results to `type === "insight"` and the requested `status` (default: active only). When `query` is omitted: scan insight files in `$KORE_DATA_PATH/insights/`, parse frontmatter, filter by requested criteria, return sorted by `last_synthesized_at` descending.
 
-### 4.5 `status` — System Health
+### 4.5 `health` — System Health
 
-Returns the current state of the Kore system — memory counts, queue status, sync state, and index health.
+Returns the current state of the Kore system — memory counts, queue status, sync state, and index health. Supersedes the previous `kore health` (basic API ping) by incorporating memory counts and index state into one unified view.
 
 **Input Schema:**
 ```typescript
@@ -620,7 +617,7 @@ RESULT INTERPRETATION:
 - status "evolving": This insight is being updated with new evidence
 ```
 
-### 5.5 `status`
+### 5.5 `health`
 
 ```
 Check Kore system health — memory counts by type, ingestion queue status,
@@ -700,7 +697,7 @@ Both servers can run simultaneously. They serve different audiences:
 | **Audience** | Power users, non-Kore apps, debugging | AI agents interacting with Kore |
 | **Returns** | Raw Markdown documents | Structured JSON objects |
 | **Write access** | No | Yes (`remember`) |
-| **Lifecycle awareness** | No | Yes (filters retired insights, exposes status) |
+| **Lifecycle awareness** | No | Yes (filters retired insights, exposes health state) |
 | **Consolidation** | No | Yes (`insights`, `consolidate`) |
 | **Tool descriptions** | Generic ("search documents") | Behavior-encoding ("check before answering travel questions") |
 
@@ -726,8 +723,8 @@ For users currently using QMD's MCP server with Kore, the migration is:
 # Enable/disable MCP server (default: true when core-api starts)
 KORE_MCP_ENABLED=true
 
-# HTTP transport port (default: 3001; set to 0 to disable HTTP transport)
-KORE_MCP_PORT=3001
+# HTTP transport route on core-api (default: /mcp; set to empty string to disable HTTP transport)
+KORE_MCP_PATH=/mcp
 
 # Default recall limit (default: 10)
 KORE_MCP_DEFAULT_RECALL_LIMIT=10
@@ -772,7 +769,7 @@ Each tool has unit tests with mocked dependencies (`qmdClient`, `memoryIndex`, `
 - `remember`: enqueue with default source, custom source/url/priority, empty content rejection
 - `inspect`: found memory returns full structure, not-found returns error
 - `insights`: query-based search, no-query listing, type/status filtering
-- `status`: aggregates counts from memory index and queue
+- `health`: aggregates counts from memory index and queue
 - `consolidate`: dry-run returns preview, non-dry-run triggers cycle
 
 ### 10.2 Integration Tests
@@ -833,8 +830,10 @@ Each core function lives in a shared module (e.g., `apps/core-api/src/operations
 | `remember` | `kore ingest` | Exists | Add `--json` output |
 | `inspect` | `kore show <id>` | Exists | Add `--json` output with full structured metadata |
 | `insights` | `kore insights` | **New** | New command: `kore insights [query] [--type] [--status] [--limit] [--json]` |
-| `status` | `kore status` | **New** (currently fragmented across `kore health` + `kore sync --status`) | Unified command: `kore status [--json]` |
-| `consolidate` | `kore consolidate` | Planned | `kore consolidate [--dry-run] [--json]` |
+| `health` | `kore health` | Exists but limited | Extend to include memory counts, index state, sync state; add `--json` output. Replaces `kore health` (basic API ping) and absorbs `kore sync --status` |
+| `consolidate` | `kore consolidate` | Exists (basic) | Add `--dry-run`, `--json` flags |
+
+**Renamed CLI command:** `kore status <task-id>` → `kore task <id>`. The old `kore status` checked a single ingestion task; this is now `kore task <id>`. The top-level `kore status` is retired — use `kore health` for system state and `kore task <id>` for task state.
 
 ### 12.4 New & Enhanced CLI Commands
 
@@ -858,10 +857,17 @@ kore insights --type evolution --status active   # filtered listing
 kore insights --json                            # structured output matching insights tool schema
 ```
 
-**`kore status` (new, replaces fragmented commands):**
+**`kore health` (extended, replaces fragmented commands):**
 ```bash
-kore status           # human-readable summary of memory counts, queue, index, sync
-kore status --json    # structured output matching status tool schema
+kore health           # human-readable summary: API status, memory counts, queue, index, sync
+kore health --json    # structured output matching health tool schema
+# Replaces: kore health (basic ping), kore sync --status (sync state)
+```
+
+**`kore task <id>` (renamed from `kore status <task-id>`):**
+```bash
+kore task abc123      # check status of a specific ingestion task
+kore task abc123 --json
 ```
 
 **`kore consolidate` (enhanced):**
@@ -894,7 +900,7 @@ if (flags.json) {
   formatRecallForTerminal(result);  // colored, human-readable
 }
 
-// MCP wrapper (apps/mcp-server/tools/recall.ts)
+// MCP wrapper (apps/core-api/src/mcp.ts — tool registration)
 return {
   content: [{ type: "text", text: JSON.stringify(result) }]
 };
@@ -908,7 +914,7 @@ The shared core functions will be extracted during MCP implementation (Phase 1 o
 2. Refactor CLI commands to call shared functions
 3. Build MCP tools as thin wrappers around the same functions
 4. Add `--json` flag and new filter flags to CLI commands
-5. Add new CLI commands (`kore insights`, `kore status`)
+5. Add new CLI commands (`kore insights`); extend `kore health`; rename `kore status <id>` to `kore task <id>`
 
 This ensures CLI and MCP never diverge — a bug fix or feature addition in the core function benefits both interfaces automatically.
 
@@ -944,7 +950,7 @@ Different agents (Claude, GPT, Cursor) may interpret tool descriptions different
 5. Implement `recall` tool wrapping shared `recall()` operation
 6. Implement `remember` tool wrapping shared `remember()` operation
 7. Implement `inspect` tool wrapping shared `inspect()` operation
-8. Implement `status` tool wrapping shared `status()` operation
+8. Implement `health` tool wrapping shared `health()` operation
 9. Write tool descriptions (§5)
 10. Write server instructions (§6)
 11. Unit tests for all tools and shared operations
@@ -953,22 +959,23 @@ Different agents (Claude, GPT, Cursor) may interpret tool descriptions different
 12. Add `--json` flag to `kore search`, `kore show`, `kore ingest`
 13. Add structured filter flags to `kore search` (`--type`, `--intent`, `--tags`, `--min-confidence`, `--min-score`, `--include-insights`)
 14. Implement `kore insights` command wrapping shared `insights()` operation
-15. Implement `kore status` command wrapping shared `status()` operation (replacing fragmented health/sync commands)
-16. Refactor existing CLI commands to call shared operations
+15. Extend `kore health` with memory counts, index state, sync state (replacing fragmented `kore health` + `kore sync --status`); add `--json` output
+16. Rename `kore status <task-id>` → `kore task <id>`
+17. Refactor existing CLI commands to call shared operations
 
-### Phase 3: Insight Tools (after consolidation system is implemented)
-17. Implement `insights` MCP tool (insight search/listing)
-18. Implement `consolidate` MCP tool (trigger synthesis)
-19. Implement `kore consolidate` CLI command
-20. Update `recall` to include insight-specific fields and retired filtering
+### Phase 3: Insight Tools (consolidation system is complete)
+18. Implement `insights` MCP tool (insight search/listing)
+19. Implement `consolidate` MCP tool (trigger synthesis)
+20. Enhance `kore consolidate` CLI command with `--dry-run` and `--json` flags
+21. Update `recall` to include insight-specific fields and retired insight filtering
 
 ### Phase 4: Integration
-21. Wire MCP server startup into core-api process
-22. Add standalone stdio entry point for Claude Desktop
-23. Add HTTP transport support
-24. Add `KORE_MCP_*` env vars to `.env.example`
-25. Integration tests (MCP client → server round-trip)
-26. Document Claude Desktop configuration
+22. Wire MCP server startup into core-api process (`startMcpServer()` in `index.ts`)
+23. Mount `/mcp` HTTP route on core-api's existing Bun.serve() instance
+24. Add standalone stdio proxy entry point (`apps/mcp-server/index.ts`) for Claude Desktop
+25. Add `KORE_MCP_*` env vars to `.env.example`
+26. Integration tests (MCP client → server round-trip)
+27. Document Claude Desktop configuration
 
 ### Phase 5: Refinement
 27. Monitor agent tool usage patterns
@@ -988,6 +995,12 @@ Different agents (Claude, GPT, Cursor) may interpret tool descriptions different
 | 3 | Missing pagination in `recall` | Added `offset` to `recall` input schema (§4.1), `offset` + `has_more` to output schema, updated implementation with pagination logic |
 | 4 | `remember` lacks agent-assisted extraction hints | Added `suggested_tags` and `suggested_category` to `remember` input schema (§4.2) as hints to the extraction pipeline; updated tool description (§5.2) |
 | 6 | No explicit ban on destructive tools | Added §2.5 "No Destructive Operations" as a core design principle |
+| 7 | `apps/mcp-server/` package vs. embedded core-api ambiguous | §3.1 rewritten: tool logic lives in `apps/core-api/src/operations/`; `apps/mcp-server/` is solely the stdio proxy; MCP server registration lives in `apps/core-api/src/mcp.ts` |
+| 8 | HTTP transport on separate port 3001 unnecessary | §3.3 updated: HTTP transport mounted as `/mcp` route on existing port 3000; no second listener needed |
+| 9 | `kore status` naming collision with existing task-status command | §12.3, §12.4 updated: `kore status <task-id>` renamed to `kore task <id>`; system health unified into `kore health`; MCP `status` tool renamed to `health` |
+| 10 | `raw_source` field name misleading in `inspect` output | Renamed to `content` (§4.3) — reflects that the full file content is returned, which is the purpose of `inspect` |
+| 11 | `distilled_items` parsing undefined | §4.3 implementation note added: parsed from `## Distilled Memory Items` Markdown section; shared `extractDistilledItems()` helper reused by both `inspect` and `recall` |
+| 12 | Phase 3 blocked by consolidation system | Prerequisite lifted — consolidation system is complete; phases restructured accordingly |
 
 ### Assessed and Not Incorporated
 
