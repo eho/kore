@@ -41,7 +41,7 @@ export interface ConsolidationDeps {
 }
 
 export interface ConsolidationCycleResult {
-  status: "consolidated" | "no_seed" | "cluster_too_small" | "retired_reeval";
+  status: "consolidated" | "no_seed" | "cluster_too_small" | "retired_reeval" | "synthesis_failed";
   insightId?: string;
   seed?: { id: string; title: string };
   clusterSize?: number;
@@ -493,7 +493,15 @@ export async function runConsolidationCycle(deps: ConsolidationDeps): Promise<Co
     clusterMembers.push(member);
   }
 
-  const synthesis = await synthesizeInsight(clusterMembers, insightType);
+  let synthesis;
+  try {
+    synthesis = await synthesizeInsight(clusterMembers, insightType);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error(`[consolidation] Synthesis failed for seed "${seed.title}" (${seedId}): ${msg}`);
+    tracker.markFailed(seedId, maxSynthesisAttempts);
+    return { status: "synthesis_failed", seed: { id: seedId, title: seed.title } };
+  }
 
   // 8. Compute confidence
   const avgSimilarity = cluster.reduce((sum, c) => sum + c.score, 0) / cluster.length;
@@ -689,14 +697,11 @@ export function startConsolidationLoop(deps: ConsolidationDeps): ConsolidationHa
         );
       } else if (result.status === "retired_reeval") {
         console.log(`[consolidation] Retired re-eval seed "${result.seed?.title}" (insufficient sources)`);
+      } else if (result.status === "synthesis_failed") {
+        console.log(`[consolidation] Synthesis failed for seed "${result.seed?.title}", marked as failed`);
       }
     } catch (err) {
       console.error("[consolidation] Cycle error:", err);
-      // Try to mark current seed as failed
-      const seedResult = deps.tracker.selectSeed(deps.cooldownDays, deps.maxSynthesisAttempts);
-      if (seedResult) {
-        deps.tracker.markFailed(seedResult.memoryId, deps.maxSynthesisAttempts);
-      }
     } finally {
       running = false;
       if (resolveInProgress) {

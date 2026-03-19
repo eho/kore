@@ -136,7 +136,30 @@ export function fallbackParse(text: string): InsightOutput {
     raw.distilled_items = raw.distilled_items.slice(0, 7);
   }
 
-  return InsightOutputSchema.parse(raw);
+  // Ensure connections is an array (LLM may omit or return null)
+  if (!Array.isArray(raw.connections)) {
+    raw.connections = [];
+  }
+
+  // Normalize connection objects to ensure required fields
+  raw.connections = raw.connections
+    .filter((c: unknown) => c && typeof c === "object")
+    .map((c: Record<string, unknown>) => ({
+      source_id: String(c.source_id ?? ""),
+      target_id: String(c.target_id ?? ""),
+      relationship: String(c.relationship ?? ""),
+    }));
+
+  const result = InsightOutputSchema.safeParse(raw);
+  if (!result.success) {
+    const fields = result.error.issues.map(
+      (i) => `${i.path.join(".")}: expected ${i.expected ?? i.code}, got ${JSON.stringify((i as Record<string, unknown>).received ?? "?")}`
+    );
+    console.warn(`[consolidation] Fallback parse validation failed:\n  ${fields.join("\n  ")}`);
+    console.warn(`[consolidation] Raw keys: ${Object.keys(raw).join(", ")}`);
+    throw result.error;
+  }
+  return result.data;
 }
 
 // ─── Synthesis ────────────────────────────────────────────────────────
@@ -179,7 +202,8 @@ export async function synthesizeInsight(
       const parsed = fallbackParse(text);
       return { ...parsed, _extractionPath: "fallback" as const };
     } catch (fallbackError) {
-      console.warn("Synthesis fallback parse also failed:", fallbackError);
+      const fbMsg = fallbackError instanceof Error ? fallbackError.message : String(fallbackError);
+      console.warn(`[consolidation] Synthesis fallback also failed: ${fbMsg}`);
       throw primaryError;
     }
   }
