@@ -191,7 +191,7 @@ export function fallbackParse(text: string): InsightOutput {
   const result = InsightOutputSchema.safeParse(raw);
   if (!result.success) {
     const fields = result.error.issues.map(
-      (i) => `${i.path.join(".")}: expected ${i.expected ?? i.code}, got ${JSON.stringify((i as Record<string, unknown>).received ?? "?")}`
+      (i) => `${i.path.join(".")}: expected ${(i as any).expected ?? i.code}, got ${JSON.stringify((i as any).received ?? "?")}`
     );
     console.warn(`[consolidation] Fallback parse validation failed:\n  ${fields.join("\n  ")}`);
     console.warn(`[consolidation] Raw keys: ${Object.keys(raw).join(", ")}`);
