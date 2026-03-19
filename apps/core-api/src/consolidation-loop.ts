@@ -61,6 +61,8 @@ export interface DryRunResult {
 
 export interface ConsolidationHandle {
   stop: () => Promise<void>;
+  pause: () => Promise<void>;
+  resume: () => void;
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────
@@ -673,10 +675,11 @@ export async function runConsolidationDryRun(deps: ConsolidationDeps): Promise<D
 export function startConsolidationLoop(deps: ConsolidationDeps): ConsolidationHandle {
   let running = false;
   let stopped = false;
+  let paused = false;
   let resolveInProgress: (() => void) | null = null;
 
   async function cycle() {
-    if (stopped) return;
+    if (stopped || paused) return;
     if (running) {
       console.log("[consolidation] Previous cycle still running, skipping");
       return;
@@ -723,6 +726,18 @@ export function startConsolidationLoop(deps: ConsolidationDeps): ConsolidationHa
           resolveInProgress = resolve;
         });
       }
+    },
+    async pause() {
+      paused = true;
+      if (running) {
+        // Wait for in-progress cycle to finish
+        await new Promise<void>((resolve) => {
+          resolveInProgress = resolve;
+        });
+      }
+    },
+    resume() {
+      paused = false;
     },
   };
 }

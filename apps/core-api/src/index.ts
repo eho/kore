@@ -139,6 +139,22 @@ for (const plugin of plugins) {
 // Register all plugins (including consolidation pseudo-plugin) with EventDispatcher
 eventDispatcher.registerPlugins([consolidationPlugin, ...plugins]);
 
+// ── Start consolidation loop (before app creation so handle is available) ──
+
+const consolidationDeps = buildConsolidationDeps({
+  dataPath,
+  qmdSearch: qmdClient.search,
+  tracker: consolidationTracker,
+  memoryIndex,
+  eventDispatcher,
+});
+
+// Run startup reconciliation before starting loop
+await reconcileOnStartup({ dataPath, tracker: consolidationTracker, memoryIndex });
+
+const consolidation = startConsolidationLoop(consolidationDeps);
+console.log("Kore consolidation loop started");
+
 let app = createApp({
   dataPath,
   queue,
@@ -148,6 +164,8 @@ let app = createApp({
   searchFn: qmdClient.search,
   consolidationTracker,
   pluginRegistry,
+  consolidationLoopHandle: consolidation,
+  qmdUpdateFn: qmdClient.update,
 });
 
 // Mount plugin routes
@@ -201,21 +219,7 @@ console.log("Kore file watcher started (watching for .md changes)");
 const embedder = startEmbedInterval();
 console.log("Kore embed interval started");
 
-// ── Start consolidation loop (step 10, after embedder) ──────────────
-
-const consolidationDeps = buildConsolidationDeps({
-  dataPath,
-  qmdSearch: qmdClient.search,
-  tracker: consolidationTracker,
-  memoryIndex,
-  eventDispatcher,
-});
-
-// Run startup reconciliation before starting loop
-await reconcileOnStartup({ dataPath, tracker: consolidationTracker, memoryIndex });
-
-const consolidation = startConsolidationLoop(consolidationDeps);
-console.log("Kore consolidation loop started");
+// Consolidation loop already started above (before app creation)
 
 // ── Graceful shutdown ───────────────────────────────────────────────────
 
