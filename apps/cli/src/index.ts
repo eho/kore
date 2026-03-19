@@ -12,6 +12,7 @@ import { searchCommand } from "./commands/search.ts";
 import { resetCommand } from "./commands/reset.ts";
 import { syncCommand } from "./commands/sync.ts";
 import { consolidateCommand } from "./commands/consolidate.ts";
+import { consolidationResetCommand } from "./commands/consolidation-reset.ts";
 
 // Read version from package.json
 const pkg = await import("../package.json", { with: { type: "json" } });
@@ -139,6 +140,20 @@ program
   .option("--json", "Output raw JSON", false)
   .action(async (opts) => {
     await consolidateCommand({ dryRun: opts.dryRun, resetFailed: opts.resetFailed, json: opts.json, verbose: opts.verbose });
+  });
+
+// ─── consolidation (subcommands) ─────────────────────────────────────────────
+const consolidationCmd = program
+  .command("consolidation")
+  .description("Manage consolidation state");
+
+consolidationCmd
+  .command("reset")
+  .description("Delete all insights and restore all memories to unconsolidated state")
+  .option("--force", "Skip confirmation prompt", false)
+  .option("--json", "Output raw JSON", false)
+  .action(async (opts) => {
+    await consolidationResetCommand({ force: opts.force, json: opts.json });
   });
 
 // ─── reset ──────────────────────────────────────────────────────────────────

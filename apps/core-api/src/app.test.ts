@@ -236,7 +236,7 @@ describe("POST /api/v1/ingest/structured", () => {
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.status).toBe("indexed");
-    expect(body.file_path).toContain("notes/test_note.md");
+    expect(body.file_path).toContain("notes/test-note.md");
 
     // Verify the file was written correctly
     const fileContent = await readFile(body.file_path, "utf-8");
@@ -277,7 +277,7 @@ describe("POST /api/v1/ingest/structured", () => {
     const body2 = await res2.json();
 
     expect(body1.file_path).not.toBe(body2.file_path);
-    expect(body2.file_path).toMatch(/collision_test_[a-f0-9]{4}\.md$/);
+    expect(body2.file_path).toMatch(/collision-test_[a-f0-9]{4}\.md$/);
   });
 
   test("routes files to correct type directory", async () => {
@@ -299,7 +299,7 @@ describe("POST /api/v1/ingest/structured", () => {
       }),
     });
     const body = await res.json();
-    expect(body.file_path).toContain("places/mutekiya_ramen.md");
+    expect(body.file_path).toContain("places/mutekiya-ramen.md");
   });
 
   test("rejects invalid payload", async () => {

@@ -17,8 +17,9 @@ import { EventDispatcher } from "./event-dispatcher";
 import { deleteMemoryById } from "./delete-memory";
 import type { HybridQueryResult, SearchOptions } from "@kore/qmd-client";
 import type { ConsolidationTracker } from "./consolidation-tracker";
-import type { ConsolidationDeps } from "./consolidation-loop";
+import type { ConsolidationDeps, ConsolidationHandle } from "./consolidation-loop";
 import { runConsolidationCycle, runConsolidationDryRun, buildConsolidationDeps } from "./consolidation-loop";
+import { resetConsolidation } from "./consolidation-reset";
 import type { PluginRegistryRepository } from "./plugin-registry";
 
 // ─── Zod Schemas for request validation ─────────────────────────────
@@ -230,6 +231,8 @@ export interface AppDeps {
   eventDispatcher?: EventDispatcher;
   consolidationTracker?: ConsolidationTracker;
   pluginRegistry?: PluginRegistryRepository;
+  consolidationLoopHandle?: ConsolidationHandle;
+  qmdUpdateFn?: () => Promise<unknown>;
 }
 
 export function createApp(deps: AppDeps = {}) {
@@ -526,6 +529,42 @@ export function createApp(deps: AppDeps = {}) {
 
       const result = await runConsolidationCycle(consolidationDeps);
       return result;
+    })
+    // ─── Reset Consolidation ─────────────────────────────────────
+    .delete("/api/v1/consolidation", async ({ set }) => {
+      const tracker = deps.consolidationTracker;
+      const loopHandle = deps.consolidationLoopHandle;
+      const qmdUpdateFn = deps.qmdUpdateFn;
+
+      if (!tracker || !dataPath) {
+        set.status = 503;
+        return { error: "Consolidation service not available" };
+      }
+
+      try {
+        if (loopHandle) await loopHandle.pause();
+
+        const result = await resetConsolidation({
+          dataPath,
+          tracker,
+          memoryIndex,
+          qmdUpdate: qmdUpdateFn ?? (async () => {}),
+        });
+
+        return {
+          status: "reset",
+          deleted_insights: result.deletedInsights,
+          restored_memories: result.restoredMemories,
+          tracker_backfilled: result.trackerBackfilled,
+        };
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        console.error("[consolidation-reset] Reset failed:", message);
+        set.status = 500;
+        return { error: message, code: "RESET_FAILED" };
+      } finally {
+        if (loopHandle) loopHandle.resume();
+      }
     })
     // ─── Update Memory ────────────────────────────────────────────
     .put("/api/v1/memory/:id", async ({ params, body, set }) => {
