@@ -482,12 +482,23 @@ Triggers an immediate consolidation cycle. Supports dry-run mode for previewing 
 ```typescript
 {
   dry_run?: boolean;           // Preview only, don't write insight files (default: false)
+  no_wait?: boolean;           // Return immediately after triggering; don't wait for cycle to complete (default: false)
 }
 ```
 
 **Output Schema:**
 ```typescript
-// When dry_run is false:
+// When dry_run is false and no_wait is false (default): blocks until cycle completes
+// The API awaits runConsolidationCycle() synchronously, so this returns the full result:
+{
+  status: "consolidated" | "no_seed" | "cluster_too_small";
+  seed?: { id: string; title: string };
+  insight_id?: string;
+  cluster_size?: number;
+  message?: string;
+}
+
+// When no_wait is true: fires cycle in background, returns immediately
 {
   status: "triggered";
   message: string;
