@@ -176,7 +176,16 @@ Reference design: `docs/phase2/mcp_server_design.md`
 - **`parseMemoryFileFull` extraction**: currently a private function in `apps/core-api/src/app.ts:146`; must be extracted to `operations/inspect.ts` and exported — verify no other callers break
 - **`extractDistilledItems` implementation**: parse the `## Distilled Memory Items` section by finding the heading and collecting subsequent `- ` bullet lines until the next heading or EOF
 - **QMD over-fetch ceiling**: use `Math.max(100, offset + limit * 2)` to avoid runaway fetches on large offsets while maintaining enough headroom for post-filtering
-- **Bun.serve() `/mcp` route**: mount using the MCP SDK's Streamable HTTP transport handler on the existing server; confirm SDK compatibility with Bun's fetch-based routing
+- **Elysia Framework Integration (`/mcp` route)**: `apps/core-api/src/app.ts` uses Elysia, which uses Web Standard `Request`/`Response` under Bun. Use `WebStandardStreamableHTTPServerTransport` from `@modelcontextprotocol/sdk/server/webStandardStreamableHttp` — it is purpose-built for this (Bun, Deno, Cloudflare Workers, Hono). The Elysia route is a direct drop-in with no framework bypassing needed:
+  ```typescript
+  app.all('/mcp', async (ctx) => {
+    const transport = new WebStandardStreamableHTTPServerTransport();
+    await mcpServer.connect(transport);
+    return transport.handleRequest(ctx.request); // ctx.request is a standard Web API Request
+  });
+  ```
+  Do NOT use `SSEServerTransport` — that is the older Node.js HTTP-based approach and is incompatible with Elysia's request model.
+- **stdio-to-HTTP Proxy Implementation Strategy**: The MCP SDK has no built-in "proxy" utility. `apps/mcp-server/index.ts` should use the MCP Client + Server bridge pattern (Option 1): instantiate an MCP `Server` with `StdioServerTransport` (facing Claude/the agent) and an MCP `Client` with `StreamableHTTPClientTransport` (pointing at `KORE_API_URL/mcp`), then forward tool call requests from the Server to the Client and relay responses back. Use `StreamableHTTPClientTransport` (not `SSEClientTransport`) — the daemon uses `WebStandardStreamableHTTPServerTransport` which speaks the Streamable HTTP protocol. The SDK's example at `examples/server/` shows the server-side patterns; the client-side transport is in `client/streamableHttp`.
 - **`health()` and existing REST endpoint**: `/api/v1/health` currently returns `{ status, version, qmd, queue_length }`; after refactor it should call `health()` and merge/extend the response — avoid breaking the existing response shape for any current consumers
 - **Consolidation system is complete**: Phase 3 (insight tools) is not blocked; `insights()` and `consolidate()` operations can be implemented alongside the rest
 
