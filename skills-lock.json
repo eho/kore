@@ -19,7 +19,7 @@
     "user-story-implementer": {
       "source": "eho/agent-skills",
       "sourceType": "github",
-      "computedHash": "fbc17bdfb4843a0218924254845400f4d11913cb7ff728f9840b8b3b8b43b0e5"
+      "computedHash": "04ccc664a67be83ca5a1c736e76c2fbfe9af3445fc5a78537c0666d873f53f90"
     },
     "user-story-reviewer": {
       "source": "eho/agent-skills",
