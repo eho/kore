@@ -336,8 +336,8 @@ describe("Delete insight cleans up insight_refs from sources", () => {
     });
 
     // Delete the insight
-    const deleted = await deleteMemoryById(insightId, { memoryIndex, eventDispatcher });
-    expect(deleted).toBe(true);
+    const result = await deleteMemoryById(insightId, { memoryIndex, eventDispatcher });
+    expect(result.deleted).toBe(true);
 
     // Check source 1: should still have "ins-other" but not the deleted insight
     const src1Content = await readFile(src1Path, "utf-8");

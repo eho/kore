@@ -164,7 +164,7 @@ export interface PluginStartDeps {
     payload: { source: string; content: string; original_url?: string; date_created?: string; date_modified?: string },
     priority?: "low" | "normal" | "high"
   ): string;
-  deleteMemory(id: string): Promise<boolean>;
+  deleteMemory(id: string): Promise<{ deleted: boolean; restoredSources: number }>;
   getMemoryIdByExternalKey(externalKey: string): string | undefined;
   setExternalKeyMapping(externalKey: string, memoryId: string, metadata?: string): void;
   removeExternalKeyMapping(externalKey: string): void;

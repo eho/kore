@@ -235,7 +235,7 @@ describe("PluginStartDeps: registry scoping", () => {
     // Build deps for plugin A
     const depsA: PluginStartDeps = {
       enqueue: (payload, priority) => queue.enqueue(payload, priority),
-      deleteMemory: async () => false,
+      deleteMemory: async () => ({ deleted: false, restoredSources: 0 }),
       getMemoryIdByExternalKey: (key) => registry.get("plugin-a", key),
       setExternalKeyMapping: (key, memId, metadata?) => registry.set("plugin-a", key, memId, metadata),
       removeExternalKeyMapping: (key) => registry.remove("plugin-a", key),
@@ -246,7 +246,7 @@ describe("PluginStartDeps: registry scoping", () => {
     // Build deps for plugin B
     const depsB: PluginStartDeps = {
       enqueue: (payload, priority) => queue.enqueue(payload, priority),
-      deleteMemory: async () => false,
+      deleteMemory: async () => ({ deleted: false, restoredSources: 0 }),
       getMemoryIdByExternalKey: (key) => registry.get("plugin-b", key),
       setExternalKeyMapping: (key, memId, metadata?) => registry.set("plugin-b", key, memId, metadata),
       removeExternalKeyMapping: (key) => registry.remove("plugin-b", key),
@@ -367,8 +367,8 @@ describe("deleteMemoryById", () => {
     await writeFile(filePath, md);
     memoryIndex.set(id, filePath);
 
-    const deleted = await deleteMemoryById(id, { memoryIndex, eventDispatcher: dispatcher });
-    expect(deleted).toBe(true);
+    const result = await deleteMemoryById(id, { memoryIndex, eventDispatcher: dispatcher });
+    expect(result.deleted).toBe(true);
     expect(memoryIndex.get(id)).toBeUndefined();
     expect(events).toHaveLength(1);
     expect(events[0].id).toBe(id);
@@ -376,7 +376,7 @@ describe("deleteMemoryById", () => {
 
   test("returns false for unknown memory id", async () => {
     const memoryIndex = new MemoryIndex();
-    const deleted = await deleteMemoryById("nonexistent", { memoryIndex, eventDispatcher: dispatcher });
-    expect(deleted).toBe(false);
+    const result = await deleteMemoryById("nonexistent", { memoryIndex, eventDispatcher: dispatcher });
+    expect(result.deleted).toBe(false);
   });
 });

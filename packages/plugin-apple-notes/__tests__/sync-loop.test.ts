@@ -45,7 +45,7 @@ function makeMockDeps() {
     },
     deleteMemory: async (id) => {
       deleted.push(id);
-      return true;
+      return { deleted: true, restoredSources: 0 };
     },
     getMemoryIdByExternalKey: (key) => registry.get(key)?.memoryId,
     setExternalKeyMapping: (key, memId, metadata?) => {

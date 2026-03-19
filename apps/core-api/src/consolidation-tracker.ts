@@ -188,6 +188,21 @@ export class ConsolidationTracker {
     );
   }
 
+  /** Reset a memory back to pending: clears consolidated_at, synthesis_attempts, last_attempted_at, re_eval_reason. */
+  resetToPending(id: string): void {
+    this.db.run(
+      `UPDATE consolidation_tracker
+       SET status = 'pending',
+           consolidated_at = NULL,
+           synthesis_attempts = 0,
+           last_attempted_at = NULL,
+           re_eval_reason = NULL,
+           updated_at = datetime('now')
+       WHERE memory_id = ?`,
+      [id]
+    );
+  }
+
   /** Delete all rows (used by reset command). */
   truncateAll(): void {
     this.db.run("DELETE FROM consolidation_tracker");

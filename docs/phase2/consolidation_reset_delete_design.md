@@ -1,6 +1,6 @@
 # Consolidation Reset & Insight Delete Design
 
-**Status:** Draft (v2 — revised after review)
+**Status:** Implemented
 **Date:** 2026-03-20
 
 ## Problem Statement
