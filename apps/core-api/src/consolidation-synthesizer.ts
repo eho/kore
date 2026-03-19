@@ -51,27 +51,35 @@ function resolveModel() {
 const CONTRADICTION_RULE = `
 Before synthesizing, examine all source facts for contradictions. If significant contradictions exist between source memories (e.g., conflicting facts, opposite recommendations, or incompatible claims), set insight_type to "contradiction" in your output regardless of the requested type.`;
 
+const JSON_SCHEMA = `
+You MUST respond with a JSON object with exactly these fields:
+{
+  "title": "string — a concise title for this insight",
+  "insight_type": "cluster_summary" | "evolution" | "connection" | "contradiction",
+  "synthesis": "string — 3-5 sentence synthesis paragraph",
+  "distilled_items": ["string — atomic fact 1", "...up to 7 items"],
+  "tags": ["string — 1-5 lowercase kebab-case tags"],
+  "connections": [{"source_id": "memory-id-1", "target_id": "memory-id-2", "relationship": "description"}]
+}`;
+
 const SYSTEM_PROMPTS: Record<string, string> = {
   cluster_summary: `You are a knowledge synthesis engine for a personal memory system.
 
 Given a cluster of related memories on the same topic, synthesize them into a single reference document. Identify the most important facts, patterns, and takeaways across all sources. Produce a concise synthesis paragraph (3-5 sentences), extract atomic distilled facts, and identify relationships between source memories.
 ${CONTRADICTION_RULE}
-
-Respond with valid JSON matching the required schema.`,
+${JSON_SCHEMA}`,
 
   evolution: `You are a knowledge synthesis engine for a personal memory system.
 
 Given a set of memories on the same topic saved at different times, identify how the user's understanding, position, or practices have changed over time. Highlight what shifted, what was added, and what was abandoned. Produce a synthesis paragraph (3-5 sentences) capturing the evolution narrative, extract atomic distilled facts, and identify temporal relationships between source memories.
 ${CONTRADICTION_RULE}
-
-Respond with valid JSON matching the required schema.`,
+${JSON_SCHEMA}`,
 
   connection: `You are a knowledge synthesis engine for a personal memory system.
 
 Given memories from different categories or types that are semantically related, identify and articulate the cross-domain connection. Explain why these seemingly different memories are related and what insight emerges from seeing them together. Produce a synthesis paragraph (3-5 sentences), extract atomic distilled facts, and map the cross-domain relationships between source memories.
 ${CONTRADICTION_RULE}
-
-Respond with valid JSON matching the required schema.`,
+${JSON_SCHEMA}`,
 };
 
 // ─── Prompt Construction (design doc §5.3) ────────────────────────────
@@ -117,6 +125,36 @@ export function fallbackParse(text: string): InsightOutput {
   }
 
   const raw = JSON.parse(jsonMatch[0]);
+
+  // Map common LLM field name variations to expected names
+  const aliases: string[] = [];
+  if (!raw.title && raw.insight_title) { raw.title = raw.insight_title; aliases.push("insight_title→title"); }
+  if (!raw.distilled_items && raw.distilled_facts) { raw.distilled_items = raw.distilled_facts; aliases.push("distilled_facts→distilled_items"); }
+  if (!raw.distilled_items && raw.facts) { raw.distilled_items = raw.facts; aliases.push("facts→distilled_items"); }
+  if (!raw.distilled_items && raw.key_facts) { raw.distilled_items = raw.key_facts; aliases.push("key_facts→distilled_items"); }
+  if (!raw.tags && raw.keywords) { raw.tags = raw.keywords; aliases.push("keywords→tags"); }
+  if (!raw.connections && raw.cross_domain_relationships) { raw.connections = raw.cross_domain_relationships; aliases.push("cross_domain_relationships→connections"); }
+  if (!raw.connections && raw.relationships) { raw.connections = raw.relationships; aliases.push("relationships→connections"); }
+
+  // Generate title from synthesis if LLM omitted it
+  const generated: string[] = [];
+  if (!raw.title && raw.synthesis) {
+    raw.title = raw.synthesis.split(/[.!?]/)[0].trim().slice(0, 100);
+    generated.push("title (from synthesis)");
+  }
+
+  // Generate tags from insight_type if LLM omitted them
+  if (!Array.isArray(raw.tags) || raw.tags.length === 0) {
+    raw.tags = [raw.insight_type || "insight"];
+    generated.push("tags (from insight_type)");
+  }
+
+  if (aliases.length > 0 || generated.length > 0) {
+    const parts = [];
+    if (aliases.length) parts.push(`aliased: ${aliases.join(", ")}`);
+    if (generated.length) parts.push(`generated: ${generated.join(", ")}`);
+    console.warn(`[consolidation] Fallback parse: LLM used non-standard fields — ${parts.join("; ")}`);
+  }
 
   // Normalize tags: lowercase kebab-case
   if (Array.isArray(raw.tags)) {
@@ -191,11 +229,13 @@ export async function synthesizeInsight(
 
     return { ...output, _extractionPath: "structured" as const };
   } catch (primaryError) {
+    const pmsg = primaryError instanceof Error ? primaryError.message : String(primaryError);
+    console.warn(`[consolidation] Structured output failed, falling back to text parse: ${pmsg}`);
     try {
       const { text } = await generateText({
         model,
         system: systemPrompt,
-        prompt: userPrompt + "\n\nRespond with ONLY valid JSON matching the schema.",
+        prompt: userPrompt + `\n\nRespond with ONLY valid JSON. Use exactly these field names: title, insight_type, synthesis, distilled_items, tags, connections.`,
         temperature: 0,
       });
 
