@@ -28,11 +28,14 @@ export function startWatcher(deps: WatcherDeps): WatcherHandle {
   const updateFn = deps.updateFn ?? update;
 
   let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+  let cooldownTimer: ReturnType<typeof setTimeout> | null = null;
   let noopCooldownUntil = 0;
   let pendingDuringCooldown = false;
+  let stopped = false;
   let watcher: FSWatcher | null = null;
 
   function scheduleUpdate() {
+    if (stopped) return;
     if (Date.now() < noopCooldownUntil) {
       // We're in the no-op cooldown window, but remember that a real event came
       // in so we run update() once when the cooldown expires.
@@ -45,13 +48,16 @@ export function startWatcher(deps: WatcherDeps): WatcherHandle {
     debounceTimer = setTimeout(async () => {
       debounceTimer = null;
       pendingDuringCooldown = false;
+      if (stopped) return;
       try {
         const result = await updateFn();
+        if (stopped) return;
         console.log(`Watcher: QMD update complete (indexed: ${result.indexed}, updated: ${result.updated})`);
         if (result.indexed === 0 && result.updated === 0) {
           noopCooldownUntil = Date.now() + NOOP_COOLDOWN_MS;
           // Schedule a deferred check in case a real write landed during cooldown
-          setTimeout(() => {
+          cooldownTimer = setTimeout(() => {
+            cooldownTimer = null;
             if (pendingDuringCooldown) scheduleUpdate();
           }, NOOP_COOLDOWN_MS);
         }
@@ -69,9 +75,14 @@ export function startWatcher(deps: WatcherDeps): WatcherHandle {
 
   return {
     stop() {
+      stopped = true;
       if (debounceTimer) {
         clearTimeout(debounceTimer);
         debounceTimer = null;
+      }
+      if (cooldownTimer) {
+        clearTimeout(cooldownTimer);
+        cooldownTimer = null;
       }
       if (watcher) {
         watcher.close();

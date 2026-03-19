@@ -220,9 +220,19 @@ console.log("Kore consolidation loop started");
 // ── Graceful shutdown ───────────────────────────────────────────────────
 
 const PLUGIN_STOP_TIMEOUT_MS = 5_000;
+const SHUTDOWN_HARD_TIMEOUT_MS = 15_000;
+let shutdownStarted = false;
 
 async function shutdown() {
+  if (shutdownStarted) return;
+  shutdownStarted = true;
   console.log("Shutting down...");
+
+  // Hard timeout: force exit if graceful shutdown takes too long
+  setTimeout(() => {
+    console.warn("Shutdown timed out, forcing exit");
+    process.exit(1);
+  }, SHUTDOWN_HARD_TIMEOUT_MS).unref();
   watcher.stop();
   embedder.stop();
   worker.stop();
