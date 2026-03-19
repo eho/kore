@@ -16,7 +16,7 @@ let tmpHome: string;
 function createMockDeps(entries: Array<{ externalKey: string; memoryId: string; metadata?: string }> = []): PluginStartDeps {
   return {
     enqueue: () => "task-1",
-    deleteMemory: async () => true,
+    deleteMemory: async () => ({ deleted: true, restoredSources: 0 }),
     getMemoryIdByExternalKey: () => undefined,
     setExternalKeyMapping: () => {},
     removeExternalKeyMapping: () => {},
