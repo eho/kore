@@ -45,7 +45,7 @@ async function resolveFilePath(
   const file = Bun.file(filePath);
   if (await file.exists()) {
     const hash = randomUUID().replace(/-/g, "").slice(0, 4);
-    filePath = join(dir, `${slug}_${hash}.md`);
+    filePath = join(dir, `${slug}-${hash}.md`);
   }
 
   return filePath;

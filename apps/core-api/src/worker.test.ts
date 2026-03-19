@@ -79,7 +79,7 @@ describe("Worker: pollOnce", () => {
     // File should exist in the correct type directory
     const files = await readdir(join(tempDir, "places"));
     expect(files.length).toBe(1);
-    expect(files[0]).toMatch(/^mutekiya_ramen_in_ikebukuro.*\.md$/);
+    expect(files[0]).toMatch(/^mutekiya-ramen-in-ikebukuro.*\.md$/);
   });
 
   test("generated .md file has correct canonical format", async () => {
@@ -183,7 +183,7 @@ describe("Worker: pollOnce", () => {
     await pollOnce(makeDeps());
 
     const files = await readdir(join(tempDir, "places"));
-    const matchingFiles = files.filter((f) => f.startsWith("mutekiya_ramen"));
+    const matchingFiles = files.filter((f) => f.startsWith("mutekiya-ramen"));
     expect(matchingFiles.length).toBe(2);
   });
 
@@ -200,7 +200,7 @@ describe("Worker: pollOnce", () => {
     await pollOnce(makeDeps({ extractFn: noteExtract }));
 
     const noteFiles = await readdir(join(tempDir, "notes"));
-    expect(noteFiles.some((f) => f.startsWith("unique_note_title"))).toBe(true);
+    expect(noteFiles.some((f) => f.startsWith("unique-note-title"))).toBe(true);
   });
 });
 
@@ -284,7 +284,7 @@ describe("E2E: POST /ingest/raw → worker → .md file", () => {
 
     // 5. Verify .md file on disk
     const files = await readdir(join(tempDir, "places"));
-    const mdFile = files.find((f) => f.startsWith("mutekiya_ramen"))!;
+    const mdFile = files.find((f) => f.startsWith("mutekiya-ramen"))!;
     expect(mdFile).toBeDefined();
 
     const content = await readFile(join(tempDir, "places", mdFile), "utf-8");

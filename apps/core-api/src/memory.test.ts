@@ -47,7 +47,7 @@ async function createMemoryFile(opts: {
 }): Promise<string> {
   const { id, title, type = "note", category = "qmd://tech/programming", intent, confidence } = opts;
   const typeDir = { place: "places", media: "media", note: "notes", person: "people" }[type] || "notes";
-  const slug = title.toLowerCase().replace(/\s+/g, "_");
+  const slug = title.toLowerCase().replace(/\s+/g, "-");
   const filePath = join(tempDir, typeDir, `${slug}.md`);
 
   const md = renderMarkdown({
@@ -299,7 +299,7 @@ describe("PUT /api/v1/memory/:id", () => {
     const body = await res.json();
     expect(body.status).toBe("updated");
     expect(body.id).toBe(id);
-    expect(body.file_path).toContain("updated_title.md");
+    expect(body.file_path).toContain("updated-title.md");
 
     // Verify file content
     const content = await readFile(body.file_path, "utf-8");
@@ -409,7 +409,7 @@ describe("PUT /api/v1/memory/:id", () => {
 
     const newPath = memoryIndex.get(id);
     expect(newPath).toBeDefined();
-    expect(newPath).toContain("places/new_path.md");
+    expect(newPath).toContain("places/new-path.md");
     expect(newPath).not.toBe(oldPath);
   });
 });

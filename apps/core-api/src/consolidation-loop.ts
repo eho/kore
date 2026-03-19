@@ -180,15 +180,11 @@ async function loadClusterMember(filePath: string, fm: Record<string, any>): Pro
  * QMD returns paths in "qmd://<collection>/<relative-path>" format.
  * The "memories" collection root maps to dataPath.
  *
- * QMD normalizes underscores → hyphens in virtual paths, but on-disk filenames
- * are produced by slugify() which uses underscores exclusively. Reverse the
- * normalization so the resolved path matches the actual filename.
  */
 function resolveQmdPath(virtualPath: string, dataPath: string): string {
   const prefix = "qmd://memories/";
   if (virtualPath.startsWith(prefix)) {
-    const relative = virtualPath.slice(prefix.length).replace(/-/g, "_");
-    return join(dataPath, relative);
+    return join(dataPath, virtualPath.slice(prefix.length));
   }
   return virtualPath; // already absolute or unknown format — return as-is
 }
