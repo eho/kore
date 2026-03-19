@@ -2,6 +2,9 @@ import { watch, type FSWatcher } from "node:fs";
 import { update } from "@kore/qmd-client";
 
 const DEFAULT_DEBOUNCE_MS = 2_000;
+// After a no-op update (0 indexed, 0 updated), suppress further events for
+// this long. Prevents cascading spurious FSEvents from OS metadata activity.
+const NOOP_COOLDOWN_MS = 30_000;
 
 export interface WatcherDeps {
   dataPath: string;
@@ -25,17 +28,33 @@ export function startWatcher(deps: WatcherDeps): WatcherHandle {
   const updateFn = deps.updateFn ?? update;
 
   let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+  let noopCooldownUntil = 0;
+  let pendingDuringCooldown = false;
   let watcher: FSWatcher | null = null;
 
   function scheduleUpdate() {
+    if (Date.now() < noopCooldownUntil) {
+      // We're in the no-op cooldown window, but remember that a real event came
+      // in so we run update() once when the cooldown expires.
+      pendingDuringCooldown = true;
+      return;
+    }
     if (debounceTimer) {
       clearTimeout(debounceTimer);
     }
     debounceTimer = setTimeout(async () => {
       debounceTimer = null;
+      pendingDuringCooldown = false;
       try {
         const result = await updateFn();
         console.log(`Watcher: QMD update complete (indexed: ${result.indexed}, updated: ${result.updated})`);
+        if (result.indexed === 0 && result.updated === 0) {
+          noopCooldownUntil = Date.now() + NOOP_COOLDOWN_MS;
+          // Schedule a deferred check in case a real write landed during cooldown
+          setTimeout(() => {
+            if (pendingDuringCooldown) scheduleUpdate();
+          }, NOOP_COOLDOWN_MS);
+        }
       } catch (err) {
         console.error("Watcher: QMD update error:", err);
       }

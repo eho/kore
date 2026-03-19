@@ -1,7 +1,8 @@
 import type { KorePlugin, PluginStartDeps, MemoryEvent } from "@kore/shared-types";
 import { startSyncLoop, type SyncLoopOpts, type SyncLoopHandle, type SyncNotesFn } from "./sync-loop";
 import { mkdir } from "node:fs/promises";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
+import { homedir } from "node:os";
 import { Elysia } from "elysia";
 
 export interface AppleNotesPluginOverrides {
@@ -20,8 +21,11 @@ export function createAppleNotesPlugin(overrides?: AppleNotesPluginOverrides): K
     async start(d: PluginStartDeps) {
       deps = d;
 
-      // Resolve staging directory
-      const koreHome = process.env.KORE_HOME || join(process.env.HOME || "~", ".kore");
+      // Resolve staging directory (mirrors resolveKoreHome() in @kore/qmd-client)
+      const rawKoreHome = process.env.KORE_HOME ?? "~/.kore";
+      const koreHome = rawKoreHome.startsWith("~/")
+        ? join(homedir(), rawKoreHome.slice(2))
+        : rawKoreHome === "~" ? homedir() : resolve(rawKoreHome);
       const stagingDir = join(koreHome, "staging", "apple-notes");
       pluginStagingDir = stagingDir;
 

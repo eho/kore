@@ -175,6 +175,9 @@ title: React Advanced Patterns
       }),
     );
 
+    // Reactive check runs fire-and-forget — wait for it to complete
+    await new Promise((r) => setTimeout(r, 100));
+
     // The insight should be flagged as evolving
     const status = tracker.getStatus("ins-existing");
     expect(status?.status).toBe("evolving");

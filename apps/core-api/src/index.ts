@@ -192,7 +192,7 @@ try {
 
 // ── Start background services ───────────────────────────────────────────
 
-const worker = startWorker({ queue, dataPath, dispatcher: eventDispatcher });
+const worker = startWorker({ queue, dataPath, dispatcher: eventDispatcher, memoryIndex });
 console.log("Kore extraction worker started (polling every 5s)");
 
 const watcher = startWatcher({ dataPath });

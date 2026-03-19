@@ -108,7 +108,13 @@ export function createConsolidationEventHandlers(
         return;
       }
 
-      // 3. Reactive re-synthesis: search QMD for related existing insights
+      // 3. Reactive re-synthesis: search QMD for related existing insights.
+      // Fire-and-forget — do NOT await. The QMD search goes through withLock and
+      // can take seconds per call. Awaiting it blocks the entire event dispatch
+      // pipeline, causing lock contention during bulk ingestion (e.g. 298 events
+      // all queued behind the same QMD lock). This is a background check — the
+      // result only flags insights for re-eval on the next consolidation cycle.
+      void (async () => {
       try {
         const title = event.frontmatter.title ?? "";
         const distilledItems: string[] = [];
@@ -180,6 +186,7 @@ export function createConsolidationEventHandlers(
       } catch (err) {
         console.error("[consolidation] Reactive re-synthesis check failed:", err);
       }
+      })(); // end fire-and-forget IIFE
     },
 
     /**

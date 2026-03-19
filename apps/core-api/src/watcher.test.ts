@@ -183,6 +183,7 @@ test("watcher handles updateFn failure gracefully", async () => {
   });
 
   try {
+    await new Promise((r) => setTimeout(r, 50)); // let fs.watch register
     await Bun.write(join(tempDir, "test.md"), "# Test");
 
     // Wait for debounce + processing
@@ -209,6 +210,7 @@ test("watcher handles updateFn exception gracefully", async () => {
   });
 
   try {
+    await new Promise((r) => setTimeout(r, 50)); // let fs.watch register
     await Bun.write(join(tempDir, "test.md"), "# Test");
 
     // Wait for debounce + processing — should not crash
@@ -238,6 +240,7 @@ test("watcher detects changes in subdirectories", async () => {
   });
 
   try {
+    await new Promise((r) => setTimeout(r, 50)); // let fs.watch register
     // Write a .md file inside a subdirectory
     await Bun.write(join(subDir, "my_note.md"), "# My Note");
 

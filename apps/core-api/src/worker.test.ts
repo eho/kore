@@ -1,6 +1,7 @@
 import { describe, test, expect, beforeEach, afterEach } from "bun:test";
 import { pollOnce, startWorker, type WorkerDeps } from "./worker";
 import { QueueRepository } from "./queue";
+import { MemoryIndex } from "./memory-index";
 import { ensureDataDirectories } from "./app";
 import type { MemoryExtraction } from "@kore/shared-types";
 import { renderMarkdown } from "./markdown";
@@ -369,12 +370,42 @@ describe("renderMarkdown: intent and confidence", () => {
     expect(md).toContain("confidence: 0.95");
   });
 
-  test("omits intent and confidence lines when absent", () => {
+  test("omits intent and confidence lines when absent (no intent/confidence)", () => {
     const md = renderMarkdown({
       frontmatter: baseFrontmatter,
       title: "Test",
     });
     expect(md).not.toContain("intent:");
     expect(md).not.toContain("confidence:");
+  });
+});
+
+describe("Worker: memoryIndex integration", () => {
+  test("updates memoryIndex with new memory id and filePath after successful task", async () => {
+    const memoryIndex = new MemoryIndex();
+    expect(memoryIndex.size).toBe(0);
+
+    queue.enqueue({ source: "apple_notes", content: "Great ramen at Mutekiya" });
+    await pollOnce(makeDeps({ memoryIndex }));
+
+    expect(memoryIndex.size).toBe(1);
+    const [[id, filePath]] = [...memoryIndex.entries()];
+    expect(id).toMatch(/^[0-9a-f-]{36}$/);
+    expect(filePath).toContain("places");
+    expect(filePath).toEndWith(".md");
+  });
+
+  test("does not update memoryIndex when task fails", async () => {
+    const memoryIndex = new MemoryIndex();
+    queue.enqueue({ source: "apple_notes", content: "bad content" });
+    await pollOnce(makeDeps({ memoryIndex, extractFn: failingExtract }));
+
+    expect(memoryIndex.size).toBe(0);
+  });
+
+  test("pollOnce works normally when memoryIndex is not provided", async () => {
+    queue.enqueue({ source: "apple_notes", content: "Great ramen at Mutekiya" });
+    const result = await pollOnce(makeDeps()); // no memoryIndex — optional dep
+    expect(result).toBe(true);
   });
 });

@@ -176,26 +176,42 @@ async function loadClusterMember(filePath: string, fm: Record<string, any>): Pro
 }
 
 /**
+ * Resolve a QMD virtual path to an absolute filesystem path.
+ * QMD returns paths in "qmd://<collection>/<relative-path>" format.
+ * The "memories" collection root maps to dataPath.
+ */
+function resolveQmdPath(virtualPath: string, dataPath: string): string {
+  const prefix = "qmd://memories/";
+  if (virtualPath.startsWith(prefix)) {
+    return join(dataPath, virtualPath.slice(prefix.length));
+  }
+  return virtualPath; // already absolute or unknown format — return as-is
+}
+
+/**
  * Enrich candidate results with memoryId and frontmatter from disk.
+ * Resolves QMD virtual paths to absolute filesystem paths before index lookup.
  */
 async function enrichCandidates(
   candidates: CandidateResult[],
   memoryIndex: MemoryIndex,
+  dataPath: string,
 ): Promise<CandidateResult[]> {
   const enriched: CandidateResult[] = [];
   for (const c of candidates) {
-    const id = memoryIndex.getIdByPath(c.filePath);
+    const absolutePath = resolveQmdPath(c.filePath, dataPath);
+    const id = memoryIndex.getIdByPath(absolutePath);
 
     if (!id) {
-      console.log(`[consolidation] Candidate dropped: no memoryIndex match for QMD path "${c.filePath}"`);
+      console.log(`[consolidation] Candidate dropped: no memoryIndex match for path "${absolutePath}" (QMD: "${c.filePath}")`);
       continue;
     }
     try {
-      const content = await Bun.file(c.filePath).text();
+      const content = await Bun.file(absolutePath).text();
       const fm = parseFrontmatter(content);
-      enriched.push({ ...c, memoryId: id, frontmatter: fm });
+      enriched.push({ ...c, filePath: absolutePath, memoryId: id, frontmatter: fm });
     } catch {
-      enriched.push({ ...c, memoryId: id });
+      enriched.push({ ...c, filePath: absolutePath, memoryId: id });
     }
   }
   return enriched;
@@ -388,7 +404,7 @@ export async function runConsolidationCycle(deps: ConsolidationDeps): Promise<Co
       { maxClusterSize, minSimilarityScore },
     );
     candidateDebug = debug;
-    candidates = await enrichCandidates(rawCandidates, memoryIndex);
+    candidates = await enrichCandidates(rawCandidates, memoryIndex, dataPath);
     console.log(`[consolidation] Enriched ${rawCandidates.length} → ${candidates.length} candidate(s) (${rawCandidates.length - candidates.length} missing from memoryIndex)`);
 
     // Merge remaining known sources (if not already in candidates)
@@ -407,7 +423,7 @@ export async function runConsolidationCycle(deps: ConsolidationDeps): Promise<Co
     // 3b. New seed path
     const { candidates: rawCandidates, debug } = await findCandidates(seed, qmdSearch, { maxClusterSize, minSimilarityScore });
     candidateDebug = debug;
-    candidates = await enrichCandidates(rawCandidates, memoryIndex);
+    candidates = await enrichCandidates(rawCandidates, memoryIndex, dataPath);
     console.log(`[consolidation] Enriched ${rawCandidates.length} → ${candidates.length} candidate(s) (${rawCandidates.length - candidates.length} missing from memoryIndex)`);
   }
 
@@ -561,6 +577,7 @@ export async function runConsolidationCycle(deps: ConsolidationDeps): Promise<Co
  */
 export async function runConsolidationDryRun(deps: ConsolidationDeps): Promise<DryRunResult> {
   const {
+    dataPath,
     qmdSearch,
     tracker,
     memoryIndex,
@@ -590,7 +607,7 @@ export async function runConsolidationDryRun(deps: ConsolidationDeps): Promise<D
 
   // 2. Find candidates
   const { candidates: rawCandidates, debug: candidateDebug } = await findCandidates(seed, qmdSearch, { maxClusterSize, minSimilarityScore });
-  const candidates = await enrichCandidates(rawCandidates, memoryIndex);
+  const candidates = await enrichCandidates(rawCandidates, memoryIndex, dataPath);
 
   // 3. Validate cluster
   const validation = validateCluster(seed, candidates, { minClusterSize, maxClusterSize });

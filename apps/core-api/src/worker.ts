@@ -2,6 +2,7 @@ import { randomUUID } from "crypto";
 import { join } from "node:path";
 import { QueueRepository } from "./queue";
 import { EventDispatcher } from "./event-dispatcher";
+import { MemoryIndex } from "./memory-index";
 import { extract } from "@kore/llm-extractor";
 import { MemoryExtractionSchema } from "@kore/shared-types";
 import type { BaseFrontmatter } from "@kore/shared-types";
@@ -23,6 +24,7 @@ export interface WorkerDeps {
   queue: QueueRepository;
   dataPath: string;
   dispatcher?: EventDispatcher;
+  memoryIndex?: MemoryIndex;
   extractFn?: typeof extract;
   pollIntervalMs?: number;
 }
@@ -124,6 +126,11 @@ export async function pollOnce(deps: WorkerDeps): Promise<boolean> {
     console.log(`Worker: processing task ${task.id} (source: ${payload.source}, attempt ${task.retries + 1})`);
     const result = await processTask(task.id, payload, deps);
     console.log(`Worker: task ${task.id} completed`);
+
+    // Update memory index immediately so consolidation can find this memory
+    if (deps.memoryIndex) {
+      deps.memoryIndex.set(result.id, result.filePath);
+    }
 
     // Emit memory.indexed event after successful extraction
     if (deps.dispatcher) {

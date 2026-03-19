@@ -113,7 +113,7 @@ OLLAMA_MODEL=qwen2.5:7b
 | `KORE_API_KEY` | *(required)* | Bearer token for API authentication |
 | `OLLAMA_BASE_URL` | `http://localhost:11434` | Ollama server URL |
 | `OLLAMA_MODEL` | `qwen2.5:7b` | Model used for LLM extraction |
-| `QMD_CACHE_PATH` | `~/.kore/qmd-cache` | Cache directory for QMD GGUF embedding models |
+| `XDG_CACHE_HOME` | `~/.cache` | Base cache dir; QMD models stored at `$XDG_CACHE_HOME/qmd` |
 | `KORE_SYNTHESIS_MODEL` | *(uses LLM_MODEL)* | Optional override model for insight synthesis |
 | `CONSOLIDATION_INTERVAL_MS` | `1800000` (30 min) | How often the consolidation loop runs |
 | `CONSOLIDATION_COOLDOWN_DAYS` | `7` | Days before a memory can be re-consolidated |
