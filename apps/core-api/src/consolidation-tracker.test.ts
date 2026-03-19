@@ -429,6 +429,54 @@ describe("resetFailed", () => {
   });
 });
 
+describe("resetToPending", () => {
+  test("resets active memory to pending, clears all consolidation fields", () => {
+    tracker.upsertMemory("mem-1", "note");
+    tracker.markConsolidated("mem-1");
+
+    tracker.resetToPending("mem-1");
+
+    const row = tracker.getStatus("mem-1");
+    expect(row!.status).toBe("pending");
+    expect(row!.consolidated_at).toBeNull();
+    expect(row!.synthesis_attempts).toBe(0);
+    expect(row!.last_attempted_at).toBeNull();
+    expect(row!.re_eval_reason).toBeNull();
+  });
+
+  test("clears re_eval_reason from evolving state", () => {
+    tracker.upsertMemory("ins-1", "insight");
+    tracker.markEvolving("ins-1", "new_evidence");
+
+    tracker.resetToPending("ins-1");
+
+    const row = tracker.getStatus("ins-1");
+    expect(row!.status).toBe("pending");
+    expect(row!.re_eval_reason).toBeNull();
+  });
+
+  test("no-op for non-existent memory", () => {
+    tracker.resetToPending("nonexistent");
+    expect(tracker.getStatus("nonexistent")).toBeNull();
+  });
+
+  test("makes memory selectable as seed again", () => {
+    tracker.upsertMemory("mem-1", "note");
+    tracker.markConsolidated("mem-1");
+
+    // Active memory with recent consolidated_at — not selectable
+    const before = tracker.selectSeed(999);
+    expect(before).toBeNull();
+
+    tracker.resetToPending("mem-1");
+
+    // Now pending with no consolidated_at — should be selectable
+    const after = tracker.selectSeed();
+    expect(after).not.toBeNull();
+    expect(after!.memoryId).toBe("mem-1");
+  });
+});
+
 describe("truncateAll", () => {
   test("deletes all rows", () => {
     tracker.upsertMemory("mem-1", "note");

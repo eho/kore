@@ -119,7 +119,7 @@ for (const plugin of plugins) {
   if (plugin.start) {
     const deps: PluginStartDeps = {
       enqueue: (payload, priority) => queue.enqueue(payload, priority),
-      deleteMemory: (id) => deleteMemoryById(id, { memoryIndex, eventDispatcher }),
+      deleteMemory: (id) => deleteMemoryById(id, { memoryIndex, eventDispatcher, consolidationTracker }),
       getMemoryIdByExternalKey: (externalKey) => pluginRegistry.get(plugin.name, externalKey),
       setExternalKeyMapping: (externalKey, memoryId, metadata?) => pluginRegistry.set(plugin.name, externalKey, memoryId, metadata),
       removeExternalKeyMapping: (externalKey) => pluginRegistry.remove(plugin.name, externalKey),

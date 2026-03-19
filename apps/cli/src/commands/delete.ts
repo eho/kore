@@ -19,7 +19,7 @@ export async function deleteCommand(id: string, opts: DeleteOpts): Promise<void>
     }
   }
 
-  const result = await apiFetch<{ status: string; id: string }>(
+  const result = await apiFetch<{ status: string; id: string; restored_sources?: number }>(
     `/api/v1/memory/${id}`,
     { method: "DELETE" }
   );
@@ -35,5 +35,10 @@ export async function deleteCommand(id: string, opts: DeleteOpts): Promise<void>
     process.exit(1);
   }
 
-  process.stdout.write(`✓ Deleted memory ${id}.\n`);
+  const restored = result.data?.restored_sources ?? 0;
+  if (restored > 0) {
+    process.stdout.write(`✓ Deleted insight ${id}. ${restored} source memories restored to consolidation pool.\n`);
+  } else {
+    process.stdout.write(`✓ Deleted memory ${id}.\n`);
+  }
 }

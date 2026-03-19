@@ -492,12 +492,16 @@ export function createApp(deps: AppDeps = {}) {
     })
     // ─── Delete Memory ────────────────────────────────────────────
     .delete("/api/v1/memory/:id", async ({ params, set }) => {
-      const deleted = await deleteMemoryById(params.id, { memoryIndex, eventDispatcher });
-      if (!deleted) {
+      const result = await deleteMemoryById(params.id, {
+        memoryIndex,
+        eventDispatcher,
+        consolidationTracker: deps.consolidationTracker,
+      });
+      if (!result.deleted) {
         set.status = 404;
         return { error: "Memory not found", code: "NOT_FOUND" };
       }
-      return { status: "deleted", id: params.id };
+      return { status: "deleted", id: params.id, restored_sources: result.restoredSources };
     })
     // ─── Consolidate ──────────────────────────────────────────────
     .post("/api/v1/consolidate", async ({ query, set }) => {
