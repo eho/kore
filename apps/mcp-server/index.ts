@@ -40,7 +40,7 @@ async function checkDaemonHealth(): Promise<void> {
     }
   } catch {
     process.stderr.write(
-      "Kore daemon is not running. Start it with `kore start`.\n"
+      "Kore daemon is not running. Start it with: bun run apps/core-api/src/index.ts\n"
     );
     process.exit(1);
   }
