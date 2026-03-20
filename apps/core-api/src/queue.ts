@@ -159,6 +159,20 @@ export class QueueRepository {
     return row.count;
   }
 
+  /** Get task counts by status (queued, processing, failed). */
+  getStatusCounts(): { queued: number; processing: number; failed: number } {
+    const rows = this.db
+      .query("SELECT status, COUNT(*) as count FROM tasks WHERE status IN ('queued', 'processing', 'failed') GROUP BY status")
+      .all() as Array<{ status: string; count: number }>;
+    const counts = { queued: 0, processing: 0, failed: 0 };
+    for (const row of rows) {
+      if (row.status in counts) {
+        counts[row.status as keyof typeof counts] = row.count;
+      }
+    }
+    return counts;
+  }
+
   /** Expose the underlying Database instance for sharing with other repositories. */
   getDatabase(): Database {
     return this.db;
