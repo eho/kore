@@ -192,10 +192,16 @@ kore delete <id>           # prompts for confirmation
 kore delete <id> --force   # skip confirmation
 ```
 
-Example output:
+Example output (regular memory):
 
 ```
 ✓ Deleted memory aaaaaaaa-1234-5678-abcd-000000000001.
+```
+
+When deleting an insight, source memories are automatically restored to the consolidation pool:
+
+```
+✓ Deleted insight ins-a1b2c3d4. 3 source memories restored to consolidation pool.
 ```
 
 Options:
@@ -334,6 +340,36 @@ Options:
 | `--dry-run`        | Preview seed, candidates, and type without synthesis  |
 | `--reset-failed`   | Reset failed tracker entries before running           |
 | `--json`           | Output raw JSON                                      |
+
+---
+
+### `kore consolidation reset`
+
+Delete all insights and return all source memories to unconsolidated state. Ingested memories are preserved. Useful for starting fresh insight generation after tuning consolidation parameters.
+
+```sh
+kore consolidation reset           # prompts for confirmation
+kore consolidation reset --force   # skip confirmation (for scripting)
+kore consolidation reset --json    # output raw JSON response
+```
+
+Example output:
+
+```
+Consolidation reset complete!
+Deleted insights:    14
+Restored memories:   42
+Tracker backfilled:  275
+```
+
+Options:
+
+| Flag      | Description                         |
+| --------- | ----------------------------------- |
+| `--force` | Skip confirmation prompt            |
+| `--json`  | Output raw JSON `{ status, deleted_insights, restored_memories, tracker_backfilled }` |
+
+The consolidation loop is paused during the reset and automatically resumed on completion. Exits with code `1` on API error.
 
 ---
 
