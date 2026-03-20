@@ -2,8 +2,10 @@ import pc from "picocolors";
 import { createSpinner } from "nanospinner";
 import { apiFetch } from "../api.ts";
 
-interface IngestResponse {
+interface RememberOutput {
   task_id: string;
+  status: "queued";
+  message: string;
 }
 
 interface TaskResponse {
@@ -21,6 +23,8 @@ interface IngestOpts {
   priority: string;
   wait: boolean;
   json: boolean;
+  suggestedTags?: string;
+  suggestedCategory?: string;
 }
 
 async function readStdin(): Promise<string> {
@@ -42,11 +46,11 @@ async function submitIngest(
     source,
     priority: opts.priority,
   };
-  if (opts.url) {
-    body.original_url = opts.url;
-  }
+  if (opts.url) body.url = opts.url;
+  if (opts.suggestedTags) body.suggested_tags = opts.suggestedTags.split(",").map((t) => t.trim());
+  if (opts.suggestedCategory) body.suggested_category = opts.suggestedCategory;
 
-  const result = await apiFetch<IngestResponse>("/api/v1/ingest/raw", {
+  const result = await apiFetch<RememberOutput>("/api/v1/remember", {
     method: "POST",
     body: JSON.stringify(body),
   });
@@ -113,18 +117,22 @@ export async function ingestCommand(
 
     const result = await submitIngest(content, source, opts);
     if ("error" in result) {
-      process.stderr.write(`Error: ${result.error}\n`);
+      if (opts.json) {
+        process.stderr.write(JSON.stringify({ error: result.error }) + "\n");
+      } else {
+        process.stderr.write(`Error: ${result.error}\n`);
+      }
       process.exit(1);
     }
 
     if (!opts.wait) {
       if (opts.json) {
         process.stdout.write(
-          JSON.stringify({ task_id: result.taskId, source }) + "\n"
+          JSON.stringify({ task_id: result.taskId, status: "queued", source }) + "\n"
         );
       } else {
         process.stdout.write(
-          `Queued task ${result.taskId} (source: "${source}"). Check status: kore status ${result.taskId}\n`
+          `Queued task ${result.taskId} (source: "${source}"). Check status: kore task ${result.taskId}\n`
         );
       }
       return;
@@ -162,11 +170,11 @@ export async function ingestCommand(
     if (!opts.wait) {
       if (opts.json) {
         process.stdout.write(
-          JSON.stringify({ task_id: result.taskId, source }) + "\n"
+          JSON.stringify({ task_id: result.taskId, status: "queued", source }) + "\n"
         );
       } else {
         process.stdout.write(
-          `Queued task ${result.taskId} (source: "${source}"). Check status: kore status ${result.taskId}\n`
+          `Queued task ${result.taskId} (source: "${source}"). Check status: kore task ${result.taskId}\n`
         );
       }
       succeeded++;

@@ -21,7 +21,8 @@ import type { ConsolidationDeps, ConsolidationHandle } from "./consolidation-loo
 import { runConsolidationCycle, runConsolidationDryRun, buildConsolidationDeps } from "./consolidation-loop";
 import { resetConsolidation } from "./consolidation-reset";
 import type { PluginRegistryRepository } from "./plugin-registry";
-import { health as healthOp } from "./operations";
+import { health as healthOp, recall, remember, inspect as inspectOp, insights as insightsOp, consolidate as consolidateOp } from "./operations";
+import type { RecallInput, InsightsInput, ConsolidateInput } from "./operations";
 
 // ─── Zod Schemas for request validation ─────────────────────────────
 
@@ -539,6 +540,104 @@ export function createApp(deps: AppDeps = {}) {
         if (loopHandle) loopHandle.resume();
       }
     })
+    // ─── Recall (shared operation) ─────────────────────────────────
+    .post("/api/v1/recall", async ({ body, set }) => {
+      if (!searchFn) {
+        set.status = 503;
+        return { error: "Search index not available" };
+      }
+      const params = (body ?? {}) as RecallInput;
+      try {
+        return await recall(params, {
+          memoryIndex,
+          qmdSearch: searchFn,
+        });
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        set.status = 500;
+        return { error: message };
+      }
+    }, { body: t.Any() })
+    // ─── Remember (shared operation) ──────────────────────────────
+    .post("/api/v1/remember", async ({ body, set }) => {
+      const params = body as { content?: string; source?: string; url?: string; priority?: string; suggested_tags?: string[]; suggested_category?: string };
+      if (!params?.content) {
+        set.status = 400;
+        return { error: "content is required", code: "VALIDATION_ERROR" };
+      }
+      try {
+        const result = await remember({
+          content: params.content,
+          source: params.source,
+          url: params.url,
+          priority: (params.priority as "low" | "normal" | "high") ?? "normal",
+          suggested_tags: params.suggested_tags,
+          suggested_category: params.suggested_category,
+        }, { queue });
+        set.status = 202;
+        return result;
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        set.status = 500;
+        return { error: message };
+      }
+    }, { body: t.Any() })
+    // ─── Inspect (shared operation) ──────────────────────────────
+    .get("/api/v1/inspect/:id", async ({ params, set }) => {
+      try {
+        const result = await inspectOp(params.id, { memoryIndex });
+        if (!result) {
+          set.status = 404;
+          return { error: "Memory not found", code: "NOT_FOUND" };
+        }
+        return result;
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        set.status = 500;
+        return { error: message };
+      }
+    })
+    // ─── Insights (shared operation) ─────────────────────────────
+    .get("/api/v1/insights", async ({ query, set }) => {
+      if (!searchFn) {
+        set.status = 503;
+        return { error: "Search index not available" };
+      }
+      const params: InsightsInput = {};
+      if (query.query) params.query = query.query as string;
+      if (query.type) params.insight_type = query.type as string;
+      if (query.status) params.status = query.status as string;
+      if (query.limit) params.limit = Number(query.limit);
+      try {
+        return await insightsOp(params, {
+          dataPath,
+          qmdSearch: searchFn,
+          memoryIndex,
+        });
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        set.status = 500;
+        return { error: message };
+      }
+    })
+    // ─── Consolidate (shared operation) ──────────────────────────
+    .post("/api/v1/consolidate/op", async ({ body, set }) => {
+      const params = (body ?? {}) as ConsolidateInput;
+      try {
+        return await consolidateOp(params, {
+          dataPath,
+          qmdSearch: searchFn!,
+          consolidationTracker: deps.consolidationTracker,
+          memoryIndex,
+          eventDispatcher,
+          consolidationLoopHandle: deps.consolidationLoopHandle,
+        });
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        set.status = 500;
+        return { error: message };
+      }
+    }, { body: t.Any() })
     // ─── Reset Consolidation ─────────────────────────────────────
     .delete("/api/v1/consolidation", async ({ set }) => {
       const tracker = deps.consolidationTracker;

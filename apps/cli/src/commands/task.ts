@@ -11,21 +11,19 @@ interface TaskResponse {
   [key: string]: unknown;
 }
 
-export async function statusCommand(
+export async function taskCommand(
   taskId: string,
   opts: { json: boolean }
 ): Promise<void> {
   const result = await apiFetch<TaskResponse>(`/api/v1/task/${taskId}`);
 
   if (!result.ok) {
-    if (result.status === 404) {
+    if (opts.json) {
+      process.stderr.write(JSON.stringify({ error: result.message }) + "\n");
+    } else if (result.status === 404) {
       process.stderr.write(`Error: Task ${taskId} not found.\n`);
-    } else if (result.status === 0) {
-      process.stderr.write(`Error: ${result.message}\n`);
     } else {
-      process.stderr.write(
-        `Error: Failed to fetch task ${taskId} (${result.status}): ${result.message}\n`
-      );
+      process.stderr.write(`Error: ${result.message}\n`);
     }
     process.exit(1);
   }
@@ -33,7 +31,7 @@ export async function statusCommand(
   const task = result.data;
 
   if (opts.json) {
-    process.stdout.write(JSON.stringify(task, null, 2) + "\n");
+    process.stdout.write(JSON.stringify(task) + "\n");
     return;
   }
 
