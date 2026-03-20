@@ -20,13 +20,18 @@ Kore uses a **daemon-required model** with a **stdio proxy** pattern:
                                                  └──────────────────┘
 ```
 
-**Two components:**
+**Two components, two lifetimes:**
 
-1. **Kore Daemon** (`kore start`) — the core-api server that runs continuously, managing memories, the search index, and the ingestion queue. The MCP server is embedded in this process at the `/mcp` HTTP endpoint.
+1. **Kore Daemon** (`kore start`) — the core-api server you run once and leave running. It manages memories, the search index, the ingestion queue, and the consolidation loop. The MCP server is embedded in this process and the `/mcp` HTTP route is **always active** — it does not need to be enabled or started separately.
 
-2. **stdio Proxy** (`kore mcp`) — a lightweight bridge that translates MCP JSON-RPC over stdio into HTTP requests to the daemon's `/mcp` endpoint. It contains no business logic — all tool execution happens in the daemon.
+2. **stdio Proxy** (`kore mcp`) — a lightweight bridge process with no business logic. It translates MCP JSON-RPC from stdio into HTTP requests to the daemon's `/mcp` endpoint. The agent spawns it automatically at session start and it exits when the session ends. **You never run `kore mcp` manually.**
 
-**Why two components?** MCP clients like Claude Desktop expect to launch a process that speaks MCP over stdio. But Kore's memory system requires a long-running daemon (for the search index, queue worker, consolidation loop, etc.). The stdio proxy bridges these models: the client launches `kore mcp`, which connects to the already-running daemon.
+**Why two components?** MCP clients expect to launch a process that speaks MCP over stdio (they can't make HTTP requests to a running daemon). But Kore requires a persistent daemon for its stateful subsystems. The proxy bridges these two models: the agent spawns a fresh `kore mcp` process per session, that process connects to the already-running daemon, and all tool calls are forwarded over HTTP.
+
+**Typical session flow:**
+1. You run `kore start` once — daemon is up, `/mcp` is live
+2. You open Claude Desktop or Claude Code — agent spawns `kore mcp` automatically
+3. Agent session ends — `kore mcp` exits; daemon keeps running
 
 ## Prerequisites
 
