@@ -19,28 +19,14 @@ export async function consolidateCommand(opts: {
   json: boolean;
   verbose: boolean;
 }): Promise<void> {
-  // If reset-failed, call the old endpoint first
-  if (opts.resetFailed) {
-    const resetResult = await apiFetch<unknown>("/api/v1/consolidate?reset_failed=true", {
-      method: "POST",
-    });
-    if (!resetResult.ok) {
-      if (opts.json) {
-        process.stderr.write(JSON.stringify({ error: resetResult.message }) + "\n");
-      } else {
-        process.stderr.write(`Error: Failed to reset failed entries: ${resetResult.message}\n`);
-      }
-      process.exit(1);
-    }
-  }
-
   const isTTY = process.stdout.isTTY && !opts.json && !opts.dryRun;
   const spinner = isTTY ? createSpinner("Consolidating…").start() : null;
 
   const body: Record<string, unknown> = {};
   if (opts.dryRun) body.dry_run = true;
+  if (opts.resetFailed) body.reset_failed = true;
 
-  const result = await apiFetch<ConsolidateOutput>("/api/v1/consolidate/op", {
+  const result = await apiFetch<ConsolidateOutput>("/api/v1/consolidate", {
     method: "POST",
     body: JSON.stringify(body),
   });

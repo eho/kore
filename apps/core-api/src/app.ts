@@ -17,8 +17,7 @@ import { EventDispatcher } from "./event-dispatcher";
 import { deleteMemoryById } from "./delete-memory";
 import type { HybridQueryResult, SearchOptions } from "@kore/qmd-client";
 import type { ConsolidationTracker } from "./consolidation-tracker";
-import type { ConsolidationDeps, ConsolidationHandle } from "./consolidation-loop";
-import { runConsolidationCycle, runConsolidationDryRun, buildConsolidationDeps } from "./consolidation-loop";
+import type { ConsolidationHandle } from "./consolidation-loop";
 import { resetConsolidation } from "./consolidation-reset";
 import type { PluginRegistryRepository } from "./plugin-registry";
 import { health as healthOp, recall, remember, inspect as inspectOp, insights as insightsOp, consolidate as consolidateOp } from "./operations";
@@ -504,42 +503,34 @@ export function createApp(deps: AppDeps = {}) {
       }
       return { status: "deleted", id: params.id, restored_sources: result.restoredSources };
     })
-    // ─── Consolidate ──────────────────────────────────────────────
-    .post("/api/v1/consolidate", async ({ query, set }) => {
-      const tracker = deps.consolidationTracker;
-      const loopHandle = deps.consolidationLoopHandle;
-      if (!tracker || !searchFn) {
-        set.status = 503;
-        return { error: "Consolidation service not available" };
-      }
-
-      const resetFailed = query.reset_failed === "true";
-      const dryRun = query.dry_run === "true";
-
+    // ─── Consolidate (shared operation) ──────────────────────────
+    .post("/api/v1/consolidate", async ({ body, query, set }) => {
+      // Support reset_failed as query param (backward compat) or body param
+      const resetFailed = query.reset_failed === "true" || (body as any)?.reset_failed === true;
       if (resetFailed) {
-        tracker.resetFailed();
+        const tracker = deps.consolidationTracker;
+        if (tracker) tracker.resetFailed();
       }
 
-      const consolidationDeps = buildConsolidationDeps({
-        dataPath,
-        qmdSearch: searchFn,
-        tracker,
-        memoryIndex,
-        eventDispatcher,
-      });
+      const params = (body ?? {}) as ConsolidateInput;
+      // Also accept dry_run from query param for backward compat
+      if (query.dry_run === "true") params.dry_run = true;
 
-      // Pause the background loop for the duration of this manual cycle to
-      // prevent both from picking the same seed and producing duplicate insights.
-      if (loopHandle) await loopHandle.pause();
       try {
-        if (dryRun) {
-          return await runConsolidationDryRun(consolidationDeps);
-        }
-        return await runConsolidationCycle(consolidationDeps);
-      } finally {
-        if (loopHandle) loopHandle.resume();
+        return await consolidateOp(params, {
+          dataPath,
+          qmdSearch: searchFn!,
+          consolidationTracker: deps.consolidationTracker,
+          memoryIndex,
+          eventDispatcher,
+          consolidationLoopHandle: deps.consolidationLoopHandle,
+        });
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        set.status = 500;
+        return { error: message };
       }
-    })
+    }, { body: t.Any() })
     // ─── Recall (shared operation) ─────────────────────────────────
     .post("/api/v1/recall", async ({ body, set }) => {
       if (!searchFn) {
@@ -621,24 +612,6 @@ export function createApp(deps: AppDeps = {}) {
         return { error: message };
       }
     })
-    // ─── Consolidate (shared operation) ──────────────────────────
-    .post("/api/v1/consolidate/op", async ({ body, set }) => {
-      const params = (body ?? {}) as ConsolidateInput;
-      try {
-        return await consolidateOp(params, {
-          dataPath,
-          qmdSearch: searchFn!,
-          consolidationTracker: deps.consolidationTracker,
-          memoryIndex,
-          eventDispatcher,
-          consolidationLoopHandle: deps.consolidationLoopHandle,
-        });
-      } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        set.status = 500;
-        return { error: message };
-      }
-    }, { body: t.Any() })
     // ─── Reset Consolidation ─────────────────────────────────────
     .delete("/api/v1/consolidation", async ({ set }) => {
       const tracker = deps.consolidationTracker;

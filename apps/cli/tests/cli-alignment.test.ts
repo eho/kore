@@ -465,7 +465,7 @@ describe("consolidate command (consolidate operation)", () => {
     port: 18905,
     fetch(req) {
       const url = new URL(req.url);
-      if (url.pathname === "/api/v1/consolidate/op" && req.method === "POST") {
+      if (url.pathname === "/api/v1/consolidate" && req.method === "POST") {
         return (async () => {
           const body = (await req.json()) as { dry_run?: boolean };
           if (body.dry_run) {
@@ -488,11 +488,6 @@ describe("consolidate command (consolidate operation)", () => {
             cluster_size: 3,
           }), { headers: { "Content-Type": "application/json" } });
         })();
-      }
-      if (url.pathname === "/api/v1/consolidate" && req.method === "POST") {
-        return new Response(JSON.stringify({ status: "ok" }), {
-          headers: { "Content-Type": "application/json" },
-        });
       }
       return new Response("Not found", { status: 404 });
     },
