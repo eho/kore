@@ -221,7 +221,7 @@ The primary retrieval tool. Wraps QMD hybrid search but returns structured memor
 **Input Schema:**
 ```typescript
 {
-  query: string;               // Natural language search query (required)
+  query?: string;              // Natural language search query (optional — if omitted, returns recent memories sorted by date_saved descending)
   type?: string;               // Filter by memory type: "place" | "media" | "note" | "person"
   intent?: string;             // Filter by intent: "recommendation" | "reference" | "personal-experience" | "aspiration" | "how-to"
   tags?: string[];             // Filter to memories containing ALL specified tags
@@ -268,44 +268,78 @@ The primary retrieval tool. Wraps QMD hybrid search but returns structured memor
 async function recall(params: RecallInput): Promise<RecallOutput> {
   const limit = params.limit ?? 10;
   const offset = params.offset ?? 0;
+  const BATCH_SIZE = 50; // fetch in fixed batches regardless of requested limit
 
-  // 1. Search QMD — over-fetch to account for post-filtering and pagination
-  const qmdResults = await qmdClient.search(params.query, {
-    intent: "personal knowledge retrieval",
-    limit: (limit + offset) * 2,
-  });
+  // When query is omitted, list all memories sorted by date_saved descending.
+  // No QMD search is needed — scan the memory index directly and sort.
+  if (!params.query) {
+    let all = await Promise.all(
+      [...memoryIndex.entries()].map(async ([id, filePath]) => {
+        const memory = await parseMemoryFileFull(id, filePath);
+        return memory ? { ...memory, score: 1.0, distilled_items: extractDistilledItems(filePath) } : null;
+      })
+    );
+    let filtered = applyKoreFilters(all.filter(Boolean), params);
+    filtered.sort((a, b) => b.date_saved.localeCompare(a.date_saved));
+    const results = filtered.slice(offset, offset + limit);
+    return { results, query: "", total: results.length, offset, has_more: filtered.length > offset + limit };
+  }
 
-  // 2. Enrich with Kore metadata
-  const enriched = await Promise.all(
-    qmdResults.map(async (r) => {
-      const id = memoryIndex.getIdByPath(r.file);
-      if (!id) return null;
-      const memory = await parseMemoryFileFull(id, r.file);
-      if (!memory) return null;
-      return { ...memory, score: r.score, distilled_items: extractDistilledItems(r.file) };
-    })
-  );
+  // 1. Iteratively fetch from QMD in batches until we have enough post-filtered
+  //    results or QMD is exhausted. A fixed *2 multiplier is unsafe when heavy
+  //    Kore-level filters (type, intent, tags) are applied: a single batch may
+  //    return zero matching results even if matches exist deeper in the ranking.
+  const filtered: EnrichedMemory[] = [];
+  let qmdOffset = 0;
+  let qmdExhausted = false;
 
-  // 3. Apply Kore-level filters
-  let filtered = enriched.filter(Boolean);
+  while (filtered.length < offset + limit && !qmdExhausted) {
+    const qmdResults = await qmdClient.search(params.query, {
+      intent: "personal knowledge retrieval",
+      limit: BATCH_SIZE,
+      offset: qmdOffset,
+    });
 
-  // Filter out retired insights
-  filtered = filtered.filter(m => m.type !== "insight" || m.status !== "retired");
+    if (qmdResults.length < BATCH_SIZE) qmdExhausted = true;
+    qmdOffset += qmdResults.length;
 
+    // 2. Enrich batch with Kore metadata
+    const enriched = await Promise.all(
+      qmdResults.map(async (r) => {
+        const id = memoryIndex.getIdByPath(r.file);
+        if (!id) return null;
+        const memory = await parseMemoryFileFull(id, r.file);
+        if (!memory) return null;
+        return { ...memory, score: r.score, distilled_items: extractDistilledItems(r.file) };
+      })
+    );
+
+    // 3. Apply Kore-level filters to this batch and accumulate
+    const batchFiltered = applyKoreFilters(enriched.filter(Boolean), params);
+    filtered.push(...batchFiltered);
+  }
+
+  // 4. Apply pagination over accumulated filtered results
+  const results = filtered.slice(offset, offset + limit);
+  return { results, query: params.query, total: results.length, offset, has_more: !qmdExhausted || filtered.length > offset + limit };
+}
+
+// Shared filter logic used by both query and no-query paths
+function applyKoreFilters(memories: EnrichedMemory[], params: RecallInput): EnrichedMemory[] {
+  let filtered = memories.filter(m => m.type !== "insight" || m.status !== "retired"); // exclude retired insights
   if (params.type) filtered = filtered.filter(m => m.type === params.type);
   if (params.intent) filtered = filtered.filter(m => m.intent === params.intent);
   if (params.tags?.length) filtered = filtered.filter(m => params.tags!.every(t => m.tags.includes(t)));
   if (params.min_confidence) filtered = filtered.filter(m => (m.confidence ?? 0) >= params.min_confidence!);
+  if (params.min_score) filtered = filtered.filter(m => m.score >= params.min_score!);
   if (params.created_after) filtered = filtered.filter(m => m.date_saved >= params.created_after!);
   if (params.created_before) filtered = filtered.filter(m => m.date_saved <= params.created_before!);
   if (!params.include_insights) filtered = filtered.filter(m => m.type !== "insight");
-
-  // 4. Apply pagination
-  const results = filtered.slice(offset, offset + limit);
-
-  return { results, query: params.query, total: results.length, offset, has_more: filtered.length > offset + limit };
+  return filtered;
 }
 ```
+
+**Pagination note:** QMD does not support pre-filtering by frontmatter fields (type, intent, tags). All filtering is applied post-search in Kore. The iterative batch strategy guarantees correctness — agents will always receive `limit` results (or fewer, if the total corpus is smaller) regardless of how selective the filters are. The trade-off is that highly selective queries (e.g., `intent=recommendation` on a large corpus) may require multiple QMD round-trips. In practice this is bounded: each round-trip is <200ms and QMD is exhausted in at most `total_memories / 50` batches.
 
 ### 4.2 `remember` — Save New Memory
 
@@ -381,7 +415,7 @@ Retrieves complete details of a specific memory by ID, including all metadata, d
   source: string;
   url?: string;
   distilled_items: string[];
-  content: string;            // Full Kore Markdown file content (frontmatter + distilled items + original source)
+  content: string;            // Full Kore Markdown file content (frontmatter + distilled items + original source), truncated at 20,000 characters
   // Consolidation metadata
   consolidated_at?: string;
   insight_refs?: string[];
@@ -395,7 +429,7 @@ Retrieves complete details of a specific memory by ID, including all metadata, d
 }
 ```
 
-**Implementation:** Reads the memory file from disk via `memoryIndex.get(id)`, parses frontmatter and body sections, returns the full structured representation. The `distilled_items` field is parsed from the `## Distilled Memory Items` section in the Markdown body (bulleted list items). The `content` field is the full raw file content as read from disk. The shared `inspect()` operation in `apps/core-api/src/operations/inspect.ts` implements this body parsing; the same logic is reused by `recall`'s `extractDistilledItems()` helper.
+**Implementation:** Reads the memory file from disk via `memoryIndex.get(id)`, parses frontmatter and body sections, returns the full structured representation. The `distilled_items` field is parsed from the `## Distilled Memory Items` section in the Markdown body (bulleted list items). The `content` field is the full raw file content as read from disk, **truncated at 20,000 characters** — large web clips or PDFs could otherwise blow out the agent's context window; the distilled_items field always contains the key facts regardless of truncation. The shared `inspect()` operation in `apps/core-api/src/operations/inspect.ts` implements this body parsing; the same logic is reused by `recall`'s `extractDistilledItems()` helper.
 
 ### 4.4 `insights` — Query Synthesized Knowledge
 
@@ -450,6 +484,7 @@ Returns the current state of the Kore system — memory counts, queue status, sy
 **Output Schema:**
 ```typescript
 {
+  version: string;                     // core-api version (e.g., "0.4.1") — useful for debugging agent-reported issues
   memories: {
     total: number;
     by_type: Record<string, number>;   // { note: 120, place: 45, media: 30, person: 12, insight: 8 }
@@ -482,45 +517,46 @@ Triggers an immediate consolidation cycle. Supports dry-run mode for previewing 
 ```typescript
 {
   dry_run?: boolean;           // Preview only, don't write insight files (default: false)
-  no_wait?: boolean;           // Return immediately after triggering; don't wait for cycle to complete (default: false)
 }
 ```
 
 **Output Schema:**
 ```typescript
-// When dry_run is false and no_wait is false (default): blocks until cycle completes
-// The API awaits runConsolidationCycle() synchronously, so this returns the full result:
+// When dry_run is false (default): blocks until cycle completes, returns full result.
+// The API awaits runConsolidationCycle() synchronously and pauses the background loop
+// for the duration to prevent duplicate insight creation.
 {
-  status: "consolidated" | "no_seed" | "cluster_too_small";
+  status: "consolidated" | "no_seed" | "cluster_too_small" | "retired_reeval" | "synthesis_failed";
   seed?: { id: string; title: string };
-  insight_id?: string;
-  cluster_size?: number;
-  message?: string;
+  insightId?: string;          // present when status === "consolidated"
+  clusterSize?: number;        // present when status === "consolidated"
+  candidateCount?: number;     // present when status === "cluster_too_small"
 }
+// Status meanings:
+//   "consolidated"     — insight created successfully
+//   "no_seed"          — no eligible seed found in the tracker (nothing to consolidate yet)
+//   "cluster_too_small"— seed found but fewer than 3 related memories exist; seed is cooled down
+//   "retired_reeval"   — seed was an insight being re-evaluated but too few source memories remain; insight retired
+//   "synthesis_failed" — LLM synthesis failed (max attempts reached or LLM error)
+// For all non-"consolidated" statuses the agent should report to the user and suggest trying again later.
 
-// When no_wait is true: fires cycle in background, returns immediately
-{
-  status: "triggered";
-  message: string;
-}
-
-// When dry_run is true:
+// When dry_run is true, two possible shapes:
+// Candidates found — preview of what would be synthesized:
 {
   status: "dry_run";
-  seed?: {
-    id: string;
-    title: string;
-  };
-  candidates?: Array<{
-    id: string;
-    title: string;
-    score: number;
-  }>;
-  proposed_type?: string;        // cluster_summary | evolution | connection
-  estimated_confidence?: number;
-  message: string;               // "No eligible seeds found" if nothing to consolidate
+  seed: { id: string; title: string };
+  candidates: Array<{ id: string; title: string; score: number }>;
+  proposedInsightType: string;   // "cluster_summary" | "evolution" | "connection"
+  estimatedConfidence: number;
+  candidateCount: number;
+}
+// No eligible seed found:
+{
+  status: "no_seed";
 }
 ```
+
+**Serialization note:** The underlying TypeScript interfaces use camelCase (`insightId`, `clusterSize`, `proposedInsightType`, `estimatedConfidence`, `candidateCount`). The MCP wrapper must serialize these to snake_case when building the JSON response if following standard JSON API conventions — or keep camelCase and document it consistently. Either is fine; pick one and be consistent across all tools.
 
 ---
 
@@ -549,11 +585,21 @@ WHEN TO USE:
 - Use created_after/created_before for time-based queries: "restaurants saved
   last month", "articles from 2024", "recent bookmarks".
 - Use offset for pagination when you need more results than a single page.
+- query is optional. For purely metadata-based browsing (e.g., "show me all
+  my aspirations" or "list recent places"), omit query entirely and use the
+  type/intent/created_after filters — results are sorted by date_saved
+  descending. Only pass a semantic query when content relevance matters.
 
 WHEN NOT TO USE:
 - General knowledge questions with no personal angle ("what is photosynthesis")
 - Pure code generation or debugging tasks with no personal context
 - When the user has explicitly said they don't want memory lookup
+
+IF RESULTS ARE EMPTY OR SPARSE:
+- Try broadening your search terms or removing specific filters before
+  concluding nothing exists. A query for "tonkotsu ramen tokyo" that returns
+  nothing might still return results for "ramen tokyo" or "ramen".
+- Try omitting intent/tag filters to widen the match set, then narrow manually.
 
 RESULT INTERPRETATION:
 - score: How relevant this result is to your query (from the search engine)
@@ -655,7 +701,15 @@ WHEN TO USE:
 - Use dry_run=true first to preview what would be synthesized before committing.
 
 NOTE: Consolidation runs automatically in the background every 30 minutes.
-This tool is for on-demand synthesis when the user wants it now.
+This tool is for on-demand synthesis when the user wants it now. The call
+blocks until the cycle completes (typically <5s) and returns the result.
+
+RESULT INTERPRETATION:
+- "consolidated": synthesis succeeded — insightId contains the new insight's ID
+- "no_seed": nothing ready to consolidate yet; more memories needed
+- "cluster_too_small": a candidate seed exists but lacks related memories yet
+- "retired_reeval" / "synthesis_failed": transient failure; suggest trying again
+- dry_run "no_seed": no candidates at all — the knowledge base may be too sparse
 ```
 
 ---
@@ -1012,6 +1066,17 @@ Different agents (Claude, GPT, Cursor) may interpret tool descriptions different
 | 10 | `raw_source` field name misleading in `inspect` output | Renamed to `content` (§4.3) — reflects that the full file content is returned, which is the purpose of `inspect` |
 | 11 | `distilled_items` parsing undefined | §4.3 implementation note added: parsed from `## Distilled Memory Items` Markdown section; shared `extractDistilledItems()` helper reused by both `inspect` and `recall` |
 | 12 | Phase 3 blocked by consolidation system | Prerequisite lifted — consolidation system is complete; phases restructured accordingly |
+| 13 | `consolidate` output schema missing `retired_reeval` and `synthesis_failed` statuses | §4.6 output schema updated to include all five statuses returned by `ConsolidationCycleResult`; §5.6 description updated with interpretation guidance for each |
+| 14 | `no_wait` parameter not implemented in current API | Removed from §4.6 input schema — the API always awaits synchronously; the background loop already handles async consolidation |
+| 15 | `consolidate` dry-run returns `"no_seed"` status (not `"dry_run"` + message) when no seed found | §4.6 dry-run output split into two shapes: `"dry_run"` (candidates found) and `"no_seed"` (nothing to consolidate); message string removed |
+| 16 | `consolidate` field names: `proposed_type` → `proposedInsightType`; camelCase vs snake_case | §4.6 output schemas updated to match actual `ConsolidationCycleResult` and `DryRunResult` interfaces; serialization note added |
+| 17 | `candidateCount` field undocumented | Added to `consolidate` output schema (§4.6) for both `cluster_too_small` and dry-run results |
+| 18 | `min_score` filter missing from `recall` implementation pseudocode | Added `if (params.min_score)` filter step to §4.1 implementation block |
+| 19 | Post-filtering pagination trap: fixed 2x over-fetch fails when strict filters (type, intent, tags) produce zero matches in the fetched batch | §4.1 implementation rewritten to use an iterative batch loop (50 results/batch) that continues until `offset + limit` filtered results are accumulated or QMD is exhausted; pagination note added explaining the trade-off |
+| 20 | `recall` query required but agents need metadata-only browsing ("show all aspirations") | `query` made optional (§4.1 input schema); no-query path added that scans memory index sorted by `date_saved` descending; §5.1 description updated with guidance on when to omit query |
+| 21 | `inspect` content field unbounded — large web clips can overflow agent context | `content` truncated at 20,000 characters (§4.3 output schema and implementation note); note added that `distilled_items` always contains key facts regardless of truncation |
+| 22 | Empty search fallback not documented | Added "IF RESULTS ARE EMPTY OR SPARSE" block to §5.1 `recall` description with broadening strategies |
+| 23 | `health` output missing version for debugging | Added `version: string` field to §4.5 health output schema |
 
 ### Assessed and Not Incorporated
 
