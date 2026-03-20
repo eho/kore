@@ -6,6 +6,11 @@
       "sourceType": "github",
       "computedHash": "029cff5134fa331dbf2fad89ac1fc060415d5032d04564e925f22dd317363962"
     },
+    "prd-completion-reviewer": {
+      "source": "eho/agent-skills",
+      "sourceType": "github",
+      "computedHash": "ab1983b19fa213f67b4f7aeae101002a9aa4959ab4feba37fc5a1e3d9afc5d49"
+    },
     "prd-to-github-milestone": {
       "source": "eho/agent-skills",
       "sourceType": "github",
