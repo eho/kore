@@ -185,6 +185,11 @@ function mcpSuccess(data: unknown) {
 
 // ─── MCP Server Creation ────────────────────────────────────────────
 
+// NOTE: We use `as any` for the Zod schema objects and explicitly type the callback
+// arguments as `args: any` when registering tools with `server.tool()`.
+// This is necessary because the MCP SDK uses extremely deep generic type inference
+// to map Zod schemas to handler arguments. Passing complex Zod objects inline causes
+// the TypeScript compiler to enter an infinite inference loop and crash with an Out of Memory (OOM) error.
 export function createMcpServer(deps: OperationDeps) {
   const server = new McpServer(
     { name: "kore", version: "1.0.0" },
@@ -210,8 +215,8 @@ export function createMcpServer(deps: OperationDeps) {
       min_score: z.number().optional().describe("Minimum QMD relevance score (default: 0.0)"),
       min_confidence: z.number().optional().describe("Minimum extraction confidence (default: 0.0)"),
       include_insights: z.boolean().optional().describe("Include insight-type results (default: true)"),
-    },
-    async (args) => {
+    } as any,
+    async (args: any) => {
       try {
         const result = await recall(args, deps);
         return mcpSuccess(result);
@@ -236,8 +241,8 @@ export function createMcpServer(deps: OperationDeps) {
       priority: z.string().optional().describe('"low" | "normal" | "high" (default: "normal")'),
       suggested_tags: z.array(z.string()).optional().describe("Agent-suggested tags — passed as hints to the extraction pipeline"),
       suggested_category: z.string().optional().describe('Agent-suggested category (e.g., "travel/food/ramen") — hint, not override'),
-    },
-    async (args) => {
+    } as any,
+    async (args: any) => {
       try {
         const result = await remember(
           { ...args, priority: (args.priority as "low" | "normal" | "high") ?? "normal" },
@@ -257,8 +262,8 @@ export function createMcpServer(deps: OperationDeps) {
     INSPECT_DESCRIPTION,
     {
       id: z.string().describe("Memory UUID (required)"),
-    },
-    async (args) => {
+    } as any,
+    async (args: any) => {
       try {
         const result = await inspect(args.id, deps);
         if (!result) {
@@ -281,8 +286,8 @@ export function createMcpServer(deps: OperationDeps) {
       insight_type: z.string().optional().describe('Filter: "cluster_summary" | "evolution" | "contradiction" | "connection"'),
       status: z.string().optional().describe('Filter: "active" | "evolving" | "degraded" (default: "active")'),
       limit: z.number().optional().describe("Max results (default: 5, max: 20)"),
-    },
-    async (args) => {
+    } as any,
+    async (args: any) => {
       try {
         const result = await insights(args, deps);
         return mcpSuccess(result);
@@ -318,8 +323,8 @@ export function createMcpServer(deps: OperationDeps) {
     CONSOLIDATE_DESCRIPTION,
     {
       dry_run: z.boolean().optional().describe("Preview only, don't write insight files (default: false)"),
-    },
-    async (args) => {
+    } as any,
+    async (args: any) => {
       try {
         const result = await consolidate(args, deps);
         return mcpSuccess(result);
