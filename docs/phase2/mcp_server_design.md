@@ -556,7 +556,7 @@ Triggers an immediate consolidation cycle. Supports dry-run mode for previewing 
 }
 ```
 
-**Serialization note:** The underlying TypeScript interfaces use camelCase (`insightId`, `clusterSize`, `proposedInsightType`, `estimatedConfidence`, `candidateCount`). The MCP wrapper must serialize these to snake_case when building the JSON response if following standard JSON API conventions — or keep camelCase and document it consistently. Either is fine; pick one and be consistent across all tools.
+**Serialization note:** The underlying TypeScript interfaces use camelCase (`insightId`, `clusterSize`, `proposedInsightType`, `estimatedConfidence`, `candidateCount`). The MCP wrapper MUST serialize these to snake_case (`insight_id`, `cluster_size`, `proposed_insight_type`, `estimated_confidence`, `candidate_count`) when building the JSON response — consistent with all other tools' output fields (`date_saved`, `insight_type`, `source_ids`, etc.).
 
 ---
 
@@ -1077,6 +1077,7 @@ Different agents (Claude, GPT, Cursor) may interpret tool descriptions different
 | 21 | `inspect` content field unbounded — large web clips can overflow agent context | `content` truncated at 20,000 characters (§4.3 output schema and implementation note); note added that `distilled_items` always contains key facts regardless of truncation |
 | 22 | Empty search fallback not documented | Added "IF RESULTS ARE EMPTY OR SPARSE" block to §5.1 `recall` description with broadening strategies |
 | 23 | `health` output missing version for debugging | Added `version: string` field to §4.5 health output schema |
+| 24 | Serialization note for `consolidate` was ambiguous ("either is fine") | §4.6 serialization note updated: snake_case is mandatory for MCP output, matching all other tools |
 
 ### Assessed and Not Incorporated
 
