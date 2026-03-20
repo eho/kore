@@ -22,7 +22,7 @@ Kore uses a **daemon-required model** with a **stdio proxy** pattern:
 
 **Two components:**
 
-1. **Kore Daemon** — the core-api server that runs continuously, managing memories, the search index, and the ingestion queue. The MCP server is embedded in this process at the `/mcp` HTTP endpoint. Start it with `bun run apps/core-api/src/index.ts`.
+1. **Kore Daemon** (`kore start`) — the core-api server that runs continuously, managing memories, the search index, and the ingestion queue. The MCP server is embedded in this process at the `/mcp` HTTP endpoint.
 
 2. **stdio Proxy** (`kore mcp`) — a lightweight bridge that translates MCP JSON-RPC over stdio into HTTP requests to the daemon's `/mcp` endpoint. It contains no business logic — all tool execution happens in the daemon.
 
@@ -30,7 +30,7 @@ Kore uses a **daemon-required model** with a **stdio proxy** pattern:
 
 ## Prerequisites
 
-1. **Kore daemon running**: Start it with `bun run apps/core-api/src/index.ts`
+1. **Kore daemon running**: `kore start`
 2. **API key set**: `KORE_API_KEY` must be set in the environment for both the daemon and the proxy
 
 ## Generic MCP Client Configuration
@@ -182,7 +182,7 @@ The stdio proxy checks the daemon's health endpoint on startup. If it can't reac
 
 **Fix:** Start the daemon first:
 ```bash
-bun run apps/core-api/src/index.ts
+kore start
 ```
 
 ### `/mcp` endpoint unreachable (HTTP errors)

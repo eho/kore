@@ -15,6 +15,7 @@ import { consolidateCommand } from "./commands/consolidate.ts";
 import { consolidationResetCommand } from "./commands/consolidation-reset.ts";
 import { insightsCommand } from "./commands/insights.ts";
 import { mcpCommand } from "./commands/mcp.ts";
+import { startCommand } from "./commands/start.ts";
 
 // Read version from package.json
 const pkg = await import("../package.json", { with: { type: "json" } });
@@ -34,6 +35,14 @@ program.hook("preAction", (thisCommand) => {
     warnIfNoApiKey();
   }
 });
+
+// ─── start ───────────────────────────────────────────────────────────────────
+program
+  .command("start")
+  .description("Start the Kore daemon (core-api server)")
+  .action(async () => {
+    await startCommand();
+  });
 
 // ─── health ──────────────────────────────────────────────────────────────────
 program
