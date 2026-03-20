@@ -1,4 +1,5 @@
 import { readFile } from "node:fs/promises";
+import { join } from "node:path";
 import type { OperationDeps, InspectOutput } from "./types";
 
 const CONTENT_TRUNCATION_LIMIT = 20_000;
@@ -53,6 +54,18 @@ export function extractDistilledItems(fileContent: string): string[] {
   }
 
   return items;
+}
+
+/**
+ * Resolve a QMD virtual path (e.g. "qmd://memories/notes/foo.md") to an
+ * absolute filesystem path, or return the input unchanged if already absolute.
+ */
+export function resolveQmdPath(virtualPath: string, dataPath: string): string {
+  const prefix = "qmd://memories/";
+  if (virtualPath.startsWith(prefix)) {
+    return join(dataPath, virtualPath.slice(prefix.length));
+  }
+  return virtualPath;
 }
 
 // ─── parseMemoryFileFull ──────────────────────────────────────────

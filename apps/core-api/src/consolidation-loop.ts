@@ -177,19 +177,8 @@ async function loadClusterMember(filePath: string, fm: Record<string, any>): Pro
   };
 }
 
-/**
- * Resolve a QMD virtual path to an absolute filesystem path.
- * QMD returns paths in "qmd://<collection>/<relative-path>" format.
- * The "memories" collection root maps to dataPath.
- *
- */
-function resolveQmdPath(virtualPath: string, dataPath: string): string {
-  const prefix = "qmd://memories/";
-  if (virtualPath.startsWith(prefix)) {
-    return join(dataPath, virtualPath.slice(prefix.length));
-  }
-  return virtualPath; // already absolute or unknown format — return as-is
-}
+// Re-use the shared resolveQmdPath from operations module
+import { resolveQmdPath } from "./operations";
 
 /**
  * Enrich candidate results with memoryId and frontmatter from disk.

@@ -1,7 +1,7 @@
 import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { OperationDeps, InsightsInput, InsightsOutput, InsightResultItem } from "./types";
-import { parseFrontmatter, parseTagsArray, extractTitleFromMarkdown, extractDistilledItems } from "./inspect";
+import { parseFrontmatter, parseTagsArray, extractTitleFromMarkdown, extractDistilledItems, resolveQmdPath } from "./inspect";
 
 /**
  * Extract the synthesis paragraph from the `## Synthesis` section.
@@ -64,7 +64,8 @@ export async function insights(
       if (!r.file.includes("/insights/")) continue;
 
       try {
-        const content = await readFile(r.file, "utf-8");
+        const resolvedPath = resolveQmdPath(r.file, deps.dataPath);
+        const content = await readFile(resolvedPath, "utf-8");
         const item = parseInsightFile(content);
         if (!item) continue;
         if (item.status !== statusFilter) continue;
