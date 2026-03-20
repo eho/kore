@@ -506,6 +506,7 @@ export function createApp(deps: AppDeps = {}) {
     // ─── Consolidate ──────────────────────────────────────────────
     .post("/api/v1/consolidate", async ({ query, set }) => {
       const tracker = deps.consolidationTracker;
+      const loopHandle = deps.consolidationLoopHandle;
       if (!tracker || !searchFn) {
         set.status = 503;
         return { error: "Consolidation service not available" };
@@ -526,13 +527,17 @@ export function createApp(deps: AppDeps = {}) {
         eventDispatcher,
       });
 
-      if (dryRun) {
-        const result = await runConsolidationDryRun(consolidationDeps);
-        return result;
+      // Pause the background loop for the duration of this manual cycle to
+      // prevent both from picking the same seed and producing duplicate insights.
+      if (loopHandle) await loopHandle.pause();
+      try {
+        if (dryRun) {
+          return await runConsolidationDryRun(consolidationDeps);
+        }
+        return await runConsolidationCycle(consolidationDeps);
+      } finally {
+        if (loopHandle) loopHandle.resume();
       }
-
-      const result = await runConsolidationCycle(consolidationDeps);
-      return result;
     })
     // ─── Reset Consolidation ─────────────────────────────────────
     .delete("/api/v1/consolidation", async ({ set }) => {
