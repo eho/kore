@@ -2,23 +2,38 @@ import pc from "picocolors";
 import { apiFetch } from "../api.ts";
 import { API_URL } from "../utils/env.ts";
 
-interface HealthResponse {
-  status: string;
+interface HealthOutput {
   version: string;
-  qmd: {
-    status: string;
-    doc_count?: number;
-    collections?: number;
-    needs_embedding?: number;
+  memories: {
+    total: number;
+    by_type: Record<string, number>;
   };
-  queue_length: number;
+  queue: {
+    pending: number;
+    processing: number;
+    failed: number;
+  };
+  index: {
+    documents: number;
+    embedded: number;
+    status: string;
+  };
+  sync?: {
+    apple_notes: {
+      enabled: boolean;
+      last_sync_at?: string;
+      total_tracked: number;
+    };
+  };
 }
 
 export async function healthCommand(opts: { json: boolean }): Promise<void> {
-  const result = await apiFetch<HealthResponse>("/api/v1/health");
+  const result = await apiFetch<HealthOutput>("/api/v1/health");
 
   if (!result.ok) {
-    if (result.status === 0) {
+    if (opts.json) {
+      process.stderr.write(JSON.stringify({ error: result.message }) + "\n");
+    } else if (result.status === 0) {
       process.stderr.write(`Error: ${result.message}\n`);
     } else {
       process.stderr.write(
@@ -29,35 +44,50 @@ export async function healthCommand(opts: { json: boolean }): Promise<void> {
   }
 
   if (opts.json) {
-    process.stdout.write(JSON.stringify(result.data, null, 2) + "\n");
+    process.stdout.write(JSON.stringify(result.data) + "\n");
     return;
   }
 
-  const { status, version, qmd, queue_length } = result.data;
-  const statusColor = status === "ok" ? pc.green(status) : pc.red(status);
-  
-  // Guard against missing `qmd` if server returns old structure temporarily
-  const qmdStatus = qmd?.status || "undefined";
-  const qmdColor =
-    qmdStatus === "ok" ? pc.green(qmdStatus) : pc.yellow(qmdStatus);
-    
-  let qmdDetails = "";
-  if (qmd) {
-    const details = [];
-    if (qmd.doc_count !== undefined) details.push(`docs: ${qmd.doc_count}`);
-    if (qmd.collections !== undefined) details.push(`collections: ${qmd.collections}`);
-    if (qmd.needs_embedding) details.push(`needs embedding: ${qmd.needs_embedding}`);
-    if (details.length > 0) {
-      qmdDetails = ` (${details.join(", ")})`;
-    }
+  const { version, memories, queue, index, sync } = result.data;
+  const indexColor = index.status === "ok" ? pc.green(index.status) : pc.yellow(index.status);
+
+  const lines = [
+    `Version:      ${version}`,
+    ``,
+    pc.bold("Memories"),
+    `  Total:      ${memories.total}`,
+  ];
+
+  // Memory counts by type
+  for (const [type, count] of Object.entries(memories.by_type)) {
+    lines.push(`  ${type}: ${count}`);
   }
 
-  process.stdout.write(
-    [
-      `API Status:   ${statusColor}`,
-      `Version:      ${version}`,
-      `QMD Status:   ${qmdColor}${qmdDetails}`,
-      `Queue Length: ${queue_length}`,
-    ].join("\n") + "\n"
+  lines.push(
+    ``,
+    pc.bold("Queue"),
+    `  Pending:    ${queue.pending}`,
+    `  Processing: ${queue.processing}`,
+    `  Failed:     ${queue.failed}`,
+    ``,
+    pc.bold("Index"),
+    `  Status:     ${indexColor}`,
+    `  Documents:  ${index.documents}`,
+    `  Embedded:   ${index.embedded}`,
   );
+
+  // Sync state
+  if (sync?.apple_notes) {
+    const an = sync.apple_notes;
+    const enabledStr = an.enabled ? pc.green("enabled") : pc.dim("disabled");
+    lines.push(
+      ``,
+      pc.bold("Sync"),
+      `  Apple Notes: ${enabledStr}`,
+    );
+    if (an.last_sync_at) lines.push(`  Last Sync:   ${an.last_sync_at}`);
+    lines.push(`  Tracked:     ${an.total_tracked}`);
+  }
+
+  process.stdout.write(lines.join("\n") + "\n");
 }

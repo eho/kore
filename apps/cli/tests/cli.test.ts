@@ -140,10 +140,10 @@ describe("health command", () => {
     fetch(req) {
       if (req.url.endsWith("/api/v1/health")) {
         return new Response(JSON.stringify({
-          status: "ok",
           version: "1.0",
-          qmd_status: "ok",
-          queue_length: 5
+          memories: { total: 10, by_type: { note: 5, place: 5 } },
+          queue: { pending: 5, processing: 0, failed: 0 },
+          index: { documents: 10, embedded: 10, status: "ok" },
         }), { headers: { "Content-Type": "application/json" } });
       }
       return new Response("Not found", { status: 404 });
@@ -166,9 +166,9 @@ describe("health command", () => {
     const exitCode = await proc.exited;
     expect(exitCode).toBe(0);
     const out = await new Response(proc.stdout).text();
-    expect(out).toContain("API Status:");
+    expect(out).toContain("Version:");
     expect(out).toContain("ok");
-    expect(out).toContain("Queue Length: 5");
+    expect(out).toContain("Pending:    5");
   });
 
   test("prints error and exits 1 when API is unreachable", async () => {
@@ -212,11 +212,11 @@ describe("ingest command", () => {
     fetch(req) {
       const url = new URL(req.url);
 
-      // POST /api/v1/ingest/raw → return task_id
-      if (url.pathname === "/api/v1/ingest/raw" && req.method === "POST") {
+      // POST /api/v1/remember → return task_id (new endpoint)
+      if (url.pathname === "/api/v1/remember" && req.method === "POST") {
         return new Response(
-          JSON.stringify({ task_id: "task-abc-123" }),
-          { headers: { "Content-Type": "application/json" } }
+          JSON.stringify({ task_id: "task-abc-123", status: "queued", message: "Memory queued." }),
+          { status: 202, headers: { "Content-Type": "application/json" } }
         );
       }
 
@@ -246,10 +246,10 @@ describe("ingest command", () => {
     fetch(req) {
       const url = new URL(req.url);
 
-      if (url.pathname === "/api/v1/ingest/raw" && req.method === "POST") {
+      if (url.pathname === "/api/v1/remember" && req.method === "POST") {
         return new Response(
-          JSON.stringify({ task_id: "task-fail-456" }),
-          { headers: { "Content-Type": "application/json" } }
+          JSON.stringify({ task_id: "task-fail-456", status: "queued", message: "Memory queued." }),
+          { status: 202, headers: { "Content-Type": "application/json" } }
         );
       }
 
@@ -291,7 +291,7 @@ describe("ingest command", () => {
 
     expect(exitCode).toBe(0);
     expect(out).toContain("Queued task task-abc-123");
-    expect(out).toContain("kore status task-abc-123");
+    expect(out).toContain("kore task task-abc-123");
   });
 
   test("single file ingest with --no-wait --json outputs JSON", async () => {
@@ -407,9 +407,9 @@ describe("ingest command", () => {
   });
 });
 
-// ─── Status Command ─────────────────────────────────────────────────────────
+// ─── Task Command (was Status) ──────────────────────────────────────────────
 
-describe("status command", () => {
+describe("task command", () => {
   const statusServer = serve({
     port: 19993,
     fetch(req) {
@@ -441,7 +441,7 @@ describe("status command", () => {
   });
 
   test("prints task status in human-readable format", async () => {
-    const proc = runCliWithPort(19993, "status", "task-found-123");
+    const proc = runCliWithPort(19993, "task", "task-found-123");
     const exitCode = await proc.exited;
     const out = await new Response(proc.stdout).text();
 
@@ -452,7 +452,7 @@ describe("status command", () => {
   });
 
   test("--json outputs raw JSON task object", async () => {
-    const proc = runCliWithPort(19993, "status", "task-found-123", "--json");
+    const proc = runCliWithPort(19993, "task", "task-found-123", "--json");
     const exitCode = await proc.exited;
     const out = await new Response(proc.stdout).text();
 
@@ -463,7 +463,7 @@ describe("status command", () => {
   });
 
   test("404 prints not found error and exits 1", async () => {
-    const proc = runCliWithPort(19993, "status", "task-not-found");
+    const proc = runCliWithPort(19993, "task", "task-not-found");
     const exitCode = await proc.exited;
     const stderr = await new Response(proc.stderr).text();
 
@@ -472,7 +472,7 @@ describe("status command", () => {
   });
 
   test("API connection failure prints error", async () => {
-    const proc = runCliWithPort(19994, "status", "some-task");
+    const proc = runCliWithPort(19994, "task", "some-task");
     const exitCode = await proc.exited;
     const stderr = await new Response(proc.stderr).text();
 
@@ -603,12 +603,12 @@ describe("show command", () => {
     port: 19990,
     fetch(req) {
       const url = new URL(req.url);
-      if (url.pathname === `/api/v1/memory/${fullMemory.id}`) {
+      if (url.pathname === `/api/v1/inspect/${fullMemory.id}`) {
         return new Response(JSON.stringify(fullMemory), {
           headers: { "Content-Type": "application/json" },
         });
       }
-      if (url.pathname.startsWith("/api/v1/memory/")) {
+      if (url.pathname.startsWith("/api/v1/inspect/")) {
         return new Response(JSON.stringify({ error: "Memory not found", code: "NOT_FOUND" }), {
           status: 404,
           headers: { "Content-Type": "application/json" },
@@ -757,56 +757,64 @@ describe("delete command", () => {
 // ─── Search Command ───────────────────────────────────────────────────────────
 
 describe("search command", () => {
+  const recallResponse = {
+    results: [
+      {
+        id: "mem-001",
+        title: "Tokyo Ramen Shop",
+        type: "place",
+        category: "food",
+        tags: ["japan"],
+        date_saved: "2026-03-10T00:00:00Z",
+        source: "manual",
+        distilled_items: ["Amazing ramen spot in Shinjuku with rich tonkotsu broth"],
+        score: 0.95,
+      },
+      {
+        id: "mem-002",
+        title: "Travel Notes: Japan Trip",
+        type: "note",
+        category: "travel",
+        tags: [],
+        date_saved: "2026-03-09T00:00:00Z",
+        source: "apple_notes",
+        distilled_items: ["Visited several ramen shops including the famous one"],
+        score: 0.85,
+      },
+    ],
+    query: "ramen",
+    total: 2,
+    offset: 0,
+    has_more: false,
+  };
+
   const searchServer = serve({
     port: 19988,
     fetch(req) {
       const url = new URL(req.url);
-      if (url.pathname === "/api/v1/search" && req.method === "POST") {
+      if (url.pathname === "/api/v1/recall" && req.method === "POST") {
         return (async () => {
-          const body = (await req.json()) as {
-            query: string;
-            collection?: string;
-            limit?: number;
-          };
+          const body = (await req.json()) as Record<string, unknown>;
           if (body.query === "error") {
-            return new Response(JSON.stringify({ error: "Search index not available", code: "UNAVAILABLE" }), {
+            return new Response(JSON.stringify({ error: "Search index not available" }), {
               status: 503,
               headers: { "Content-Type": "application/json" },
             });
           }
           if (body.query === "empty") {
-            return new Response(JSON.stringify([]), {
-              headers: { "Content-Type": "application/json" },
-            });
+            return new Response(JSON.stringify({
+              results: [], query: "empty", total: 0, offset: 0, has_more: false,
+            }), { headers: { "Content-Type": "application/json" } });
           }
-          const results = [
-            {
-              path: "data/places/tokyo-ramen.md",
-              title: "Tokyo Ramen Shop",
-              snippet: "Amazing ramen spot in Shinjuku with rich tonkotsu broth...",
-              score: 0.95,
-              collection: "places",
-            },
-            {
-              path: "data/notes/japan-trip.md",
-              title: "Travel Notes: Japan Trip",
-              snippet: "Visited several ramen shops including the famous one in...",
-              score: 0.85,
-              collection: "notes",
-            },
-          ];
-          
-          let filtered = results;
-          if (body.collection) {
-             filtered = filtered.filter(r => r.collection === body.collection);
-          }
+          let results = [...recallResponse.results];
           if (body.limit) {
-             filtered = filtered.slice(0, body.limit);
+            results = results.slice(0, body.limit as number);
           }
-
-          return new Response(JSON.stringify(filtered), {
-            headers: { "Content-Type": "application/json" },
-          });
+          return new Response(JSON.stringify({
+            ...recallResponse,
+            results,
+            total: results.length,
+          }), { headers: { "Content-Type": "application/json" } });
         })();
       }
       return new Response("Not found", { status: 404 });
@@ -824,54 +832,12 @@ describe("search command", () => {
 
     expect(exitCode).toBe(0);
     expect(out).toContain("Tokyo Ramen Shop");
-    expect(out).toContain("data/places/tokyo-ramen.md");
-    expect(out).toContain("Amazing ramen spot in Shinjuku");
     expect(out).toContain("Travel Notes: Japan Trip");
-    expect(out).toContain("data/notes/japan-trip.md");
     expect(out).toContain("───");
-  });
-
-  test("snippet truncated to 200 chars", async () => {
-    // Build a server with a long snippet inline
-    const longSnippetServer = serve({
-      port: 19989,
-      fetch() {
-        const results = [
-          {
-            path: "data/long.md",
-            title: "Long Snippet",
-            snippet: "A".repeat(250),
-            score: 0.9,
-            collection: null,
-          },
-        ];
-        return new Response(JSON.stringify(results), {
-          headers: { "Content-Type": "application/json" },
-        });
-      },
-    });
-    const proc = runCliWithPort(19989, "search", "long");
-    const exitCode = await proc.exited;
-    const out = await new Response(proc.stdout).text();
-    longSnippetServer.stop();
-
-    expect(exitCode).toBe(0);
-    expect(out).toContain("A".repeat(200) + "...");
-    expect(out).not.toContain("A".repeat(201) + "...");
   });
 
   test("--limit restricts results", async () => {
     const proc = runCliWithPort(19988, "search", "ramen", "--limit", "1");
-    const exitCode = await proc.exited;
-    const out = await new Response(proc.stdout).text();
-
-    expect(exitCode).toBe(0);
-    expect(out).toContain("Tokyo Ramen Shop");
-    expect(out).not.toContain("Travel Notes: Japan Trip");
-  });
-
-  test("--collection filters results", async () => {
-    const proc = runCliWithPort(19988, "search", "ramen", "--collection", "places");
     const exitCode = await proc.exited;
     const out = await new Response(proc.stdout).text();
 
@@ -891,6 +857,8 @@ describe("search command", () => {
     expect(Array.isArray(data.results)).toBe(true);
     expect(data.results.length).toBe(2);
     expect(data.results[0].title).toBe("Tokyo Ramen Shop");
+    expect(data.results[0].id).toBeDefined();
+    expect(data.results[0].type).toBeDefined();
   });
 
   test("empty results prints 'No results found'", async () => {
@@ -899,7 +867,7 @@ describe("search command", () => {
     const out = await new Response(proc.stdout).text();
 
     expect(exitCode).toBe(0);
-    expect(out).toContain("No results found for 'empty'");
+    expect(out).toContain("No results found");
   });
 
   test("API error gracefully exits with code 1", async () => {

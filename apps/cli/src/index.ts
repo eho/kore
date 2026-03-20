@@ -4,7 +4,7 @@ import { warnIfNoApiKey } from "./utils/env.ts";
 import { healthCommand } from "./commands/health.ts";
 import { configCommand } from "./commands/config.ts";
 import { ingestCommand } from "./commands/ingest.ts";
-import { statusCommand } from "./commands/status.ts";
+import { taskCommand } from "./commands/task.ts";
 import { listCommand } from "./commands/list.ts";
 import { showCommand } from "./commands/show.ts";
 import { deleteCommand } from "./commands/delete.ts";
@@ -13,6 +13,7 @@ import { resetCommand } from "./commands/reset.ts";
 import { syncCommand } from "./commands/sync.ts";
 import { consolidateCommand } from "./commands/consolidate.ts";
 import { consolidationResetCommand } from "./commands/consolidation-reset.ts";
+import { insightsCommand } from "./commands/insights.ts";
 
 // Read version from package.json
 const pkg = await import("../package.json", { with: { type: "json" } });
@@ -36,7 +37,7 @@ program.hook("preAction", (thisCommand) => {
 // ─── health ──────────────────────────────────────────────────────────────────
 program
   .command("health")
-  .description("Check the health of the Kore API")
+  .description("Check system health: memory counts, queue, index, and sync state")
   .option("--json", "Output raw JSON", false)
   .action(async (opts) => {
     await healthCommand(opts);
@@ -60,19 +61,21 @@ program
   .option("--url <url>", "Attach an original URL to the ingestion payload")
   .option("--priority <level>", "Queue priority: low, normal, high", "normal")
   .option("--no-wait", "Skip polling and return immediately")
+  .option("--suggested-tags <tags>", "Comma-separated suggested tags")
+  .option("--suggested-category <category>", "Suggested category")
   .option("--json", "Output JSON (with --no-wait)", false)
   .action(async (files, opts) => {
     await ingestCommand(files, opts);
   });
 
-// ─── status ─────────────────────────────────────────────────────────────────
+// ─── task ────────────────────────────────────────────────────────────────────
 program
-  .command("status")
+  .command("task")
   .description("Check the status of an ingestion task")
-  .argument("<task-id>", "Task ID to check")
+  .argument("<id>", "Task ID to check")
   .option("--json", "Output raw JSON", false)
   .action(async (taskId, opts) => {
-    await statusCommand(taskId, opts);
+    await taskCommand(taskId, opts);
   });
 
 // ─── list ────────────────────────────────────────────────────────────────────
@@ -89,9 +92,9 @@ program
 // ─── show ────────────────────────────────────────────────────────────────────
 program
   .command("show")
-  .description("Show a stored memory")
+  .description("Show a stored memory with full details")
   .argument("<id>", "Memory ID (or prefix)")
-  .option("--json", "Output raw JSON", false)
+  .option("--json", "Output raw JSON matching InspectOutput schema", false)
   .action(async (id, opts) => {
     await showCommand(id, opts);
   });
@@ -109,15 +112,34 @@ program
 // ─── search ──────────────────────────────────────────────────────────────────
 program
   .command("search")
-  .description("Search memories using semantic search")
+  .description("Search memories using semantic search (backed by recall operation)")
   .argument("[query]", "Search query (prompted interactively if omitted)")
+  .option("--type <type>", "Filter by memory type")
   .option("--intent <string>", "Hint for the reranker")
+  .option("--tags <tags>", "Comma-separated tag filter (all must match)")
   .option("--limit <number>", "Max results to return", "10")
-  .option("--collection <string>", "Filter by collection")
+  .option("--min-confidence <number>", "Minimum confidence threshold (0.0 to 1.0)")
   .option("--min-score <number>", "Minimum score threshold (0.0 to 1.0)")
-  .option("--json", "Output results as JSON", false)
+  .option("--include-insights", "Include insight memories in results")
+  .option("--created-after <date>", "Filter to memories created after this date (ISO 8601)")
+  .option("--created-before <date>", "Filter to memories created before this date (ISO 8601)")
+  .option("--offset <number>", "Pagination offset", "0")
+  .option("--json", "Output results as JSON matching RecallOutput schema", false)
   .action(async (query, opts) => {
     await searchCommand(query, opts);
+  });
+
+// ─── insights ────────────────────────────────────────────────────────────────
+program
+  .command("insights")
+  .description("List or search synthesized insights")
+  .argument("[query]", "Optional search query")
+  .option("--type <type>", "Filter by insight type (e.g., evolution, pattern, preference)")
+  .option("--status <status>", "Filter by status (default: active)", "active")
+  .option("--limit <number>", "Max results to return", "5")
+  .option("--json", "Output results as JSON matching InsightsOutput schema", false)
+  .action(async (query, opts) => {
+    await insightsCommand(query, opts);
   });
 
 // ─── sync ───────────────────────────────────────────────────────────────────
@@ -136,8 +158,8 @@ program
   .description("Trigger a consolidation cycle to synthesize related memories into insights")
   .option("--dry-run", "Preview consolidation without running LLM synthesis", false)
   .option("--reset-failed", "Reset failed tracker entries before running", false)
-  .option("-v, --verbose", "Show detailed diagnostic info (query, scores, filter stats)", false)
-  .option("--json", "Output raw JSON", false)
+  .option("-v, --verbose", "Show detailed diagnostic info", false)
+  .option("--json", "Output raw JSON matching ConsolidateOutput schema", false)
   .action(async (opts) => {
     await consolidateCommand({ dryRun: opts.dryRun, resetFailed: opts.resetFailed, json: opts.json, verbose: opts.verbose });
   });

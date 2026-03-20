@@ -1,45 +1,16 @@
 import pc from "picocolors";
+import { createSpinner } from "nanospinner";
 import { apiFetch } from "../api.ts";
-import { API_URL } from "../utils/env.ts";
 
-interface CandidateDebugInfo {
-  query: string;
-  rawResultCount: number;
-  filteredOutSelf: number;
-  filteredOutInsights: number;
-  afterFilterCount: number;
-  topScores: number[];
-}
-
-interface ConsolidateResponse {
-  status: string;
-  insightId?: string;
+interface ConsolidateOutput {
+  status: "consolidated" | "no_seed" | "cluster_too_small" | "retired_reeval" | "synthesis_failed" | "dry_run";
   seed?: { id: string; title: string };
-  clusterSize?: number;
-  candidateCount?: number;
+  insight_id?: string;
+  cluster_size?: number;
+  candidate_count?: number;
   candidates?: Array<{ id: string; title: string; score: number }>;
-  proposedInsightType?: string;
-  estimatedConfidence?: number;
-  debug?: CandidateDebugInfo;
-}
-
-function formatDebug(debug: CandidateDebugInfo): string {
-  const lines = [
-    pc.dim("─── Diagnostics ─────────────────────────"),
-    `Query:   "${debug.query.slice(0, 100)}${debug.query.length > 100 ? "..." : ""}"`,
-    `QMD returned:  ${debug.rawResultCount} result(s)`,
-  ];
-  if (debug.topScores.length > 0) {
-    lines.push(`Top scores:    ${debug.topScores.map((s) => s.toFixed(3)).join(", ")}`);
-  }
-  if (debug.filteredOutSelf > 0 || debug.filteredOutInsights > 0) {
-    lines.push(
-      `Filtered out:  ${debug.filteredOutSelf} self, ${debug.filteredOutInsights} insight(s)`,
-    );
-  }
-  lines.push(`After filter:  ${debug.afterFilterCount} candidate(s)`);
-  lines.push(pc.dim("──────────────────────────────────────────"));
-  return lines.join("\n");
+  proposed_insight_type?: string;
+  estimated_confidence?: number;
 }
 
 export async function consolidateCommand(opts: {
@@ -48,93 +19,95 @@ export async function consolidateCommand(opts: {
   json: boolean;
   verbose: boolean;
 }): Promise<void> {
-  const params = new URLSearchParams();
-  if (opts.dryRun) params.set("dry_run", "true");
-  if (opts.resetFailed) params.set("reset_failed", "true");
+  // If reset-failed, call the old endpoint first
+  if (opts.resetFailed) {
+    const resetResult = await apiFetch<unknown>("/api/v1/consolidate?reset_failed=true", {
+      method: "POST",
+    });
+    if (!resetResult.ok) {
+      if (opts.json) {
+        process.stderr.write(JSON.stringify({ error: resetResult.message }) + "\n");
+      } else {
+        process.stderr.write(`Error: Failed to reset failed entries: ${resetResult.message}\n`);
+      }
+      process.exit(1);
+    }
+  }
 
-  const qs = params.toString();
-  const path = `/api/v1/consolidate${qs ? `?${qs}` : ""}`;
+  const isTTY = process.stdout.isTTY && !opts.json && !opts.dryRun;
+  const spinner = isTTY ? createSpinner("Consolidating…").start() : null;
 
-  const result = await apiFetch<ConsolidateResponse>(path, { method: "POST" });
+  const body: Record<string, unknown> = {};
+  if (opts.dryRun) body.dry_run = true;
+
+  const result = await apiFetch<ConsolidateOutput>("/api/v1/consolidate/op", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+
+  if (spinner) spinner.stop();
 
   if (!result.ok) {
-    if (result.status === 0) {
-      process.stderr.write(
-        `Error: ${result.message}\n`
-      );
+    if (opts.json) {
+      process.stderr.write(JSON.stringify({ error: result.message }) + "\n");
     } else {
-      process.stderr.write(
-        `Error: Consolidation failed (${result.status}): ${result.message}\n`
-      );
+      process.stderr.write(`Error: Consolidation failed (${result.status}): ${result.message}\n`);
     }
     process.exit(1);
   }
 
   if (opts.json) {
-    process.stdout.write(JSON.stringify(result.data, null, 2) + "\n");
+    process.stdout.write(JSON.stringify(result.data) + "\n");
     return;
   }
 
-  const { status } = result.data;
+  const data = result.data;
 
-  if (status === "no_seed") {
+  if (data.status === "no_seed") {
     process.stdout.write("No consolidation work available. Try again later.\n");
     return;
   }
 
-  if (status === "cluster_too_small") {
-    const { seed, candidateCount, debug } = result.data;
+  if (data.status === "cluster_too_small") {
     process.stdout.write(
-      `Seed: "${seed?.title}" (${seed?.id})\n` +
-        `Found only ${candidateCount} candidate(s), need at least 3. Try running with different content.\n`
+      `Seed: "${data.seed?.title}" (${data.seed?.id})\n` +
+        `Found only ${data.candidate_count} candidate(s), need at least 3. Try running with different content.\n`
     );
-    if (debug && (opts.verbose || candidateCount === 0)) {
-      process.stdout.write("\n" + formatDebug(debug) + "\n");
-    }
     return;
   }
 
-  if (status === "dry_run") {
-    const { seed, candidates, proposedInsightType, estimatedConfidence, debug } =
-      result.data;
-    process.stdout.write(`Seed: "${seed?.title}" (${seed?.id})\n`);
-    if (candidates && candidates.length > 0) {
-      process.stdout.write(`Candidates (${candidates.length}):\n`);
-      for (const c of candidates) {
+  if (data.status === "dry_run") {
+    process.stdout.write(`Seed: "${data.seed?.title}" (${data.seed?.id})\n`);
+    if (data.candidates && data.candidates.length > 0) {
+      process.stdout.write(`Candidates (${data.candidates.length}):\n`);
+      for (const c of data.candidates) {
         process.stdout.write(`  - "${c.title}" (score: ${c.score.toFixed(2)})\n`);
       }
     }
-    process.stdout.write(`Proposed type: ${proposedInsightType}\n`);
+    process.stdout.write(`Proposed type: ${data.proposed_insight_type}\n`);
     process.stdout.write(
-      `Estimated confidence: ${estimatedConfidence?.toFixed(2)}\n`
+      `Estimated confidence: ${data.estimated_confidence?.toFixed(2)}\n`
     );
-    if (debug && opts.verbose) {
-      process.stdout.write("\n" + formatDebug(debug) + "\n");
-    }
     return;
   }
 
-  if (status === "consolidated") {
-    const { seed, clusterSize, insightId } = result.data;
+  if (data.status === "consolidated") {
     process.stdout.write(
       [
         pc.green("Consolidation complete!"),
-        `Seed:         "${seed?.title}" (${seed?.id})`,
-        `Cluster Size: ${clusterSize}`,
-        `Insight ID:   ${insightId}`,
+        `Seed:         "${data.seed?.title}" (${data.seed?.id})`,
+        `Cluster Size: ${data.cluster_size}`,
+        `Insight ID:   ${data.insight_id}`,
       ].join("\n") + "\n"
     );
     return;
   }
 
-  // Fallback for any other status (e.g., retired_reeval)
-  process.stdout.write(`Consolidation result: ${status}\n`);
-  if (result.data.seed) {
+  // Fallback for any other status
+  process.stdout.write(`Consolidation result: ${data.status}\n`);
+  if (data.seed) {
     process.stdout.write(
-      `Seed: "${result.data.seed.title}" (${result.data.seed.id})\n`
+      `Seed: "${data.seed.title}" (${data.seed.id})\n`
     );
-  }
-  if (result.data.debug && opts.verbose) {
-    process.stdout.write("\n" + formatDebug(result.data.debug) + "\n");
   }
 }
