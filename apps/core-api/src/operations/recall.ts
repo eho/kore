@@ -101,21 +101,28 @@ export async function recall(
 
   // Query path: iterative batch loop through QMD
   const filtered: EnrichedMemory[] = [];
-  let qmdOffset = 0;
+  let currentLimit = BATCH_SIZE;
+  let lastFetchedCount = 0;
   let qmdExhausted = false;
 
   while (filtered.length < offset + limit && !qmdExhausted) {
     const qmdResults = await deps.qmdSearch(params.query, {
       intent: "personal knowledge retrieval",
-      limit: BATCH_SIZE,
+      limit: currentLimit,
     });
 
-    if (qmdResults.length < BATCH_SIZE) qmdExhausted = true;
-    qmdOffset += qmdResults.length;
+    const newResults = qmdResults.slice(lastFetchedCount);
+    if (newResults.length === 0) {
+      qmdExhausted = true;
+      break;
+    }
+    
+    lastFetchedCount = qmdResults.length;
+    currentLimit += BATCH_SIZE;
 
     // Enrich batch with Kore metadata
     const enriched = await Promise.all(
-      qmdResults.map(async (r) => {
+      newResults.map(async (r) => {
         const id = deps.memoryIndex.getIdByPath(r.file);
         if (!id) return null;
         const memory = await parseMemoryFileFull(id, r.file);
