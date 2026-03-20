@@ -18,6 +18,7 @@ import {
   reconcileOnStartup,
 } from "./consolidation-loop";
 import type { ConsolidationHandle } from "./consolidation-loop";
+import { startMcpServer } from "./mcp";
 import * as qmdClient from "@kore/qmd-client";
 import type { KorePlugin, PluginStartDeps } from "@kore/shared-types";
 
@@ -178,6 +179,34 @@ for (const plugin of plugins) {
       console.error(`Plugin "${plugin.name}" routes failed (non-fatal):`, err);
     }
   }
+}
+
+// ── Start MCP server (after consolidation loop, before listen) ───────
+const mcpHandle = await startMcpServer({
+  dataPath,
+  memoryIndex,
+  queue,
+  qmdSearch: qmdClient.search,
+  qmdStatus,
+  consolidationTracker,
+  eventDispatcher,
+  consolidationLoopHandle: consolidation,
+});
+
+if (mcpHandle) {
+  const apiKey = process.env.KORE_API_KEY;
+  app.all(mcpHandle.mcpPath, async ({ request, set }) => {
+    // Authenticate MCP requests with the same KORE_API_KEY as the REST API
+    if (apiKey) {
+      const authHeader = request.headers.get("authorization");
+      const token = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : null;
+      if (token !== apiKey) {
+        set.status = 401;
+        return { error: "Missing or invalid Bearer token", code: "UNAUTHORIZED" };
+      }
+    }
+    return mcpHandle.handleRequest(request);
+  });
 }
 
 app.listen({ port: 3000, reusePort: false });

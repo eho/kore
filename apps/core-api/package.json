@@ -9,12 +9,13 @@
     "build:bin": "bun build --compile src/index.ts --outfile bin/kore-server"
   },
   "dependencies": {
+    "@elysiajs/bearer": "^1.2.8",
+    "@elysiajs/cors": "^1.2.0",
     "@kore/llm-extractor": "workspace:*",
     "@kore/qmd-client": "workspace:*",
     "@kore/shared-types": "workspace:*",
+    "@modelcontextprotocol/sdk": "^1.27.1",
     "elysia": "^1.2.25",
-    "@elysiajs/bearer": "^1.2.8",
-    "@elysiajs/cors": "^1.2.0",
     "zod": "^3.24.2"
   }
 }
