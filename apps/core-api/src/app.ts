@@ -21,6 +21,7 @@ import type { ConsolidationDeps, ConsolidationHandle } from "./consolidation-loo
 import { runConsolidationCycle, runConsolidationDryRun, buildConsolidationDeps } from "./consolidation-loop";
 import { resetConsolidation } from "./consolidation-reset";
 import type { PluginRegistryRepository } from "./plugin-registry";
+import { health as healthOp } from "./operations";
 
 // ─── Zod Schemas for request validation ─────────────────────────────
 
@@ -258,13 +259,12 @@ export function createApp(deps: AppDeps = {}) {
     })
     // ─── Health ───────────────────────────────────────────────────
     .get("/api/v1/health", async () => {
-      const qmd = await qmdStatus();
-      return {
-        status: "ok",
-        version: "1.0.0",
-        qmd,
-        queue_length: queue.getQueueLength(),
-      };
+      return await healthOp({
+        memoryIndex,
+        queue,
+        qmdStatus,
+        dataPath,
+      });
     })
     // ─── Search ───────────────────────────────────────────────────
     .post("/api/v1/search", async ({ body, set }) => {

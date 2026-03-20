@@ -68,27 +68,25 @@ describe("ensureDataDirectories", () => {
 // ─── Health endpoint ─────────────────────────────────────────────────
 
 describe("GET /api/v1/health", () => {
-  test("returns health status with qmd object and queue_length", async () => {
+  test("returns structured health output with version, memories, queue, and index", async () => {
     const app = makeApp();
     const res = await app.handle(new Request("http://localhost/api/v1/health"));
     expect(res.status).toBe(200);
     const body = await res.json();
-    expect(body).toEqual({
-      status: "ok",
-      version: "1.0.0",
-      qmd: { status: "ok" },
-      queue_length: 0,
-    });
+    expect(body.version).toBe("1.0.0");
+    expect(body.memories).toEqual({ total: 0, by_type: {} });
+    expect(body.queue).toEqual({ pending: 0, processing: 0, failed: 0 });
+    expect(body.index).toEqual({ documents: 0, embedded: 0, status: "ok" });
   });
 
-  test("reflects qmd status unavailable", async () => {
+  test("reflects index unavailable when qmd is unavailable", async () => {
     const app = makeApp({ qmdStatus: async () => ({ status: "unavailable" as const }) });
     const res = await app.handle(new Request("http://localhost/api/v1/health"));
     const body = await res.json();
-    expect(body.qmd.status).toBe("unavailable");
+    expect(body.index.status).toBe("unavailable");
   });
 
-  test("reflects qmd bootstrapping status with flattened fields", async () => {
+  test("reflects embedding status when needs_embedding > 0", async () => {
     const mockSummary = {
       status: "bootstrapping" as const,
       doc_count: 5,
@@ -100,7 +98,9 @@ describe("GET /api/v1/health", () => {
     });
     const res = await app.handle(new Request("http://localhost/api/v1/health"));
     const body = await res.json();
-    expect(body.qmd).toEqual(mockSummary);
+    expect(body.index.status).toBe("embedding");
+    expect(body.index.documents).toBe(5);
+    expect(body.index.embedded).toBe(3);
   });
 
   test("does not require auth", async () => {
