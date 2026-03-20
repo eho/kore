@@ -1,7 +1,20 @@
 import { readFile } from "node:fs/promises";
+import { join } from "node:path";
 import type { OperationDeps, RecallInput, RecallOutput, RecallResultItem } from "./types";
 import { parseMemoryFileFull, extractDistilledItems } from "./inspect";
 import type { MemoryFileFull } from "./inspect";
+
+/**
+ * Resolve a QMD virtual path (e.g. "qmd://memories/notes/foo.md") to an
+ * absolute filesystem path, or return the input unchanged if already absolute.
+ */
+function resolveQmdPath(virtualPath: string, dataPath: string): string {
+  const prefix = "qmd://memories/";
+  if (virtualPath.startsWith(prefix)) {
+    return join(dataPath, virtualPath.slice(prefix.length));
+  }
+  return virtualPath;
+}
 
 const BATCH_SIZE = 50;
 const DEFAULT_LIMIT = 10;
@@ -54,7 +67,7 @@ function toResultItem(m: EnrichedMemory): RecallResultItem {
 
 export async function recall(
   params: RecallInput,
-  deps: Pick<OperationDeps, "memoryIndex" | "qmdSearch">
+  deps: Pick<OperationDeps, "memoryIndex" | "qmdSearch" | "dataPath">
 ): Promise<RecallOutput> {
   const limit = Math.min(params.limit ?? DEFAULT_LIMIT, MAX_LIMIT);
   const offset = params.offset ?? 0;
@@ -123,13 +136,14 @@ export async function recall(
     // Enrich batch with Kore metadata
     const enriched = await Promise.all(
       newResults.map(async (r) => {
-        const id = deps.memoryIndex.getIdByPath(r.file);
+        const resolvedPath = resolveQmdPath(r.file, deps.dataPath);
+        const id = deps.memoryIndex.getIdByPath(resolvedPath);
         if (!id) return null;
-        const memory = await parseMemoryFileFull(id, r.file);
+        const memory = await parseMemoryFileFull(id, resolvedPath);
         if (!memory) return null;
         let fileContent: string;
         try {
-          fileContent = await readFile(r.file, "utf-8");
+          fileContent = await readFile(resolvedPath, "utf-8");
         } catch {
           fileContent = memory.content;
         }

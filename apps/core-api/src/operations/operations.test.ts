@@ -303,7 +303,7 @@ describe("recall", () => {
   test("returns results with query via QMD search", async () => {
     const result = await recall(
       { query: "ramen" },
-      { memoryIndex, qmdSearch: mockQmdSearch }
+      { memoryIndex, qmdSearch: mockQmdSearch, dataPath: tempDir }
     );
     expect(result.query).toBe("ramen");
     expect(result.results.length).toBeGreaterThan(0);
@@ -314,7 +314,7 @@ describe("recall", () => {
   test("returns results without query sorted by date_saved desc", async () => {
     const result = await recall(
       {},
-      { memoryIndex, qmdSearch: mockQmdSearch }
+      { memoryIndex, qmdSearch: mockQmdSearch, dataPath: tempDir }
     );
     expect(result.query).toBe("");
     expect(result.results.length).toBeGreaterThanOrEqual(2);
@@ -327,7 +327,7 @@ describe("recall", () => {
   test("filters by type", async () => {
     const result = await recall(
       { type: "place" },
-      { memoryIndex, qmdSearch: mockQmdSearch }
+      { memoryIndex, qmdSearch: mockQmdSearch, dataPath: tempDir }
     );
     for (const r of result.results) {
       expect(r.type).toBe("place");
@@ -337,7 +337,7 @@ describe("recall", () => {
   test("filters by intent", async () => {
     const result = await recall(
       { intent: "recommendation" },
-      { memoryIndex, qmdSearch: mockQmdSearch }
+      { memoryIndex, qmdSearch: mockQmdSearch, dataPath: tempDir }
     );
     for (const r of result.results) {
       expect(r.intent).toBe("recommendation");
@@ -347,7 +347,7 @@ describe("recall", () => {
   test("filters by tags", async () => {
     const result = await recall(
       { tags: ["ramen"] },
-      { memoryIndex, qmdSearch: mockQmdSearch }
+      { memoryIndex, qmdSearch: mockQmdSearch, dataPath: tempDir }
     );
     for (const r of result.results) {
       expect(r.tags).toContain("ramen");
@@ -357,7 +357,7 @@ describe("recall", () => {
   test("filters by min_confidence", async () => {
     const result = await recall(
       { min_confidence: 0.88 },
-      { memoryIndex, qmdSearch: mockQmdSearch }
+      { memoryIndex, qmdSearch: mockQmdSearch, dataPath: tempDir }
     );
     for (const r of result.results) {
       expect(r.confidence).toBeGreaterThanOrEqual(0.88);
@@ -367,7 +367,7 @@ describe("recall", () => {
   test("excludes retired insights", async () => {
     const result = await recall(
       {},
-      { memoryIndex, qmdSearch: mockQmdSearch }
+      { memoryIndex, qmdSearch: mockQmdSearch, dataPath: tempDir }
     );
     const retiredIds = result.results.filter(r => r.id === "ins-retired");
     expect(retiredIds).toHaveLength(0);
@@ -376,7 +376,7 @@ describe("recall", () => {
   test("excludes insights when include_insights is false", async () => {
     const result = await recall(
       { include_insights: false },
-      { memoryIndex, qmdSearch: mockQmdSearch }
+      { memoryIndex, qmdSearch: mockQmdSearch, dataPath: tempDir }
     );
     for (const r of result.results) {
       expect(r.type).not.toBe("insight");
@@ -386,14 +386,14 @@ describe("recall", () => {
   test("respects limit and offset for pagination", async () => {
     const result1 = await recall(
       { limit: 1, offset: 0 },
-      { memoryIndex, qmdSearch: mockQmdSearch }
+      { memoryIndex, qmdSearch: mockQmdSearch, dataPath: tempDir }
     );
     expect(result1.results).toHaveLength(1);
     expect(result1.offset).toBe(0);
 
     const result2 = await recall(
       { limit: 1, offset: 1 },
-      { memoryIndex, qmdSearch: mockQmdSearch }
+      { memoryIndex, qmdSearch: mockQmdSearch, dataPath: tempDir }
     );
     expect(result2.results).toHaveLength(1);
     expect(result2.offset).toBe(1);
@@ -404,7 +404,7 @@ describe("recall", () => {
   test("has_more is true when more results exist", async () => {
     const result = await recall(
       { limit: 1 },
-      { memoryIndex, qmdSearch: mockQmdSearch }
+      { memoryIndex, qmdSearch: mockQmdSearch, dataPath: tempDir }
     );
     expect(result.has_more).toBe(true);
   });
@@ -412,7 +412,7 @@ describe("recall", () => {
   test("filters by created_after", async () => {
     const result = await recall(
       { created_after: "2026-03-12T00:00:00Z" },
-      { memoryIndex, qmdSearch: mockQmdSearch }
+      { memoryIndex, qmdSearch: mockQmdSearch, dataPath: tempDir }
     );
     for (const r of result.results) {
       expect(r.date_saved >= "2026-03-12T00:00:00Z").toBe(true);
@@ -422,7 +422,7 @@ describe("recall", () => {
   test("filters by created_before", async () => {
     const result = await recall(
       { created_before: "2026-03-12T00:00:00Z" },
-      { memoryIndex, qmdSearch: mockQmdSearch }
+      { memoryIndex, qmdSearch: mockQmdSearch, dataPath: tempDir }
     );
     for (const r of result.results) {
       expect(r.date_saved <= "2026-03-12T00:00:00Z").toBe(true);
@@ -433,7 +433,7 @@ describe("recall", () => {
     const emptySearch = async () => [];
     const result = await recall(
       { query: "nonexistent" },
-      { memoryIndex, qmdSearch: emptySearch }
+      { memoryIndex, qmdSearch: emptySearch, dataPath: tempDir }
     );
     expect(result.results).toHaveLength(0);
     expect(result.total).toBe(0);

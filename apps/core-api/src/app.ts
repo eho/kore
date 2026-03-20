@@ -551,6 +551,7 @@ export function createApp(deps: AppDeps = {}) {
         return await recall(params, {
           memoryIndex,
           qmdSearch: searchFn,
+          dataPath,
         });
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
