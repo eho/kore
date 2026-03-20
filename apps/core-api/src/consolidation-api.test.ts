@@ -132,7 +132,7 @@ describe("POST /api/v1/consolidate", () => {
     expect(body.status).toBe("cluster_too_small");
     expect(body.seed).toBeDefined();
     expect(body.seed.id).toBe("mem-seed");
-    expect(body.candidateCount).toBe(1);
+    expect(body.candidate_count).toBe(1);
   });
 
   test("reset_failed resets failed tracker rows before cycle runs", async () => {
@@ -220,9 +220,9 @@ describe("POST /api/v1/consolidate", () => {
     expect(body.seed).toBeDefined();
     expect(body.candidates).toBeArray();
     expect(body.candidates.length).toBeGreaterThanOrEqual(2);
-    expect(body.proposedInsightType).toBeDefined();
-    expect(body.estimatedConfidence).toBeDefined();
-    expect(typeof body.estimatedConfidence).toBe("number");
+    expect(body.proposed_insight_type).toBeDefined();
+    expect(body.estimated_confidence).toBeDefined();
+    expect(typeof body.estimated_confidence).toBe("number");
 
     // Verify no insight files were written
     const insightsAfter = await readdir(join(tempDir, "insights")).catch(() => []);

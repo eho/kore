@@ -35,19 +35,8 @@ const mockSynthesisResult = {
 
 mock.module("../../apps/core-api/src/consolidation-synthesizer", () => ({
   synthesizeInsight: mock(async () => mockSynthesisResult),
-  computeInsightConfidence: (params: {
-    avgSimilarity: number;
-    clusterSize: number;
-    reinforcementCount: number;
-    sourceIntegrity: number;
-  }) => {
-    const sizeFactor = Math.min((params.clusterSize - 2) / 3, 1.0);
-    const base = params.avgSimilarity * 0.5 + sizeFactor * 0.5;
-    const reinforcement = 1 + params.reinforcementCount * 0.05;
-    return Math.min(base * reinforcement * params.sourceIntegrity, 1.0);
-  },
-  buildSynthesisPrompt: mock(() => "test prompt"),
-  fallbackParse: mock(() => null),
+  // Do NOT mock buildSynthesisPrompt or fallbackParse here as it breaks their unit tests
+  // computeInsightConfidence is also left as real since it has no side effects
 }));
 
 // ─── Imports (after mock setup) ─────────────────────────────────────────
@@ -313,12 +302,12 @@ describe("Consolidation E2E", () => {
 
     const body = await res.json() as any;
     expect(body.status).toBe("consolidated");
-    expect(body.insightId).toBeDefined();
-    expect(body.insightId).toMatch(/^ins-[a-f0-9]{8}$/);
+    expect(body.insight_id).toBeDefined();
+    expect(body.insight_id).toMatch(/^ins-[a-f0-9]{8}$/);
     expect(body.seed.id).toBe("mem-react-hooks");
-    expect(body.clusterSize).toBeGreaterThanOrEqual(3);
+    expect(body.cluster_size).toBeGreaterThanOrEqual(3);
 
-    createdInsightId = body.insightId;
+    createdInsightId = body.insight_id;
 
     // Verify insight file exists on disk
     const insightsDir = join(tempDir, "insights");
@@ -379,8 +368,8 @@ describe("Consolidation E2E", () => {
     expect(body.seed).toBeDefined();
     expect(body.candidates).toBeDefined();
     expect(body.candidates.length).toBeGreaterThanOrEqual(2);
-    expect(body.proposedInsightType).toBeDefined();
-    expect(typeof body.estimatedConfidence).toBe("number");
+    expect(body.proposed_insight_type).toBeDefined();
+    expect(typeof body.estimated_confidence).toBe("number");
 
     // No new files written
     const afterFiles = await readdir(join(tempDir, "insights"));
@@ -401,7 +390,7 @@ describe("Consolidation E2E", () => {
     const body = await res.json() as any;
     expect(body.status).toBe("cluster_too_small");
     expect(body.seed).toBeDefined();
-    expect(body.candidateCount).toBeDefined();
+    expect(body.candidate_count).toBeDefined();
   });
 
   // ── List with type=insight ──────────────────────────────────────────

@@ -527,7 +527,7 @@ export function createApp(deps: AppDeps = {}) {
         });
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
-        set.status = 500;
+        set.status = message.includes("not available") ? 503 : 500;
         return { error: message };
       }
     }, { body: t.Any() })
