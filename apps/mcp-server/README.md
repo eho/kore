@@ -205,6 +205,17 @@ If the daemon is running but `/mcp` returns errors:
 3. **Filters too narrow?** Try broadening: remove `type`/`intent` filters, lower `min_confidence`
 4. **Query too specific?** Try shorter, broader search terms
 
+### Diagnosing tool call failures
+
+The daemon logs every MCP tool invocation with status, duration, and arguments:
+
+```
+[INFO] [mcp] recall OK (42ms) args={"query":"ramen tokyo"}
+[INFO] [mcp] remember ERROR (3ms) args={"content":"..."}
+```
+
+Check the daemon log file at `$KORE_HOME/logs/kore-<timestamp>.log` to see exactly what tools were called and whether they succeeded.
+
 ### Agent not seeing tools
 
 Ensure the MCP client configuration is correct:

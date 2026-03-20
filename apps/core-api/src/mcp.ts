@@ -183,10 +183,25 @@ function mcpSuccess(data: unknown) {
   };
 }
 
+function mcpLog(tool: string, args: unknown, result: { isError?: true }, durationMs: number) {
+  const status = result.isError ? "ERROR" : "OK";
+  console.log(`[mcp] ${tool} ${status} (${durationMs}ms) args=${JSON.stringify(args)}`);
+}
+
+async function mcpInvoke<T extends { isError?: true; content?: unknown }>(
+  tool: string,
+  args: unknown,
+  fn: () => Promise<T>
+): Promise<T> {
+  const start = Date.now();
+  const result = await fn();
+  mcpLog(tool, args, result, Date.now() - start);
+  return result;
+}
+
 // ─── MCP Server Creation ────────────────────────────────────────────
 
-// NOTE: We use `as any` for the Zod schema objects and explicitly type the callback
-// arguments as `args: any` when registering tools with `server.tool()`.
+// NOTE: We use `as any` for the inputSchema objects when registering tools with `server.registerTool()`.
 // This is necessary because the MCP SDK uses extremely deep generic type inference
 // to map Zod schemas to handler arguments. Passing complex Zod objects inline causes
 // the TypeScript compiler to enter an infinite inference loop and crash with an Out of Memory (OOM) error.
@@ -200,141 +215,162 @@ export function createMcpServer(deps: OperationDeps) {
   );
 
   // ── recall ────────────────────────────────────────────────────────
-  server.tool(
+  server.registerTool(
     "recall",
-    RECALL_DESCRIPTION,
     {
-      query: z.string().optional().describe("Natural language search query (optional — if omitted, returns recent memories sorted by date_saved descending)"),
-      type: z.string().optional().describe('Filter by memory type: "place" | "media" | "note" | "person"'),
-      intent: z.string().optional().describe('Filter by intent: "recommendation" | "reference" | "personal-experience" | "aspiration" | "how-to"'),
-      tags: z.array(z.string()).optional().describe("Filter to memories containing ALL specified tags"),
-      created_after: z.string().optional().describe("ISO 8601 date — only return memories saved after this date"),
-      created_before: z.string().optional().describe("ISO 8601 date — only return memories saved before this date"),
-      limit: z.number().optional().describe("Max results (default: 10, max: 50)"),
-      offset: z.number().optional().describe("Skip first N results for pagination (default: 0)"),
-      min_score: z.number().optional().describe("Minimum QMD relevance score (default: 0.0)"),
-      min_confidence: z.number().optional().describe("Minimum extraction confidence (default: 0.0)"),
-      include_insights: z.boolean().optional().describe("Include insight-type results (default: true)"),
-    } as any,
+      description: RECALL_DESCRIPTION,
+      inputSchema: {
+        query: z.string().optional().describe("Natural language search query (optional — if omitted, returns recent memories sorted by date_saved descending)"),
+        type: z.string().optional().describe('Filter by memory type: "place" | "media" | "note" | "person"'),
+        intent: z.string().optional().describe('Filter by intent: "recommendation" | "reference" | "personal-experience" | "aspiration" | "how-to"'),
+        tags: z.array(z.string()).optional().describe("Filter to memories containing ALL specified tags"),
+        created_after: z.string().optional().describe("ISO 8601 date — only return memories saved after this date"),
+        created_before: z.string().optional().describe("ISO 8601 date — only return memories saved before this date"),
+        limit: z.number().optional().describe("Max results (default: 10, max: 50)"),
+        offset: z.number().optional().describe("Skip first N results for pagination (default: 0)"),
+        min_score: z.number().optional().describe("Minimum QMD relevance score (default: 0.0)"),
+        min_confidence: z.number().optional().describe("Minimum extraction confidence (default: 0.0)"),
+        include_insights: z.boolean().optional().describe("Include insight-type results (default: true)"),
+      } as any,
+    },
     async (args: any) => {
-      try {
-        const result = await recall(args, deps);
-        return mcpSuccess(result);
-      } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        if (message.includes("not available") || message.includes("unavailable")) {
-          return mcpError("Search index is not available. The system may still be starting up.");
+      return mcpInvoke("recall", args, async () => {
+        try {
+          const result = await recall(args, deps);
+          return mcpSuccess(result);
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          if (message.includes("not available") || message.includes("unavailable")) {
+            return mcpError("Search index is not available. The system may still be starting up.");
+          }
+          return mcpError(message);
         }
-        return mcpError(message);
-      }
+      });
     }
   );
 
   // ── remember ──────────────────────────────────────────────────────
-  server.tool(
+  server.registerTool(
     "remember",
-    REMEMBER_DESCRIPTION,
     {
-      content: z.string().describe("The raw content to remember (required)"),
-      source: z.string().optional().describe('Where this came from (default: "agent")'),
-      url: z.string().optional().describe("Source URL if applicable"),
-      priority: z.string().optional().describe('"low" | "normal" | "high" (default: "normal")'),
-      suggested_tags: z.array(z.string()).optional().describe("Agent-suggested tags — passed as hints to the extraction pipeline"),
-      suggested_category: z.string().optional().describe('Agent-suggested category (e.g., "travel/food/ramen") — hint, not override'),
-    } as any,
+      description: REMEMBER_DESCRIPTION,
+      inputSchema: {
+        content: z.string().describe("The raw content to remember (required)"),
+        source: z.string().optional().describe('Where this came from (default: "agent")'),
+        url: z.string().optional().describe("Source URL if applicable"),
+        priority: z.string().optional().describe('"low" | "normal" | "high" (default: "normal")'),
+        suggested_tags: z.array(z.string()).optional().describe("Agent-suggested tags — passed as hints to the extraction pipeline"),
+        suggested_category: z.string().optional().describe('Agent-suggested category (e.g., "travel/food/ramen") — hint, not override'),
+      } as any,
+    },
     async (args: any) => {
-      try {
-        const result = await remember(
-          { ...args, priority: (args.priority as "low" | "normal" | "high") ?? "normal" },
-          deps
-        );
-        return mcpSuccess(result);
-      } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        return mcpError("The ingestion queue is not available.");
-      }
+      return mcpInvoke("remember", args, async () => {
+        try {
+          const result = await remember(
+            { ...args, priority: (args.priority as "low" | "normal" | "high") ?? "normal" },
+            deps
+          );
+          return mcpSuccess(result);
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          return mcpError("The ingestion queue is not available.");
+        }
+      });
     }
   );
 
   // ── inspect ───────────────────────────────────────────────────────
-  server.tool(
+  server.registerTool(
     "inspect",
-    INSPECT_DESCRIPTION,
     {
-      id: z.string().describe("Memory UUID (required)"),
-    } as any,
+      description: INSPECT_DESCRIPTION,
+      inputSchema: {
+        id: z.string().describe("Memory UUID (required)"),
+      } as any,
+    },
     async (args: any) => {
-      try {
-        const result = await inspect(args.id, deps);
-        if (!result) {
-          return mcpError(`Memory with ID ${args.id} was not found.`);
+      return mcpInvoke("inspect", args, async () => {
+        try {
+          const result = await inspect(args.id, deps);
+          if (!result) {
+            return mcpError(`Memory with ID ${args.id} was not found.`);
+          }
+          return mcpSuccess(result);
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          return mcpError(message);
         }
-        return mcpSuccess(result);
-      } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        return mcpError(message);
-      }
+      });
     }
   );
 
   // ── insights ──────────────────────────────────────────────────────
-  server.tool(
+  server.registerTool(
     "insights",
-    INSIGHTS_DESCRIPTION,
     {
-      query: z.string().optional().describe("Semantic search query (optional — if omitted, lists recent insights)"),
-      insight_type: z.string().optional().describe('Filter: "cluster_summary" | "evolution" | "contradiction" | "connection"'),
-      status: z.string().optional().describe('Filter: "active" | "evolving" | "degraded" (default: "active")'),
-      limit: z.number().optional().describe("Max results (default: 5, max: 20)"),
-    } as any,
+      description: INSIGHTS_DESCRIPTION,
+      inputSchema: {
+        query: z.string().optional().describe("Semantic search query (optional — if omitted, lists recent insights)"),
+        insight_type: z.string().optional().describe('Filter: "cluster_summary" | "evolution" | "contradiction" | "connection"'),
+        status: z.string().optional().describe('Filter: "active" | "evolving" | "degraded" (default: "active")'),
+        limit: z.number().optional().describe("Max results (default: 5, max: 20)"),
+      } as any,
+    },
     async (args: any) => {
-      try {
-        const result = await insights(args, deps);
-        return mcpSuccess(result);
-      } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        if (message.includes("not available") || message.includes("unavailable")) {
-          return mcpError("Search index is not available. The system may still be starting up.");
+      return mcpInvoke("insights", args, async () => {
+        try {
+          const result = await insights(args, deps);
+          return mcpSuccess(result);
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          if (message.includes("not available") || message.includes("unavailable")) {
+            return mcpError("Search index is not available. The system may still be starting up.");
+          }
+          return mcpError(message);
         }
-        return mcpError(message);
-      }
+      });
     }
   );
 
   // ── health ────────────────────────────────────────────────────────
-  server.tool(
+  server.registerTool(
     "health",
-    HEALTH_DESCRIPTION,
-    {},
+    { description: HEALTH_DESCRIPTION },
     async () => {
-      try {
-        const result = await health(deps);
-        return mcpSuccess(result);
-      } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        return mcpError(message);
-      }
+      return mcpInvoke("health", {}, async () => {
+        try {
+          const result = await health(deps);
+          return mcpSuccess(result);
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          return mcpError(message);
+        }
+      });
     }
   );
 
   // ── consolidate ───────────────────────────────────────────────────
-  server.tool(
+  server.registerTool(
     "consolidate",
-    CONSOLIDATE_DESCRIPTION,
     {
-      dry_run: z.boolean().optional().describe("Preview only, don't write insight files (default: false)"),
-    } as any,
+      description: CONSOLIDATE_DESCRIPTION,
+      inputSchema: {
+        dry_run: z.boolean().optional().describe("Preview only, don't write insight files (default: false)"),
+      } as any,
+    },
     async (args: any) => {
-      try {
-        const result = await consolidate(args, deps);
-        return mcpSuccess(result);
-      } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        if (message.includes("not available")) {
-          return mcpError("The consolidation system is not available.");
+      return mcpInvoke("consolidate", args, async () => {
+        try {
+          const result = await consolidate(args, deps);
+          return mcpSuccess(result);
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          if (message.includes("not available")) {
+            return mcpError("The consolidation system is not available.");
+          }
+          return mcpError(message);
         }
-        return mcpError(message);
-      }
+      });
     }
   );
 
