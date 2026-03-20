@@ -216,9 +216,10 @@ Kore automatically synthesizes clusters of related memories into higher-order **
 kore consolidate              # trigger one consolidation cycle
 kore consolidate --dry-run    # preview without LLM synthesis
 kore consolidate --reset-failed  # retry failed consolidations
+kore consolidation reset      # delete all insights and restore source memories to unconsolidated state (preserves ingested memories)
 kore list --type insight      # list all insights
 kore show <insight-id>        # view full insight content
-kore delete <insight-id>      # delete an insight (cleans up source refs)
+kore delete <insight-id>      # delete an insight; source memories are automatically restored to the consolidation pool
 kore search "topic"           # insights appear in search results (retired insights are filtered out)
 ```
 

@@ -125,11 +125,12 @@ All endpoints except `/health` require `Authorization: Bearer <KORE_API_KEY>`.
 | `POST` | `/api/v1/ingest/raw` | Yes | Queue raw text for async LLM extraction → returns `202` with `task_id` |
 | `GET` | `/api/v1/task/:id` | Yes | Check extraction task status (`queued`, `processing`, `completed`, `failed`) |
 | `POST` | `/api/v1/ingest/structured` | Yes | Directly write a fully-formed memory file, bypassing LLM → returns `200` with `file_path` |
-| `DELETE` | `/api/v1/memory/:id` | Yes | Delete a memory file by its frontmatter `id` |
+| `DELETE` | `/api/v1/memory/:id` | Yes | Delete a memory file by its frontmatter `id`; for insight deletions, also restores source memories to the consolidation pool (`restored_sources` in response) |
 | `PUT` | `/api/v1/memory/:id` | Yes | Overwrite an existing memory file with updated content |
 | `GET` | `/api/v1/memories` | Yes | List memories, optional `?type=insight&limit=20` |
 | `GET` | `/api/v1/memory/:id` | Yes | Get full memory by ID (supports prefix matching) |
 | `DELETE` | `/api/v1/memories` | Yes | Reset — delete all memories, tasks, QMD index, and consolidation tracker |
+| `DELETE` | `/api/v1/consolidation` | Yes | Consolidation reset — delete all insights and restore all source memories to unconsolidated state while preserving ingested memories; returns `{ status, deleted_insights, restored_memories, tracker_backfilled }` |
 | `POST` | `/api/v1/consolidate` | Yes | Trigger one consolidation cycle (see below) |
 
 ### `GET /api/v1/health` response
