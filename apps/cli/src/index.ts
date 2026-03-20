@@ -14,6 +14,7 @@ import { syncCommand } from "./commands/sync.ts";
 import { consolidateCommand } from "./commands/consolidate.ts";
 import { consolidationResetCommand } from "./commands/consolidation-reset.ts";
 import { insightsCommand } from "./commands/insights.ts";
+import { mcpCommand } from "./commands/mcp.ts";
 
 // Read version from package.json
 const pkg = await import("../package.json", { with: { type: "json" } });
@@ -140,6 +141,14 @@ program
   .option("--json", "Output results as JSON matching InsightsOutput schema", false)
   .action(async (query, opts) => {
     await insightsCommand(query, opts);
+  });
+
+// ─── mcp ────────────────────────────────────────────────────────────────────
+program
+  .command("mcp")
+  .description("Start the MCP stdio proxy for agent integration")
+  .action(async () => {
+    await mcpCommand();
   });
 
 // ─── sync ───────────────────────────────────────────────────────────────────
