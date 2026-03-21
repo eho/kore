@@ -20,6 +20,7 @@ import {
   supersede,
   updateSourceFrontmatter,
 } from "./consolidation-writer";
+import { parseFrontmatter } from "./lib/frontmatter";
 
 // ─── Types ───────────────────────────────────────────────────────────
 
@@ -66,39 +67,6 @@ export interface ConsolidationHandle {
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────
-
-/**
- * Parse YAML frontmatter from a markdown file content string.
- */
-function parseFrontmatter(content: string): Record<string, any> {
-  const match = content.match(/^---\n([\s\S]*?)\n---/);
-  if (!match) return {};
-  const result: Record<string, any> = {};
-  for (const line of match[1].split("\n")) {
-    const colonIdx = line.indexOf(":");
-    if (colonIdx === -1) continue;
-    const key = line.slice(0, colonIdx).trim();
-    let value = line.slice(colonIdx + 1).trim();
-
-    if (value.startsWith("[") && value.endsWith("]")) {
-      const inner = value.slice(1, -1).trim();
-      if (inner === "") {
-        result[key] = [];
-      } else {
-        result[key] = inner
-          .split(",")
-          .map((s) => s.trim().replace(/^["']|["']$/g, ""));
-      }
-    } else if (value === "null") {
-      result[key] = null;
-    } else if (!isNaN(Number(value)) && value !== "") {
-      result[key] = Number(value);
-    } else {
-      result[key] = value;
-    }
-  }
-  return result;
-}
 
 /**
  * Load a memory file from disk and build a SeedMemory object.

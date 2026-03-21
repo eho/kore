@@ -134,21 +134,6 @@ export type MemoryExtraction = z.infer<typeof MemoryExtractionSchema>;
 
 // ─── Plugin Event Interfaces (plugin_system.md §2) ─────────────────
 
-export interface IngestionContext {
-  id: string;
-  rawText: string;
-  source: string;
-  coreCategorization: {
-    categories: string[];
-    tags: string[];
-  };
-}
-
-export interface EnrichmentResult {
-  frontmatterExtensions?: Record<string, any>;
-  additionalMemoryItems?: string[];
-}
-
 export interface MemoryEvent {
   id: string;
   filePath: string;
@@ -179,9 +164,6 @@ export interface KorePlugin {
   start?: (deps: PluginStartDeps) => Promise<void>;
   stop?: () => Promise<void>;
   routes?: (app: Elysia) => Elysia;
-  onIngestEnrichment?: (
-    context: IngestionContext
-  ) => Promise<EnrichmentResult | void>;
   onMemoryIndexed?: (event: MemoryEvent) => Promise<void>;
   onMemoryDeleted?: (event: MemoryEvent) => Promise<void>;
   onMemoryUpdated?: (event: MemoryEvent) => Promise<void>;

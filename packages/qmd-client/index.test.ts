@@ -52,8 +52,6 @@ const mockStore: Partial<QMDStore> = {
       daysStale: null,
     }),
   ),
-  addCollection: mock(() => Promise.resolve()),
-  addContext: mock(() => Promise.resolve(true)),
   close: mock(() => Promise.resolve()),
 };
 
@@ -69,8 +67,6 @@ const {
   embed,
   getStatus,
   getIndexHealth,
-  addCollection,
-  addContext,
   resetStore,
   findSpatialite,
 } = await import("./index");
@@ -175,18 +171,7 @@ describe("qmd-client", () => {
       expect(getStatus()).rejects.toThrow("not initialized");
     });
 
-    test("addCollection() throws when store not initialized", () => {
-      expect(
-        addCollection("test", { path: "/data" }),
-      ).rejects.toThrow("not initialized");
-    });
-
-    test("addContext() throws when store not initialized", () => {
-      expect(
-        addContext("test", "/", "some context"),
-      ).rejects.toThrow("not initialized");
-    });
-  });
+});
 
   // ─── update() ──────────────────────────────────────────────
 
@@ -253,34 +238,6 @@ describe("qmd-client", () => {
       expect(result.needsEmbedding).toBe(2);
       expect(result.totalDocs).toBe(5);
       expect(result.daysStale).toBeNull();
-    });
-  });
-
-  // ─── addCollection() ──────────────────────────────────────
-
-  describe("addCollection()", () => {
-    test("delegates to store.addCollection()", async () => {
-      await initStore("/tmp/test.sqlite");
-      await addCollection("notes", { path: "/data/notes", pattern: "**/*.md" });
-      expect(mockStore.addCollection).toHaveBeenCalledWith("notes", {
-        path: "/data/notes",
-        pattern: "**/*.md",
-      });
-    });
-  });
-
-  // ─── addContext() ─────────────────────────────────────────
-
-  describe("addContext()", () => {
-    test("delegates to store.addContext()", async () => {
-      await initStore("/tmp/test.sqlite");
-      const result = await addContext("memories", "/", "Personal knowledge");
-      expect(result).toBe(true);
-      expect(mockStore.addContext).toHaveBeenCalledWith(
-        "memories",
-        "/",
-        "Personal knowledge",
-      );
     });
   });
 

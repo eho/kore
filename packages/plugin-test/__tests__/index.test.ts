@@ -75,7 +75,7 @@ describe("Test plugin: end-to-end integration", () => {
     // 2. Register plugin with event dispatcher
     dispatcher.registerPlugins([testPlugin]);
 
-    // 3. Create the app and POST to /api/v1/ingest/raw
+    // 3. Create the app and POST to /api/v1/remember
     process.env.KORE_API_KEY = "test-key";
     const app = createApp({
       queue,
@@ -86,7 +86,7 @@ describe("Test plugin: end-to-end integration", () => {
     });
 
     const response = await app.handle(
-      new Request("http://localhost/api/v1/ingest/raw", {
+      new Request("http://localhost/api/v1/remember", {
         method: "POST",
         headers: {
           Authorization: "Bearer test-key",

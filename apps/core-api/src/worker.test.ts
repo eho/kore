@@ -245,9 +245,9 @@ describe("E2E: POST /ingest/raw → worker → .md file", () => {
       dataPath: tempDir,
     });
 
-    // 1. Ingest via API
+    // 1. Ingest via API (using remember endpoint)
     const ingestRes = await app.handle(
-      new Request("http://localhost/api/v1/ingest/raw", {
+      new Request("http://localhost/api/v1/remember", {
         method: "POST",
         headers: {
           Authorization: "Bearer e2e-key",
@@ -256,7 +256,7 @@ describe("E2E: POST /ingest/raw → worker → .md file", () => {
         body: JSON.stringify({
           source: "reddit_bookmark",
           content: "I visited Mutekiya Ramen in Ikebukuro last week. The tonkotsu broth was incredible.",
-          original_url: "https://reddit.com/r/ramen/post/123",
+          url: "https://reddit.com/r/ramen/post/123",
           priority: "high",
         }),
       })

@@ -2,6 +2,7 @@ import type { ConsolidationTracker } from "./consolidation-tracker";
 import type { MemoryIndex } from "./memory-index";
 import type { MemoryEvent } from "@kore/shared-types";
 import type { SearchOptions, HybridQueryResult } from "@kore/qmd-client";
+import { parseFrontmatter, serializeFrontmatter } from "./lib/frontmatter";
 
 // ─── Types ───────────────────────────────────────────────────────────
 
@@ -16,59 +17,6 @@ export interface ConsolidationEventHandlers {
 export interface EventHandlerOptions {
   relevanceThreshold?: number;
   cooldownDays?: number;
-}
-
-// ─── Helpers ─────────────────────────────────────────────────────────
-
-/**
- * Parse YAML frontmatter from a markdown file content string.
- */
-function parseFrontmatter(content: string): Record<string, any> {
-  const match = content.match(/^---\n([\s\S]*?)\n---/);
-  if (!match) return {};
-  const result: Record<string, any> = {};
-  for (const line of match[1].split("\n")) {
-    const colonIdx = line.indexOf(":");
-    if (colonIdx === -1) continue;
-    const key = line.slice(0, colonIdx).trim();
-    let value = line.slice(colonIdx + 1).trim();
-
-    if (value.startsWith("[") && value.endsWith("]")) {
-      const inner = value.slice(1, -1).trim();
-      if (inner === "") {
-        result[key] = [];
-      } else {
-        result[key] = inner
-          .split(",")
-          .map((s) => s.trim().replace(/^["']|["']$/g, ""));
-      }
-    } else if (value === "null") {
-      result[key] = null;
-    } else if (!isNaN(Number(value)) && value !== "") {
-      result[key] = Number(value);
-    } else {
-      result[key] = value;
-    }
-  }
-  return result;
-}
-
-/**
- * Serialize frontmatter back to YAML string.
- */
-function serializeFrontmatter(fm: Record<string, any>): string {
-  const lines = ["---"];
-  for (const [key, value] of Object.entries(fm)) {
-    if (Array.isArray(value)) {
-      lines.push(`${key}: [${value.map((v) => `"${v}"`).join(", ")}]`);
-    } else if (value === null) {
-      lines.push(`${key}: null`);
-    } else {
-      lines.push(`${key}: ${value}`);
-    }
-  }
-  lines.push("---");
-  return lines.join("\n");
 }
 
 // ─── Event Handlers ──────────────────────────────────────────────────

@@ -505,14 +505,23 @@ describe("list command", () => {
 
   const listServer = serve({
     port: 19992,
-    fetch(req) {
+    async fetch(req) {
       const url = new URL(req.url);
-      if (url.pathname === "/api/v1/memories") {
-        const type = url.searchParams.get("type");
-        const limit = Number(url.searchParams.get("limit") || "20");
+      if (url.pathname === "/api/v1/recall" && req.method === "POST") {
+        const body = await req.json() as Record<string, any>;
+        const type = body.type as string | undefined;
+        const limit = Number(body.limit || 20);
         let results = type ? memories.filter((m) => m.type === type) : memories;
         results = results.slice(0, limit);
-        return new Response(JSON.stringify(results), {
+        // Return RecallOutput format with results wrapped + score field
+        const recallResults = results.map((m) => ({ ...m, score: 1.0, category: "qmd://test", distilled_items: [] }));
+        return new Response(JSON.stringify({
+          results: recallResults,
+          query: "",
+          total: recallResults.length,
+          offset: 0,
+          has_more: false,
+        }), {
           headers: { "Content-Type": "application/json" },
         });
       }
@@ -562,7 +571,7 @@ describe("list command", () => {
     const emptyServer = serve({
       port: 19991,
       fetch() {
-        return new Response("[]", { headers: { "Content-Type": "application/json" } });
+        return new Response(JSON.stringify({ results: [], query: "", total: 0, offset: 0, has_more: false }), { headers: { "Content-Type": "application/json" } });
       },
     });
 

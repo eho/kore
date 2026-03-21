@@ -3,19 +3,19 @@ import { bearer } from "@elysiajs/bearer";
 import { cors } from "@elysiajs/cors";
 import { z } from "zod";
 import { randomUUID } from "crypto";
-import { BaseFrontmatterSchema, MemoryTypeEnum } from "@kore/shared-types";
+import { BaseFrontmatterSchema } from "@kore/shared-types";
 import type { BaseFrontmatter } from "@kore/shared-types";
 import { QueueRepository } from "./queue";
 import { slugify } from "./slugify";
 import { renderMarkdown } from "./markdown";
-import { mkdir, unlink, readFile, rm } from "node:fs/promises";
+import { mkdir, unlink, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { resolveDataPath, resolveQmdDbPath } from "./config";
 import * as qmdClient from "@kore/qmd-client";
 import { MemoryIndex } from "./memory-index";
 import { EventDispatcher } from "./event-dispatcher";
 import { deleteMemoryById } from "./delete-memory";
-import type { HybridQueryResult, SearchOptions } from "@kore/qmd-client";
+import type { SearchOptions, HybridQueryResult } from "@kore/qmd-client";
 import type { ConsolidationTracker } from "./consolidation-tracker";
 import type { ConsolidationHandle } from "./consolidation-loop";
 import { resetConsolidation } from "./consolidation-reset";
@@ -25,15 +25,6 @@ import type { RecallInput, InsightsInput, ConsolidateInput } from "./operations"
 
 // ─── Zod Schemas for request validation ─────────────────────────────
 
-const RawIngestPayload = z.object({
-  source: z.string(),
-  content: z.string(),
-  original_url: z.string().url().optional(),
-  date_created: z.string().datetime().optional(),
-  date_modified: z.string().datetime().optional(),
-  priority: z.enum(["low", "normal", "high"]).default("normal"),
-});
-
 const StructuredIngestPayload = z.object({
   content: z.object({
     title: z.string(),
@@ -41,17 +32,6 @@ const StructuredIngestPayload = z.object({
     frontmatter: BaseFrontmatterSchema.omit({ id: true }),
   }),
 });
-
-const SearchRequestPayload = z.object({
-  query: z.string().min(1, "query is required"),
-  intent: z.string().optional(),
-  limit: z.number().int().positive().optional(),
-  minScore: z.number().min(0).max(1).optional(),
-  collection: z.string().optional(),
-});
-
-const DEFAULT_SEARCH_INTENT =
-  "personal knowledge base containing notes, contacts, and bookmarks";
 
 // ─── Helpers ─────────────────────────────────────────────────────────
 
@@ -85,131 +65,6 @@ async function resolveFilePath(
   }
 
   return filePath;
-}
-
-function parseFrontmatter(content: string): Record<string, any> {
-  const match = content.match(/^---\n([\s\S]*?)\n---/);
-  if (!match) return {};
-  const result: Record<string, any> = {};
-  for (const line of match[1].split("\n")) {
-    const colonIdx = line.indexOf(":");
-    if (colonIdx === -1) continue;
-    const key = line.slice(0, colonIdx).trim();
-    const value = line.slice(colonIdx + 1).trim();
-    result[key] = value;
-  }
-  return result;
-}
-
-function parseTagsArray(raw: string): string[] {
-  // Tags are stored as: ["tag1", "tag2"]
-  try {
-    return JSON.parse(raw.replace(/'/g, '"'));
-  } catch {
-    return raw ? [raw] : [];
-  }
-}
-
-function extractTitleFromMarkdown(content: string): string {
-  const match = content.match(/^# (.+)$/m);
-  return match ? match[1].trim() : "";
-}
-
-async function parseMemoryFile(id: string, filePath: string): Promise<MemorySummary | null> {
-  try {
-    const content = await readFile(filePath, "utf-8");
-    const fm = parseFrontmatter(content);
-    if (!fm.id) return null;
-    const summary: MemorySummary = {
-      id: fm.id,
-      type: fm.type || "",
-      title: extractTitleFromMarkdown(content),
-      source: fm.source || "",
-      date_saved: fm.date_saved || "",
-      ...(fm.date_created ? { date_created: fm.date_created } : {}),
-      ...(fm.date_modified ? { date_modified: fm.date_modified } : {}),
-      tags: parseTagsArray(fm.tags || ""),
-      ...(fm.intent ? { intent: fm.intent } : {}),
-      ...(fm.confidence !== undefined ? { confidence: parseFloat(fm.confidence) } : {}),
-    };
-    // Add insight-specific fields
-    if (fm.type === "insight") {
-      if (fm.insight_type) summary.insight_type = fm.insight_type;
-      if (fm.status) summary.status = fm.status;
-      const sourceIds = parseTagsArray(fm.source_ids || "");
-      summary.source_ids_count = sourceIds.length;
-    }
-    return summary;
-  } catch {
-    return null;
-  }
-}
-
-async function parseMemoryFileFull(id: string, filePath: string): Promise<MemoryFull | null> {
-  try {
-    const content = await readFile(filePath, "utf-8");
-    const fm = parseFrontmatter(content);
-    if (!fm.id) return null;
-    const full: MemoryFull = {
-      id: fm.id,
-      type: fm.type || "",
-      category: fm.category || "",
-      date_saved: fm.date_saved || "",
-      ...(fm.date_created ? { date_created: fm.date_created } : {}),
-      ...(fm.date_modified ? { date_modified: fm.date_modified } : {}),
-      source: fm.source || "",
-      tags: parseTagsArray(fm.tags || ""),
-      url: fm.url,
-      ...(fm.intent ? { intent: fm.intent } : {}),
-      ...(fm.confidence !== undefined ? { confidence: parseFloat(fm.confidence) } : {}),
-      title: extractTitleFromMarkdown(content),
-      content,
-    };
-    // Add insight-specific fields
-    if (fm.type === "insight") {
-      if (fm.insight_type) full.insight_type = fm.insight_type;
-      if (fm.status) full.status = fm.status;
-      full.source_ids = parseTagsArray(fm.source_ids || "");
-      full.supersedes = parseTagsArray(fm.supersedes || "");
-      full.superseded_by = parseTagsArray(fm.superseded_by || "");
-      if (fm.reinforcement_count !== undefined) full.reinforcement_count = parseInt(fm.reinforcement_count);
-      if (fm.last_synthesized_at) full.last_synthesized_at = fm.last_synthesized_at;
-    }
-    return full;
-  } catch {
-    return null;
-  }
-}
-
-interface MemorySummary {
-  id: string;
-  type: string;
-  title: string;
-  source: string;
-  date_saved: string;
-  date_created?: string;
-  date_modified?: string;
-  tags: string[];
-  intent?: string;
-  confidence?: number;
-  // Insight-specific fields
-  insight_type?: string;
-  status?: string;
-  source_ids_count?: number;
-}
-
-interface MemoryFull extends MemorySummary {
-  category: string;
-  url?: string;
-  content: string;
-  // Insight-specific fields
-  insight_type?: string;
-  status?: string;
-  source_ids?: string[];
-  supersedes?: string[];
-  superseded_by?: string[];
-  reinforcement_count?: number;
-  last_synthesized_at?: string;
 }
 
 // ─── QMD Health Status ───────────────────────────────────────────────
@@ -266,87 +121,6 @@ export function createApp(deps: AppDeps = {}) {
         dataPath,
       });
     })
-    // ─── Search ───────────────────────────────────────────────────
-    .post("/api/v1/search", async ({ body, set }) => {
-      const result = SearchRequestPayload.safeParse(body);
-      if (!result.success) {
-        set.status = 400;
-        return {
-          error: result.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; "),
-          code: "VALIDATION_ERROR",
-        };
-      }
-
-      if (!searchFn) {
-        set.status = 503;
-        return { error: "Search index not available" };
-      }
-
-      const { query, intent, limit, collection, minScore } = result.data;
-      const cappedLimit = Math.min(limit ?? 10, 20);
-
-      try {
-        const results = await searchFn(query, {
-          intent: intent ?? DEFAULT_SEARCH_INTENT,
-          limit: cappedLimit,
-          collection,
-          minScore,
-        });
-
-        // Post-filter: exclude retired insights (§4.5)
-        const filtered: typeof results = [];
-        for (const r of results) {
-          if (r.file && r.file.includes("/insights/")) {
-            try {
-              const fileContent = await readFile(r.file, "utf-8");
-              const fm = parseFrontmatter(fileContent);
-              if (fm.status === "retired") continue;
-            } catch {
-              // file unreadable, include it
-            }
-          }
-          filtered.push(r);
-        }
-
-        return filtered.map((r) => {
-          // Extract collection name from displayPath (qmd://collection-name/...)
-          const dpMatch = r.displayPath?.match(/^qmd:\/\/([^/]+)/);
-          return {
-            id: memoryIndex.getIdByPath(r.file) ?? null,
-            path: r.file,
-            title: r.title,
-            snippet: r.bestChunk,
-            score: r.score,
-            collection: dpMatch?.[1] ?? null,
-          };
-        });
-      } catch (err) {
-        console.error("Search error:", err instanceof Error ? err.message : err);
-        set.status = 503;
-        return { error: "Search index not available" };
-      }
-    }, { body: t.Any() })
-    // ─── Ingest Raw ───────────────────────────────────────────────
-    .post("/api/v1/ingest/raw", async ({ body, set }) => {
-      const result = RawIngestPayload.safeParse(body);
-      if (!result.success) {
-        set.status = 400;
-        return {
-          error: result.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; "),
-          code: "VALIDATION_ERROR",
-        };
-      }
-
-      const { source, content, original_url, date_created, date_modified, priority } = result.data;
-      const taskId = queue.enqueue({ source, content, original_url, date_created, date_modified }, priority);
-
-      set.status = 202;
-      return {
-        status: "queued",
-        task_id: taskId,
-        message: "Enrichment added to queue.",
-      };
-    }, { body: t.Any() })
     // ─── Task Status ──────────────────────────────────────────────
     .get("/api/v1/task/:id", ({ params, set }) => {
       const task = queue.getTask(params.id);
@@ -395,38 +169,6 @@ export function createApp(deps: AppDeps = {}) {
         file_path: filePath,
       };
     }, { body: t.Any() })
-    // ─── List Memories ────────────────────────────────────────────
-    .get("/api/v1/memories", async ({ query }) => {
-      const typeFilter = query.type as string | undefined;
-      const limit = Math.min(Number(query.limit) || 20, 100);
-
-      const results: MemorySummary[] = [];
-      for (const [id, filePath] of memoryIndex.entries()) {
-        const memory = await parseMemoryFile(id, filePath);
-        if (!memory) continue;
-        if (typeFilter && memory.type !== typeFilter) continue;
-        results.push(memory);
-        if (results.length >= limit) break;
-      }
-
-      return results;
-    })
-    // ─── Get Memory ───────────────────────────────────────────────
-    .get("/api/v1/memory/:id", async ({ params, set }) => {
-      const filePath = memoryIndex.get(params.id);
-      if (!filePath) {
-        set.status = 404;
-        return { error: "Memory not found", code: "NOT_FOUND" };
-      }
-
-      const memory = await parseMemoryFileFull(params.id, filePath);
-      if (!memory) {
-        set.status = 404;
-        return { error: "Memory not found", code: "NOT_FOUND" };
-      }
-
-      return memory;
-    })
     // ─── Delete All Memories (Reset) ────────────────────────────────
     // NOTE: must be registered before DELETE /api/v1/memory/:id to avoid
     // memoirist radix-trie shadowing (shared "memory" prefix).
