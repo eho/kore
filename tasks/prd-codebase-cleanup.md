@@ -2,7 +2,7 @@
 
 ## Introduction
 
-After the successful completion of Phase 1 (MVP) and Phase 2 (Consolidation, MCP, Apple Notes), the codebase has accumulated technical debt: deprecated endpoints with duplicated inline logic, repeated utility functions across 6+ files, dead code, oversized files, silent error handling, and hardcoded configuration. This PRD addresses the cleanup identified in the [project assessment](/docs/assessment.md) and the [endpoint deprecation plan](/docs/api-endpoint-deprecation.md).
+After the successful completion of Phase 1 (MVP) and Phase 2 (Consolidation, MCP, Apple Notes), the codebase has accumulated technical debt: deprecated endpoints with duplicated inline logic, repeated utility functions across 6+ files, dead code, oversized files, silent error handling, and hardcoded configuration. This PRD addresses the cleanup identified in the [project assessment](/docs/planning/assessment.md) and the [endpoint deprecation plan](/docs/planning/api-endpoint-deprecation.md).
 
 The MCP-005 integration tests are complete, which was the blocker for removing the deprecated endpoints. All 826 tests currently pass.
 
@@ -120,7 +120,7 @@ The MCP-005 integration tests are complete, which was the blocker for removing t
 - [ ] Update `apps/core-api/README.md` health endpoint response structure to match actual output (memories/queue/index/sync objects)
 - [ ] Update `/docs/api-endpoint-deprecation.md` — mark status as complete, update migration steps as done
 - [ ] Update `/docs/architecture/api_design.md` if it references removed endpoints
-- [ ] Review `/docs/phase2/apple_notes_integration_design.md` — mark the `listExternalKeys()` gap as resolved (it's wired)
+- [ ] Review `/docs/design/apple_notes_integration_design.md` — mark the `listExternalKeys()` gap as resolved (it's wired)
 
 *Gate:*
 - [ ] `bun test` passes with no regressions

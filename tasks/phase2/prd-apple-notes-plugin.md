@@ -4,7 +4,7 @@
 
 Kore's first fully automated, passive ingestion source. The Apple Notes plugin runs a background sync loop inside the Kore server, using `@kore/an-export` to incrementally export Apple Notes to a staging directory, then diffs the export manifest against the Plugin Identity Registry to detect new, updated, and deleted notes. New/updated notes are transformed into LLM-ready content (with folder hierarchy as context) and enqueued for extraction. Deleted notes are removed from Kore's memory store. The plugin exposes API routes for status/manual sync and a `kore sync` CLI command.
 
-**Architecture reference:** [apple_notes_integration_design.md](../docs/phase2/apple_notes_integration_design.md)
+**Architecture reference:** [apple_notes_integration_design.md](../docs/design/apple_notes_integration_design.md)
 
 ## Goals
 
@@ -86,7 +86,7 @@ Kore's first fully automated, passive ingestion source. The Apple Notes plugin r
 - [ ] Integration test runs a full sync cycle: `syncNotes()` exports to a temp staging dir, content builder processes files, verifies output structure (folder prefix, title, body)
 - [ ] Integration test verifies folder path extraction for nested folders and attachment reference stripping
 - [ ] Integration test cleans up temp staging directory after completion
-- [ ] Update [apple_notes_integration_design.md](../docs/phase2/apple_notes_integration_design.md) Phase 4 validation section to reference this test
+- [ ] Update [apple_notes_integration_design.md](../docs/design/apple_notes_integration_design.md) Phase 4 validation section to reference this test
 - [ ] Typecheck passes
 
 ## Functional Requirements

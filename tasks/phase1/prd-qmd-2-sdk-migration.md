@@ -6,7 +6,7 @@
 
 This refactor eliminates the global CLI dependency, gives kore strongly-typed access to QMD's full API (search, indexing, status, context management), and unlocks hybrid semantic search as a new capability. It also simplifies the Docker setup by removing the global install, the node symlink shim, and replacing the config volume mount with a model-cache volume.
 
-See `docs/qmd-2.0/assessment.md` for the full technical analysis.
+See `docs/planning/qmd-2.0-assessment.md` for the full technical analysis.
 
 ## Goals
 
@@ -115,7 +115,7 @@ See `docs/qmd-2.0/assessment.md` for the full technical analysis.
 - [ ] `docker-compose.yml`: `${QMD_CACHE_PATH:-~/.kore/qmd-cache}:/home/bun/.cache/qmd` volume added to `core-api` service (model cache persistence)
 - [ ] `docker-compose.yml`: `QMD_CACHE_PATH` and `KORE_EMBED_INTERVAL_MS` documented in `.env.example` (or equivalent) with a comment explaining the 2GB+ model download
 - [ ] Container builds successfully: `docker build .`
-- [ ] **Documentation:** `docs/qmd-2.0/assessment.md` Docker section marked as implemented
+- [ ] **Documentation:** `docs/planning/qmd-2.0-assessment.md` Docker section marked as implemented
 
 ---
 

@@ -8,7 +8,7 @@ This PRD covers the full implementation: a shared operations module (business lo
 
 The result: agents can search, save, inspect, and synthesize the user's personal knowledge without needing to parse YAML, understand Kore's internal structure, or manage a separate process.
 
-Reference design: `docs/phase2/mcp_server_design.md`
+Reference design: `docs/design/mcp_server_design.md`
 
 ---
 

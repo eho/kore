@@ -2,7 +2,7 @@
 
 ## Introduction
 
-Kore currently processes every memory in isolation: ingest → extract → write → index → search. Over time this creates fragmentation (40 notes on React patterns with no single synthesized answer), contradiction persistence (two conflicting beliefs with equal weight), and latent connection blindness (related memories in different categories that are never linked). The Consolidation System addresses all three by running a background loop that identifies clusters of related memories via QMD hybrid search, synthesizes them into higher-order **insight** files via LLM, and tracks the lifecycle of each insight as new evidence arrives or sources are deleted. Full design specification: [`docs/phase2/consolidation_system_design.md`](../docs/phase2/consolidation_system_design.md).
+Kore currently processes every memory in isolation: ingest → extract → write → index → search. Over time this creates fragmentation (40 notes on React patterns with no single synthesized answer), contradiction persistence (two conflicting beliefs with equal weight), and latent connection blindness (related memories in different categories that are never linked). The Consolidation System addresses all three by running a background loop that identifies clusters of related memories via QMD hybrid search, synthesizes them into higher-order **insight** files via LLM, and tracks the lifecycle of each insight as new evidence arrives or sources are deleted. Full design specification: [`docs/design/consolidation_system_design.md`](../docs/design/consolidation_system_design.md).
 
 ---
 
@@ -439,7 +439,7 @@ Kore currently processes every memory in isolation: ingest → extract → write
 - [ ] **`kore list --type insight` test**: after consolidation, assert the insight appears in list output
 - [ ] Tests use a separate SQLite database and data directory (no pollution of dev data)
 - [ ] `bun test e2e/consolidation/` passes reliably (no flakiness from QMD async indexing — use explicit `await qmdClient.update()` + `await qmdClient.embed()` before assertions)
-- [ ] Update `docs/phase2/consolidation_system_design.md` to mark implementation status as complete and add any calibration notes discovered during testing
+- [ ] Update `docs/design/consolidation_system_design.md` to mark implementation status as complete and add any calibration notes discovered during testing
 
 ---
 

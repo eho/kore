@@ -18,11 +18,11 @@ To make navigation easier, the documentation is organized into the following are
 * **[Hybrid Architecture Examples](architecture/hybrid_architecture_examples.md):** Concrete examples of how data flows through ingestion, extraction, storage, and retrieval.
 
 ## 3. Phase 2 — Consolidation & Integrations
-* **[Consolidation System Design](phase2/consolidation_system_design.md):** Full architecture for the background consolidation loop — seed selection, QMD-driven candidate finding, LLM synthesis, insight lifecycle, dedup/supersession, and reactive re-evaluation.
-* **[Consolidation Design Review](phase2/consolidation_design_review.md):** Critical assessment against competitors (Graphiti, LangMem, etc.), identified weaknesses, and V1/V2 improvement roadmap.
-* **[Design Effectiveness Review](phase2/design_effectiveness_review.md):** Honest gap analysis of the overall Kore architecture — extraction quality, consolidation, plugin system, retrieval weighting.
-* **[Apple Notes Integration Design](phase2/apple_notes_integration_design.md):** Plugin-based passive ingestion from Apple Notes — staging, manifest diffing, folder-aware context, content pipeline.
-* **[MCP Server Design](phase2/mcp_server_design.md):** Agent-facing MCP interface — 6 core tools (recall, remember, inspect, insights, status, consolidate), behavior-encoding descriptions, structured output.
+* **[Consolidation System Design](design/consolidation_system_design.md):** Full architecture for the background consolidation loop — seed selection, QMD-driven candidate finding, LLM synthesis, insight lifecycle, dedup/supersession, and reactive re-evaluation.
+* **[Consolidation Design Review](analysis/consolidation_design_review.md):** Critical assessment against competitors (Graphiti, LangMem, etc.), identified weaknesses, and V1/V2 improvement roadmap.
+* **[Design Effectiveness Review](analysis/design_effectiveness_review.md):** Honest gap analysis of the overall Kore architecture — extraction quality, consolidation, plugin system, retrieval weighting.
+* **[Apple Notes Integration Design](design/apple_notes_integration_design.md):** Plugin-based passive ingestion from Apple Notes — staging, manifest diffing, folder-aware context, content pipeline.
+* **[MCP Server Design](design/mcp_server_design.md):** Agent-facing MCP interface — 6 core tools (recall, remember, inspect, insights, status, consolidate), behavior-encoding descriptions, structured output.
 
 ## 4. Analysis & Learnings
 * **[Architectural Analysis (QMD vs. MemU)](analysis/architecture_analysis.md):** An evaluation of QMD and MemU architectures and why Kore uses a hybrid approach.

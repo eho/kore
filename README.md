@@ -67,8 +67,9 @@ kore/
 │   ├── an-export/             # Apple Notes → Markdown exporter
 │   └── plugin-apple-notes/    # Apple Notes sync plugin (passive ingestion)
 ├── docs/                  # Architecture docs and guides
-│   ├── phase2/            # Phase 2 design docs (consolidation, MCP)
-│   └── manual-e2e-testing.md
+│   ├── design/            # Feature-level design specs
+│   ├── planning/          # Ongoing planning and assessments
+│   └── testing/           # QA and testing guides
 ├── tasks/                 # PRDs and design docs
 └── progress.md            # Project-wide progress tracker
 ```
@@ -149,7 +150,7 @@ curl -X POST http://localhost:3000/api/v1/ingest/raw \
   -d '{"source": "manual", "content": "Mutekiya in Ikebukuro — best tsukemen, cash only, 30 min wait."}'
 ```
 
-See `docs/manual-e2e-testing.md` for a complete walkthrough of all scenarios.
+See `docs/testing/manual-e2e-testing.md` for a complete walkthrough of all scenarios.
 
 ---
 
@@ -223,7 +224,7 @@ kore delete <insight-id>      # delete an insight; source memories are automatic
 kore search "topic"           # insights appear in search results (retired insights are filtered out)
 ```
 
-See [`apps/core-api/README.md`](apps/core-api/README.md) for API endpoint details and the [Consolidation System Design](docs/phase2/consolidation_system_design.md) for the full specification.
+See [`apps/core-api/README.md`](apps/core-api/README.md) for API endpoint details and the [Consolidation System Design](docs/design/consolidation_system_design.md) for the full specification.
 
 ---
 
@@ -303,8 +304,8 @@ See [`docs/README.md`](docs/README.md) for the full documentation index. Key doc
 | [Vision](docs/vision/vision.md) | Strategic vision, design principles, real-world scenarios |
 | [System Architecture](docs/architecture/architecture.md) | High-level layers, technology stack, data flows |
 | [Data Schema](docs/architecture/data_schema.md) | Zod schemas, directory layout, frontmatter format |
-| [Consolidation System Design](docs/phase2/consolidation_system_design.md) | Background consolidation loop, insight lifecycle, synthesis |
-| [MCP Server Design](docs/phase2/mcp_server_design.md) | Agent-facing interface with 6 core tools |
+| [Consolidation System Design](docs/design/consolidation_system_design.md) | Background consolidation loop, insight lifecycle, synthesis |
+| [MCP Server Design](docs/design/mcp_server_design.md) | Agent-facing interface with 6 core tools |
 
 ## Roadmap
 

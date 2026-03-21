@@ -6,7 +6,7 @@ The Kore consolidation system creates insights by synthesizing clusters of relat
 
 Currently, `kore reset` wipes everything (memories, tasks, QMD index). There is no way to clear only the consolidation layer. And while `kore delete <id>` can remove an insight file, it leaves source memories stuck in `active` tracker status — permanently excluded from future consolidation.
 
-**Design doc:** `docs/phase2/consolidation_reset_delete_design.md`
+**Design doc:** `docs/design/consolidation_reset_delete_design.md`
 
 ## Goals
 
@@ -53,7 +53,7 @@ Currently, `kore reset` wipes everything (memories, tasks, QMD index). There is 
 - [ ] Enhance `kore delete` CLI output: when deleting an insight, show "N source memories restored to consolidation pool"; for non-insights, output unchanged
 - [ ] Typecheck/lint passes
 - [ ] **[Testing]** Unit tests in `delete-memory.test.ts`: single-pass I/O removes both fields; multi-insight source not reset; `resetToPending` tracker test; `deleteMemoryById` returns correct `restoredSources` count
-- [ ] **[Documentation]** Update design doc `docs/phase2/consolidation_reset_delete_design.md` status from "Draft" to "Implemented"
+- [ ] **[Documentation]** Update design doc `docs/design/consolidation_reset_delete_design.md` status from "Draft" to "Implemented"
 
 ## Functional Requirements
 

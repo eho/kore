@@ -25,7 +25,7 @@ Pivot the Kore application architecture from a Docker-containerized setup to run
 - [ ] Delete `Dockerfile`, `docker-compose.yml`, and `.dockerignore`.
 - [ ] Remove the commented-out `# OLLAMA_BASE_URL=http://host.docker.internal:11434` line from `.env.example`; confirm default is `http://localhost:11434`.
 - [ ] Add `"start": "bun run apps/core-api/src/index.ts"` and `"dev": "bun --hot run apps/core-api/src/index.ts"` scripts to the root `package.json`.
-- [ ] Remove Docker deployment instructions from `README.md` and audit `docs/` for remaining Docker-specific references (including `docs/architecture/`, `docs/qmd-2.0/assessment.md`, `apps/core-api/README.md`).
+- [ ] Remove Docker deployment instructions from `README.md` and audit `docs/` for remaining Docker-specific references (including `docs/architecture/`, `docs/planning/qmd-2.0-assessment.md`, `apps/core-api/README.md`).
 - [ ] Run `bun run typecheck` from the repo root and confirm exit code 0.
 
 ### NHP-002: Introduce `KORE_HOME` and standardize all paths
