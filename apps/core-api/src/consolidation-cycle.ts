@@ -116,9 +116,9 @@ export async function runConsolidationCycle(deps: ConsolidationDeps): Promise<Co
     // 3a. Re-eval path: load existing insight's source_ids, resolve remaining sources
     const content = await Bun.file(seedPath).text();
     const insightFm = parseFrontmatter(content);
-    const sourceIds: string[] = Array.isArray(insightFm.source_ids) ? insightFm.source_ids : [];
+    const sourceIds: string[] = Array.isArray(insightFm.source_ids) ? (insightFm.source_ids as string[]) : [];
     existingInsightId = seedId;
-    reinforcementCount = (insightFm.reinforcement_count ?? 0) + 1;
+    reinforcementCount = Number(insightFm.reinforcement_count ?? 0) + 1;
 
     // Resolve which sources still exist
     const remainingSources: SeedMemory[] = [];

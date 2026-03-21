@@ -1,6 +1,8 @@
 import { z } from "zod";
 import type { Elysia } from "elysia";
 
+type AnyElysia = Elysia<any, any, any, any, any, any, any>;
+
 // ─── Zod Schemas (data_schema.md §3.1) ─────────────────────────────
 
 export const MemoryTypeEnum = z.enum(["place", "media", "note", "person", "insight"]);
@@ -163,7 +165,7 @@ export interface KorePlugin {
   name: string;
   start?: (deps: PluginStartDeps) => Promise<void>;
   stop?: () => Promise<void>;
-  routes?: (app: Elysia) => Elysia;
+  routes?: (app: AnyElysia) => void;
   onMemoryIndexed?: (event: MemoryEvent) => Promise<void>;
   onMemoryDeleted?: (event: MemoryEvent) => Promise<void>;
   onMemoryUpdated?: (event: MemoryEvent) => Promise<void>;

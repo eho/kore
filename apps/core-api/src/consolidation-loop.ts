@@ -40,7 +40,8 @@ export async function reconcileOnStartup(deps: Pick<ConsolidationDeps, "dataPath
   let insightFiles: string[];
   try {
     insightFiles = (await readdir(insightsDir)).filter((f) => f.endsWith(".md"));
-  } catch {
+  } catch (err) {
+    console.warn("[consolidation] reconcileOnStartup: insights directory not accessible:", insightsDir, err);
     insightFiles = [];
   }
 
@@ -51,10 +52,11 @@ export async function reconcileOnStartup(deps: Pick<ConsolidationDeps, "dataPath
     try {
       const content = await Bun.file(filePath).text();
       const fm = parseFrontmatter(content);
-      if (fm.id) {
+      if (typeof fm.id === "string") {
         diskInsightIds.add(fm.id);
       }
-    } catch {
+    } catch (err) {
+      console.warn("[consolidation] reconcileOnStartup: failed to read insight file:", filePath, err);
       continue;
     }
   }
@@ -196,11 +198,11 @@ export function buildConsolidationDeps(params: {
   return {
     ...params,
     intervalMs: Number(process.env.CONSOLIDATION_INTERVAL_MS) || 1_800_000,
-    minClusterSize: 3,
-    maxClusterSize: 8,
-    minSimilarityScore: 0.45,
+    minClusterSize: Number(process.env.CONSOLIDATION_MIN_CLUSTER_SIZE) || 3,
+    maxClusterSize: Number(process.env.CONSOLIDATION_MAX_CLUSTER_SIZE) || 8,
+    minSimilarityScore: parseFloat(process.env.CONSOLIDATION_MIN_SIMILARITY ?? "") || 0.45,
     cooldownDays: Number(process.env.CONSOLIDATION_COOLDOWN_DAYS) || 7,
     maxSynthesisAttempts: Number(process.env.CONSOLIDATION_MAX_ATTEMPTS) || 3,
-    relevanceThreshold: 0.5,
+    relevanceThreshold: parseFloat(process.env.CONSOLIDATION_RELEVANCE_THRESHOLD ?? "") || 0.5,
   };
 }

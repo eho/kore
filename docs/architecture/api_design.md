@@ -22,10 +22,11 @@ Verifies the Elysia server, QMD bridge, and Core SQLite queue are responsive.
 ```typescript
 // Response (200 OK)
 {
-  "status": "ok",
   "version": "1.0.0",
-  "qmd_status": "online",
-  "queue_length": 0
+  "memories": { "total": 42, "by_type": { "note": 20, "place": 10 } },
+  "queue": { "pending": 0, "processing": 0, "failed": 0 },
+  "index": { "documents": 42, "embedded": 42, "status": "ok" },
+  "sync": { "apple_notes": { "enabled": true, "total_tracked": 100 } }  // only if KORE_APPLE_NOTES_ENABLED=true
 }
 ```
 
@@ -35,16 +36,18 @@ Verifies the Elysia server, QMD bridge, and Core SQLite queue are responsive.
 
 ### 3.1 Unstructured Data Ingestion (Default)
 
-**`POST /api/v1/ingest/raw`**
-The primary entry point for raw, messy data like scraped HTML, clipboard dumps, or Apple Notes content. The API adds this to the Queue for full LLM semantic extraction.
+**`POST /api/v1/remember`**
+The primary entry point for raw, messy data like scraped HTML, clipboard dumps, or Apple Notes content. The API adds this to the Queue for full LLM semantic extraction. (Supersedes the removed `POST /api/v1/ingest/raw`.)
 
 **Request Payload:**
 ```typescript
 {
-  "source": "apple_notes",              // Originating ingestor UUID or string
   "content": "John recommended Mutekiya in Ikebukuro for solo dining...",
-  "original_url": "optional_string",    // The source URL if applicable
-  "priority": "normal"                  // enum: [low, normal, high] - determines queue placement
+  "source": "apple_notes",              // optional: originating source
+  "url": "optional_string",             // optional: source URL
+  "priority": "normal",                 // enum: [low, normal, high] - queue placement
+  "suggested_tags": ["ramen", "tokyo"], // optional: hints for LLM extraction
+  "suggested_category": "qmd://travel/food/japan"  // optional: category hint
 }
 ```
 
@@ -114,37 +117,48 @@ Returns the current status of an ingestion task created by `POST /ingest/raw`.
 
 ---
 
-## 4. Search Endpoint
+## 4. Recall / Search Endpoint
 
-### 4.1 Semantic Search
-**`POST /api/v1/search`**
-Performs a hybrid BM25 + vector search with optional LLM reranking over all indexed memories.
+### 4.1 Recall (Search & List)
+**`POST /api/v1/recall`**
+Performs a hybrid BM25 + vector search over indexed memories with filter support and pagination. With no `query` field, returns all memories (paginated). Supersedes the removed `POST /api/v1/search` and `GET /api/v1/memories` endpoints.
 
 **Request Payload:**
 ```typescript
 {
-  "query": "anniversary dinner ideas in Sydney",
-  "intent": "personal knowledge base",  // optional: hint for LLM reranker
-  "limit": 10,                           // optional: max results (capped at 20)
-  "collection": "travel"                 // optional: filter to a specific collection
+  "query": "anniversary dinner ideas in Sydney",  // optional: semantic search query
+  "type": "place",                                 // optional: filter by memory type
+  "intent": "recommendation",                      // optional: filter by intent
+  "tags": ["sydney", "restaurant"],                // optional: filter by tags
+  "limit": 10,                                     // optional: page size (default 10)
+  "offset": 0,                                     // optional: pagination offset
+  "min_score": 0.5,                                // optional: minimum relevance score
+  "include_insights": false                        // optional: include insight memories
 }
 ```
 
 **Response (200 OK):**
 ```typescript
-[
-  {
-    "id": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",  // memory UUID (null if not in index)
-    "path": "/home/user/kore-data/places/sixpenny.md",
-    "title": "Sixpenny Restaurant",
-    "snippet": "A degustation menu restaurant in Stanmore, Sydney...",
-    "score": 0.92,
-    "collection": "travel"
-  }
-]
+{
+  "results": [
+    {
+      "id": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
+      "title": "Sixpenny Restaurant",
+      "type": "place",
+      "category": "qmd://travel/food/australia",
+      "tags": ["sydney", "restaurant", "degustation"],
+      "date_saved": "2026-03-07T12:00:00Z",
+      "source": "manual",
+      "distilled_items": ["Degustation menu restaurant in Stanmore"],
+      "score": 0.92
+    }
+  ],
+  "query": "anniversary dinner ideas in Sydney",
+  "total": 1,
+  "offset": 0,
+  "has_more": false
+}
 ```
-
-**Response (400 Bad Request):** Query field is missing or empty.
 
 **Response (503 Service Unavailable):** QMD search index is not available.
 

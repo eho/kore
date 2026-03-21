@@ -1,15 +1,23 @@
 import { readFile } from "node:fs/promises";
 
+// ─── Frontmatter Types ───────────────────────────────────────────────
+
+/**
+ * Parsed frontmatter fields. Values are `unknown` — callers should use
+ * String(), Number(), Array.isArray(), etc. to narrow before use.
+ */
+export type FrontmatterFields = Record<string, unknown>;
+
 // ─── Frontmatter Parsing ─────────────────────────────────────────────
 
 /**
  * Parse YAML frontmatter from a markdown file content string.
  * Handles arrays in bracket notation, null values, and numeric coercion.
  */
-export function parseFrontmatter(content: string): Record<string, any> {
+export function parseFrontmatter(content: string): FrontmatterFields {
   const match = content.match(/^---\n([\s\S]*?)\n---/);
   if (!match) return {};
-  const result: Record<string, any> = {};
+  const result: Record<string, unknown> = {};
   for (const line of match[1].split("\n")) {
     const colonIdx = line.indexOf(":");
     if (colonIdx === -1) continue;
@@ -40,7 +48,7 @@ export function parseFrontmatter(content: string): Record<string, any> {
  * Parse frontmatter and return both the parsed fields and the body content.
  */
 export function parseFrontmatterWithBody(content: string): {
-  frontmatter: Record<string, any>;
+  frontmatter: FrontmatterFields;
   body: string;
 } {
   const match = content.match(/^---\n([\s\S]*?)\n---/);
@@ -56,7 +64,7 @@ export function parseFrontmatterWithBody(content: string): {
 /**
  * Serialize frontmatter back to YAML string (with surrounding --- delimiters).
  */
-export function serializeFrontmatter(fm: Record<string, any>): string {
+export function serializeFrontmatter(fm: FrontmatterFields): string {
   const lines = ["---"];
   for (const [key, value] of Object.entries(fm)) {
     if (Array.isArray(value)) {
@@ -171,14 +179,14 @@ export async function parseMemoryFile(id: string, filePath: string): Promise<Mem
       date_saved: String(fm.date_saved || ""),
       ...(fm.date_created ? { date_created: String(fm.date_created) } : {}),
       ...(fm.date_modified ? { date_modified: String(fm.date_modified) } : {}),
-      tags: parseTagsArray(fm.tags || ""),
+      tags: parseTagsArray((fm.tags as string | string[]) || ""),
       ...(fm.intent ? { intent: String(fm.intent) } : {}),
       ...(fm.confidence !== undefined ? { confidence: Number(fm.confidence) } : {}),
     };
     if (fm.type === "insight") {
       if (fm.insight_type) summary.insight_type = String(fm.insight_type);
       if (fm.status) summary.status = String(fm.status);
-      const sourceIds = parseTagsArray(fm.source_ids || "");
+      const sourceIds = parseTagsArray((fm.source_ids as string | string[]) || "");
       summary.source_ids_count = sourceIds.length;
     }
     return summary;
@@ -200,7 +208,7 @@ export async function parseMemoryFileFull(id: string, filePath: string): Promise
       ...(fm.date_created ? { date_created: String(fm.date_created) } : {}),
       ...(fm.date_modified ? { date_modified: String(fm.date_modified) } : {}),
       source: String(fm.source || ""),
-      tags: parseTagsArray(fm.tags || ""),
+      tags: parseTagsArray((fm.tags as string | string[]) || ""),
       url: fm.url ? String(fm.url) : undefined,
       ...(fm.intent ? { intent: String(fm.intent) } : {}),
       ...(fm.confidence !== undefined ? { confidence: Number(fm.confidence) } : {}),
@@ -209,15 +217,15 @@ export async function parseMemoryFileFull(id: string, filePath: string): Promise
       content,
     };
     if (fm.insight_refs) {
-      full.insight_refs = parseTagsArray(fm.insight_refs);
+      full.insight_refs = parseTagsArray(fm.insight_refs as string | string[]);
     }
     if (fm.type === "insight") {
       if (fm.insight_type) full.insight_type = String(fm.insight_type);
       if (fm.status) full.status = String(fm.status);
-      full.source_ids = parseTagsArray(fm.source_ids || "");
+      full.source_ids = parseTagsArray((fm.source_ids as string | string[]) || "");
       full.source_ids_count = full.source_ids.length;
-      full.supersedes = parseTagsArray(fm.supersedes || "");
-      full.superseded_by = parseTagsArray(fm.superseded_by || "");
+      full.supersedes = parseTagsArray((fm.supersedes as string | string[]) || "");
+      full.superseded_by = parseTagsArray((fm.superseded_by as string | string[]) || "");
       if (fm.reinforcement_count !== undefined) full.reinforcement_count = Number(fm.reinforcement_count);
       if (fm.last_synthesized_at) full.last_synthesized_at = String(fm.last_synthesized_at);
     }

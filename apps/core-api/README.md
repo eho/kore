@@ -120,15 +120,15 @@ All endpoints except `/health` require `Authorization: Bearer <KORE_API_KEY>`.
 
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
-| `GET` | `/api/v1/health` | No | Health check — returns server status, QMD status, and current queue length |
-| `POST` | `/api/v1/search` | Yes | Hybrid semantic search over indexed memories — returns ranked results |
-| `POST` | `/api/v1/ingest/raw` | Yes | Queue raw text for async LLM extraction → returns `202` with `task_id` |
+| `GET` | `/api/v1/health` | No | Health check — returns memories, queue, index, and sync status |
+| `POST` | `/api/v1/remember` | Yes | Queue raw text for async LLM extraction → returns `202` with `task_id` |
 | `GET` | `/api/v1/task/:id` | Yes | Check extraction task status (`queued`, `processing`, `completed`, `failed`) |
 | `POST` | `/api/v1/ingest/structured` | Yes | Directly write a fully-formed memory file, bypassing LLM → returns `200` with `file_path` |
+| `POST` | `/api/v1/recall` | Yes | Search/list memories with filters and pagination |
+| `GET` | `/api/v1/inspect/:id` | Yes | Get full memory by ID including distilled items and consolidation metadata |
+| `GET` | `/api/v1/insights` | Yes | List insight memories, optional `?type=cluster_summary&status=active` |
 | `DELETE` | `/api/v1/memory/:id` | Yes | Delete a memory file by its frontmatter `id`; for insight deletions, also restores source memories to the consolidation pool (`restored_sources` in response) |
 | `PUT` | `/api/v1/memory/:id` | Yes | Overwrite an existing memory file with updated content |
-| `GET` | `/api/v1/memories` | Yes | List memories, optional `?type=insight&limit=20` |
-| `GET` | `/api/v1/memory/:id` | Yes | Get full memory by ID (supports prefix matching) |
 | `DELETE` | `/api/v1/memories` | Yes | Reset — delete all memories, tasks, QMD index, and consolidation tracker |
 | `DELETE` | `/api/v1/consolidation` | Yes | Consolidation reset — delete all insights and restore all source memories to unconsolidated state while preserving ingested memories; returns `{ status, deleted_insights, restored_memories, tracker_backfilled }` |
 | `POST` | `/api/v1/consolidate` | Yes | Trigger one consolidation cycle (see below) |
@@ -137,15 +137,27 @@ All endpoints except `/health` require `Authorization: Bearer <KORE_API_KEY>`.
 
 ```json
 {
-  "status": "ok",
   "version": "1.0.0",
-  "qmd": {
-    "status": "ok",          // "ok" | "bootstrapping" | "unavailable"
-    "doc_count": 42,
-    "collections": 1,
-    "needs_embedding": 5
+  "memories": {
+    "total": 42,
+    "by_type": { "note": 20, "place": 10, "person": 5, "media": 5, "insight": 2 }
   },
-  "queue_length": 0
+  "queue": {
+    "pending": 0,
+    "processing": 0,
+    "failed": 0
+  },
+  "index": {
+    "documents": 42,
+    "embedded": 40,
+    "status": "embedding"    // "ok" | "embedding" | "unavailable"
+  },
+  "sync": {                  // only present if KORE_APPLE_NOTES_ENABLED=true
+    "apple_notes": {
+      "enabled": true,
+      "total_tracked": 100
+    }
+  }
 }
 ```
 
@@ -273,6 +285,11 @@ The consolidation system runs as a background loop that synthesizes clusters of 
 | `CONSOLIDATION_INTERVAL_MS` | `1800000` (30 min) | How often the consolidation loop runs |
 | `CONSOLIDATION_COOLDOWN_DAYS` | `7` | Minimum days before re-consolidating a memory |
 | `CONSOLIDATION_MAX_ATTEMPTS` | `3` | Max synthesis attempts before a seed is marked `failed` |
+| `CONSOLIDATION_MIN_CLUSTER_SIZE` | `3` | Minimum related memories required to form a cluster |
+| `CONSOLIDATION_MAX_CLUSTER_SIZE` | `8` | Maximum memories in a consolidation cluster |
+| `CONSOLIDATION_MIN_SIMILARITY` | `0.45` | Minimum QMD similarity score for candidates |
+| `CONSOLIDATION_RELEVANCE_THRESHOLD` | `0.5` | Minimum relevance for consolidation event handlers |
+| `KORE_PORT` | `3000` | HTTP port for the Core API |
 | `KORE_SYNTHESIS_MODEL` | *(uses `LLM_MODEL`)* | Optional override for the LLM model used during synthesis |
 
 ### Consolidation Tracker

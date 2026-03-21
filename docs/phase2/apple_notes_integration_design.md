@@ -71,7 +71,7 @@ export interface PluginStartDeps {
 
 > **Note:** Registry methods are **plugin-scoped** — the `pluginName` is captured in a closure by `core-api/src/index.ts` when constructing `PluginStartDeps` for each plugin. Plugins never pass their own name.
 
-> **Gap: `listExternalKeys` is not yet exposed.** `PluginRegistryRepository.listByPlugin()` exists in `core-api/src/plugin-registry.ts` but is not wired into `PluginStartDeps`. The Apple Notes plugin requires this for delete detection and pending-key resolution in `onMemoryIndexed`. **This must be added before implementing the plugin.**
+> **`listExternalKeys` is wired.** `PluginRegistryRepository.listByPlugin()` is exposed via `PluginStartDeps.listExternalKeys()` in `core-api/src/index.ts`. The Apple Notes plugin uses this for delete detection and pending-key resolution in `onMemoryIndexed`.
 
 The `PluginStartDeps.enqueue` is a thin wrapper over `QueueRepository.enqueue()`, giving plugins access to the task queue without depending directly on the queue implementation.
 

@@ -15,7 +15,7 @@ export async function health(
     try {
       const content = await readFile(filePath, "utf-8");
       const fm = parseFrontmatter(content);
-      const type = fm.type || "unknown";
+      const type = String(fm.type || "unknown");
       byType[type] = (byType[type] || 0) + 1;
     } catch {
       byType["unknown"] = (byType["unknown"] || 0) + 1;
