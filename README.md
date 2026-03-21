@@ -2,14 +2,21 @@
 
 **A context-aware personal memory engine.**
 
-Kore solves the "Recall Disconnect" — the gap between saving high-value inspiration (travel spots, reading recommendations, hobby ideas) and actually remembering to use it. It passively ingests explicitly saved content, distills it into atomic memory items using a local LLM, and indexes them for agentic retrieval via QMD and MCP.
+Kore solves the "Recall Disconnect" — the gap between saving high-value inspiration and actually remembering it when it matters. It passively ingests content from your existing tools (Apple Notes, bookmarks, etc.), uses an LLM to distill it into structured memories, and surfaces it automatically — through an AI agent via MCP, the CLI, or proactive push nudges based on location and time.
 
-By seamlessly ingesting explicitly saved content from your fragmented digital landscape (Apple Notes, X bookmarks, Safari, etc.), Kore builds a long-term, searchable, and intelligent memory bank. It completely removes the burden of "remembering to remember" by autonomously surfacing the right information exactly when and where you need it—either through seamless conversational AI or proactive, location and context-aware nudges.
+**What makes it different:**
+
+- **Passive ingestion** — you don't change how you work; Kore watches your existing tools
+- **LLM-powered understanding** — content is extracted into structured memories with intent, tags, and confidence, not just stored as text
+- **Consolidation** — a background loop synthesizes clusters of related memories into higher-order insights over time
+- **Agentic-first** — your AI assistant (Claude, OpenClaw, etc.) has direct access to your memory via MCP, and uses it proactively without being asked
+- **File-system native** — every memory is a plain `.md` file; no proprietary database lock-in
+- **Privacy-first** — runs fully locally with Ollama, or with a cloud LLM if you prefer
 
 ### Why "Kore"?
 
-- **Greek:** Meaning "the core" or "the heart." Tied to the Eleusinian Mysteries (memory and cycles) — fitting for a memory engine at the center of the Cronus system.
-- **Japanese:** *Kore* (これ) is the demonstrative pronoun for "this." A literal pointer — the piece of memory being surfaced right now.
+- **Greek:** Meaning "the core" or "the heart" — fitting for a personal memory engine.
+- **Japanese:** *Kore* (これ) is the demonstrative pronoun for "this" — a literal pointer to the memory being surfaced right now.
 
 ### Learn More
 
@@ -20,34 +27,55 @@ See the [Vision Document](docs/vision/vision.md) for the full strategic vision, 
 ## How It Works
 
 ```
-Raw text (Apple Notes, bookmarks, etc.)
-        │
-        ▼
-POST /api/v1/ingest/raw
-        │
-        ▼
-SQLite Queue  ──── worker polls every 5s ────►  Ollama (local LLM)
-        │                                              │
-        │                                    extract structured data
-        │                                              │
-        └──────────────────────────────────────────────►
-                                                       │
-                                              write .md to $KORE_DATA_PATH
-                                                       │
-                                                 fs.watch fires
-                                                       │
-                                                  qmd update
-                                                       │
-                                              indexed for agentic query
+  ┌─────────────────────────────────────────────────────────────────┐
+  │                       INGESTION SOURCES                          │
+  │     Apple Notes  ·  Bookmarks  ·  Web Clips  ·  Manual API     │
+  └───────────────────────────────┬─────────────────────────────────┘
+                                  │
+                                  ▼
+                  ┌───────────────────────────────┐
+                  │      POST /api/v1/remember     │
+                  │   ─────────────────────────   │
+                  │       SQLite Task Queue        │
+                  └───────────────┬───────────────┘
+                                  │  worker polls every 5s
+                                  ▼
+                  ┌───────────────────────────────┐
+                  │      LLM  (cloud or local)     │
+                  │   ─────────────────────────   │
+                  │      structured extraction     │
+                  └───────────────┬───────────────┘
+                                  │
+                                  ▼
+                  ┌───────────────────────────────┐
+                  │      $KORE_HOME/data/*.md      │
+                  │   ─────────────────────────   │
+                  │    YAML frontmatter + body     │
+                  └──────────────┬────────────────┘
+                                 │                │
+                      file watcher│                │ consolidation loop
+                                 ▼                ▼
+                  ┌──────────────────┐  ┌─────────────────────┐
+                  │    QMD Index     │◄─│    Insight .md       │
+                  │  BM25 + vectors  │  │  synthesized from    │
+                  │   + reranking    │  │   related clusters   │
+                  └────────┬─────────┘  └─────────────────────┘
+                           │
+              ┌────────────┼─────────────────┐
+              ▼            ▼                 ▼
+      ┌──────────────┐  ┌──────────┐  ┌──────────────┐
+      │  MCP Server  │  │   CLI    │  │ Push Nudges  │
+      │  any agent   │  │  & API   │  │  (roadmap)   │
+      └──────────────┘  └──────────┘  └──────────────┘
 ```
 
-1. **Ingest** — send raw text to the REST API
-2. **Queue** — task is stored in a local SQLite database
-3. **Extract** — a background worker picks up the task and calls Ollama via Vercel AI SDK
-4. **Write** — a structured `.md` file with YAML frontmatter is written to `$KORE_DATA_PATH`
+1. **Ingest** — raw text arrives via REST API, Apple Notes plugin, or other source
+2. **Queue** — task is stored in a local SQLite database and processed asynchronously
+3. **Extract** — a background worker calls an LLM (cloud or local via Ollama) to produce structured metadata
+4. **Write** — a `.md` file with YAML frontmatter is written to `$KORE_HOME/data/`
 5. **Index** — a file watcher detects the new file and triggers `qmd update`
-6. **Query** — QMD serves the indexed memories to any MCP-compatible agent
-7. **Consolidate** — a background loop synthesizes clusters of related memories into higher-order **insight** files via LLM
+6. **Consolidate** — a background loop clusters related memories and synthesizes higher-order **insight** files
+7. **Retrieve** — QMD serves the indexed memories to MCP agents, the CLI, or the REST API
 
 ---
 
@@ -59,7 +87,8 @@ This project is a **Bun monorepo**.
 kore/
 ├── apps/
 │   ├── core-api/          # REST API server + extraction worker + file watcher + consolidation loop
-│   └── cli/               # Command-line interface for Kore
+│   ├── cli/               # Command-line interface for Kore
+│   └── mcp-server/        # Stdio-to-HTTP proxy for Claude Desktop, Claude Code, OpenClaw, etc.
 ├── packages/
 │   ├── shared-types/          # Zod schemas and TypeScript interfaces (single source of truth)
 │   ├── llm-extractor/         # Vercel AI SDK + Ollama integration
@@ -68,10 +97,9 @@ kore/
 │   └── plugin-apple-notes/    # Apple Notes sync plugin (passive ingestion)
 ├── docs/                  # Architecture docs and guides
 │   ├── design/            # Feature-level design specs
-│   ├── planning/          # Ongoing planning and assessments
+│   ├── planning/          # Assessments and roadmap
 │   └── testing/           # QA and testing guides
-├── tasks/                 # PRDs and design docs
-└── progress.md            # Project-wide progress tracker
+└── tasks/                 # PRDs and design docs
 ```
 
 ---
@@ -81,11 +109,7 @@ kore/
 ### Prerequisites
 
 - [Bun](https://bun.sh/) — `curl -fsSL https://bun.sh/install | bash`
-- [Ollama](https://ollama.ai/) — install, then `ollama pull qwen2.5:7b`
-- [QMD](https://github.com/tobilu/qmd) — installed and on `$PATH`
-- **Spatialite** (required for geospatial memory features):
-  - macOS: `brew install spatialite-tools`
-  - Linux (Debian/Ubuntu): `apt-get install libsqlite3-mod-spatialite`
+- [Ollama](https://ollama.ai/) — install, then `ollama pull qwen2.5:7b` *(or configure a cloud LLM — see below)*
 
 ### 1. Install dependencies
 
@@ -112,10 +136,13 @@ OLLAMA_MODEL=qwen2.5:7b
 |---|---|---|
 | `KORE_HOME` | `~/.kore` | Base directory for all Kore data (SQLite queue, notes, QMD cache) |
 | `KORE_API_KEY` | *(required)* | Bearer token for API authentication |
-| `OLLAMA_BASE_URL` | `http://localhost:11434` | Ollama server URL |
-| `OLLAMA_MODEL` | `qwen2.5:7b` | Model used for LLM extraction |
-| `XDG_CACHE_HOME` | `~/.cache` | Base cache dir; QMD models stored at `$XDG_CACHE_HOME/qmd` |
-| `KORE_SYNTHESIS_MODEL` | *(uses LLM_MODEL)* | Optional override model for insight synthesis |
+| `LLM_PROVIDER` | `ollama` | LLM backend: `ollama` (local) or `gemini` (cloud) |
+| `LLM_MODEL` | *(provider default)* | Override the model name for the chosen provider |
+| `OLLAMA_BASE_URL` | `http://localhost:11434` | Ollama server URL *(when `LLM_PROVIDER=ollama`)* |
+| `OLLAMA_MODEL` | `qwen2.5:7b` | Legacy alias for `LLM_MODEL` when using Ollama |
+| `GEMINI_API_KEY` | *(required for Gemini)* | Google Gemini API key *(when `LLM_PROVIDER=gemini`)* |
+| `XDG_CACHE_HOME` | `~/.cache` | Base cache dir; QMD embedding models stored at `$XDG_CACHE_HOME/qmd` |
+| `KORE_SYNTHESIS_MODEL` | *(uses LLM_MODEL)* | Optional model override specifically for insight synthesis |
 | `CONSOLIDATION_INTERVAL_MS` | `1800000` (30 min) | How often the consolidation loop runs |
 | `CONSOLIDATION_COOLDOWN_DAYS` | `7` | Days before a memory can be re-consolidated |
 | `CONSOLIDATION_MAX_ATTEMPTS` | `3` | Max synthesis attempts before marking as failed |
@@ -144,7 +171,7 @@ kore ingest note.md
 Or send a memory directly via curl:
 
 ```sh
-curl -X POST http://localhost:3000/api/v1/ingest/raw \
+curl -X POST http://localhost:3000/api/v1/remember \
   -H "Authorization: Bearer your-secret-key-here" \
   -H "Content-Type: application/json" \
   -d '{"source": "manual", "content": "Mutekiya in Ikebukuro — best tsukemen, cash only, 30 min wait."}'
@@ -309,4 +336,18 @@ See [`docs/README.md`](docs/README.md) for the full documentation index. Key doc
 
 ## Roadmap
 
-See [progress.md](progress.md) for current status and upcoming features.
+See [`docs/planning/roadmap.md`](docs/planning/roadmap.md) for the full roadmap — upcoming features, ideas queue, and prioritization framework.
+
+---
+
+## Status
+
+Kore is a personal project in active development. Phase 1 (ingestion pipeline + MCP) and Phase 2 (consolidation + Apple Notes) are complete with a full test suite. The push channel (location/temporal nudges) and additional ingestion sources are on the roadmap.
+
+Issues and pull requests are welcome. For significant changes, open an issue first to discuss the approach.
+
+---
+
+## License
+
+MIT
