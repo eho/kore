@@ -2,32 +2,7 @@ import { unlink, readFile, writeFile } from "node:fs/promises";
 import { MemoryIndex } from "./memory-index";
 import { EventDispatcher } from "./event-dispatcher";
 import type { ConsolidationTracker } from "./consolidation-tracker";
-
-function parseFrontmatter(content: string): Record<string, any> {
-  const match = content.match(/^---\n([\s\S]*?)\n---/);
-  if (!match) return {};
-  const result: Record<string, any> = {};
-  for (const line of match[1].split("\n")) {
-    const colonIdx = line.indexOf(":");
-    if (colonIdx === -1) continue;
-    const key = line.slice(0, colonIdx).trim();
-    const value = line.slice(colonIdx + 1).trim();
-    // Parse arrays: ["a", "b"]
-    if (value.startsWith("[") && value.endsWith("]")) {
-      const inner = value.slice(1, -1).trim();
-      if (inner === "") {
-        result[key] = [];
-      } else {
-        result[key] = inner
-          .split(",")
-          .map((s) => s.trim().replace(/^["']|["']$/g, ""));
-      }
-    } else {
-      result[key] = value;
-    }
-  }
-  return result;
-}
+import { parseFrontmatter } from "./lib/frontmatter";
 
 export interface DeleteMemoryDeps {
   memoryIndex: MemoryIndex;

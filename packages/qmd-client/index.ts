@@ -201,27 +201,6 @@ export async function getIndexHealth(): Promise<IndexHealthInfo> {
 }
 
 /**
- * Add or update a collection in the store.
- */
-export async function addCollection(
-  name: string,
-  opts: { path: string; pattern?: string; ignore?: string[] },
-): Promise<void> {
-  return requireStore().addCollection(name, opts);
-}
-
-/**
- * Add context for a path within a collection to improve search relevance.
- */
-export async function addContext(
-  collectionName: string,
-  pathPrefix: string,
-  contextText: string,
-): Promise<boolean> {
-  return requireStore().addContext(collectionName, pathPrefix, contextText);
-}
-
-/**
  * Hybrid search: BM25 + vector + query expansion + LLM reranking.
  * Falls back to BM25-only (searchLex) if the hybrid pipeline fails
  * (e.g. node-llama-cpp not available, model loading error).

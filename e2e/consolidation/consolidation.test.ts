@@ -395,23 +395,31 @@ describe("Consolidation E2E", () => {
 
   // ── List with type=insight ──────────────────────────────────────────
 
-  test("kore list --type insight: insight appears in GET /api/v1/memories?type=insight", async () => {
+  test("kore list --type insight: insight appears in POST /api/v1/recall with type filter", async () => {
     expect(createdInsightId).toBeDefined();
 
-    const res = await apiRequest("/api/v1/memories?type=insight");
+    // Use a search mock that returns the insight file
+    mockSearchResults = [
+      { file: createdInsightPath!, score: 0.90, title: "React Development Patterns", bestChunk: "React hooks" },
+    ];
+
+    const res = await apiRequest("/api/v1/recall", {
+      method: "POST",
+      body: JSON.stringify({ type: "insight" }),
+    });
     expect(res.status).toBe(200);
 
-    const body = await res.json() as any[];
-    expect(body.length).toBeGreaterThanOrEqual(1);
+    const body = await res.json() as any;
+    expect(body.results.length).toBeGreaterThanOrEqual(1);
 
-    const insight = body.find((m: any) => m.id === createdInsightId);
+    const insight = body.results.find((m: any) => m.id === createdInsightId);
     expect(insight).toBeDefined();
     expect(insight.type).toBe("insight");
   });
 
   // ── Search returns insight ──────────────────────────────────────────
 
-  test("search: insight returned by POST /api/v1/search", async () => {
+  test("search: insight returned by POST /api/v1/recall", async () => {
     expect(createdInsightId).toBeDefined();
     expect(createdInsightPath).toBeDefined();
 
@@ -426,16 +434,16 @@ describe("Consolidation E2E", () => {
       },
     ];
 
-    const res = await apiRequest("/api/v1/search", {
+    const res = await apiRequest("/api/v1/recall", {
       method: "POST",
       body: JSON.stringify({ query: "React development patterns" }),
     });
     expect(res.status).toBe(200);
 
-    const body = await res.json() as any[];
-    expect(body.length).toBeGreaterThanOrEqual(1);
+    const body = await res.json() as any;
+    expect(body.results.length).toBeGreaterThanOrEqual(1);
 
-    const result = body.find((r: any) => r.id === createdInsightId);
+    const result = body.results.find((r: any) => r.id === createdInsightId);
     expect(result).toBeDefined();
     expect(result.score).toBeGreaterThan(0);
   });
@@ -535,20 +543,20 @@ Synthesized from 2 memories: mem-react-hooks, mem-react-context
       { file: createdInsightPath!, score: 0.90, title: "React Development Patterns", bestChunk: "new patterns" },
     ];
 
-    const res = await apiRequest("/api/v1/search", {
+    const res = await apiRequest("/api/v1/recall", {
       method: "POST",
       body: JSON.stringify({ query: "React patterns" }),
     });
     expect(res.status).toBe(200);
 
-    const body = await res.json() as any[];
+    const body = await res.json() as any;
 
-    // Retired insight should be filtered out
-    const retiredResult = body.find((r: any) => r.id === retiredId);
+    // Retired insight should be filtered out (recall excludes retired by default)
+    const retiredResult = body.results.find((r: any) => r.id === retiredId);
     expect(retiredResult).toBeUndefined();
 
     // Non-retired insight should still appear (even if degraded — only "retired" is filtered)
-    const activeResult = body.find((r: any) => r.id === createdInsightId);
+    const activeResult = body.results.find((r: any) => r.id === createdInsightId);
     expect(activeResult).toBeDefined();
   });
 });

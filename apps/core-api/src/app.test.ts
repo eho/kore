@@ -116,10 +116,22 @@ describe("Bearer token auth", () => {
   test("rejects requests without valid token", async () => {
     const app = makeApp();
     const res = await app.handle(
-      new Request("http://localhost/api/v1/ingest/raw", {
+      new Request("http://localhost/api/v1/ingest/structured", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ source: "test", content: "hello" }),
+        body: JSON.stringify({
+          content: {
+            title: "Test",
+            markdown_body: "hello",
+            frontmatter: {
+              type: "note",
+              category: "qmd://test",
+              date_saved: "2026-03-07T12:00:00Z",
+              source: "test",
+              tags: [],
+            },
+          },
+        }),
       })
     );
     expect(res.status).toBe(401);
@@ -130,60 +142,28 @@ describe("Bearer token auth", () => {
   test("rejects requests with wrong token", async () => {
     const app = makeApp();
     const res = await app.handle(
-      new Request("http://localhost/api/v1/ingest/raw", {
+      new Request("http://localhost/api/v1/ingest/structured", {
         method: "POST",
         headers: {
           Authorization: "Bearer wrong-key",
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ source: "test", content: "hello" }),
+        body: JSON.stringify({
+          content: {
+            title: "Test",
+            markdown_body: "hello",
+            frontmatter: {
+              type: "note",
+              category: "qmd://test",
+              date_saved: "2026-03-07T12:00:00Z",
+              source: "test",
+              tags: [],
+            },
+          },
+        }),
       })
     );
     expect(res.status).toBe(401);
-  });
-});
-
-// ─── POST /api/v1/ingest/raw ─────────────────────────────────────────
-
-describe("POST /api/v1/ingest/raw", () => {
-  test("accepts valid payload and returns 202 with task_id", async () => {
-    const app = makeApp();
-    const res = await req(app, "/api/v1/ingest/raw", {
-      method: "POST",
-      body: JSON.stringify({
-        source: "apple_notes",
-        content: "Some raw text content",
-        priority: "high",
-      }),
-    });
-    expect(res.status).toBe(202);
-    const body = await res.json();
-    expect(body.status).toBe("queued");
-    expect(body.task_id).toBeDefined();
-    expect(body.message).toBe("Enrichment added to queue.");
-  });
-
-  test("defaults priority to normal", async () => {
-    const app = makeApp();
-    const res = await req(app, "/api/v1/ingest/raw", {
-      method: "POST",
-      body: JSON.stringify({ source: "test", content: "hello" }),
-    });
-    expect(res.status).toBe(202);
-    const body = await res.json();
-    const task = queue.getTask(body.task_id);
-    expect(task?.priority).toBe("normal");
-  });
-
-  test("rejects invalid payload", async () => {
-    const app = makeApp();
-    const res = await req(app, "/api/v1/ingest/raw", {
-      method: "POST",
-      body: JSON.stringify({ source: "test" }), // missing content
-    });
-    expect(res.status).toBe(400);
-    const body = await res.json();
-    expect(body.code).toBe("VALIDATION_ERROR");
   });
 });
 
@@ -341,118 +321,6 @@ describe("POST /api/v1/ingest/structured", () => {
   });
 });
 
-// ─── POST /api/v1/search ─────────────────────────────────────────────
-
-describe("POST /api/v1/search", () => {
-  const mockResults: HybridQueryResult[] = [
-    {
-      file: "/app/data/notes/meeting.md",
-      displayPath: "qmd://memories/notes/meeting.md",
-      title: "Team Meeting Notes",
-      body: "Full body content...",
-      bestChunk: "Discussed roadmap priorities for Q2",
-      bestChunkPos: 0,
-      score: 0.92,
-      context: null,
-      docid: "abc123",
-    },
-    {
-      file: "/app/data/people/alice.md",
-      displayPath: "qmd://memories/people/alice.md",
-      title: "Alice Smith",
-      body: "Contact details...",
-      bestChunk: "Product manager at Acme Corp",
-      bestChunkPos: 0,
-      score: 0.78,
-      context: null,
-      docid: "def456",
-    },
-  ];
-
-  test("returns mapped search results on success", async () => {
-    const app = makeApp({
-      searchFn: async () => mockResults,
-    });
-    const res = await req(app, "/api/v1/search", {
-      method: "POST",
-      body: JSON.stringify({ query: "meeting notes" }),
-    });
-    expect(res.status).toBe(200);
-    const body = await res.json();
-    expect(body).toEqual([
-      {
-        id: null,
-        path: "/app/data/notes/meeting.md",
-        title: "Team Meeting Notes",
-        snippet: "Discussed roadmap priorities for Q2",
-        score: 0.92,
-        collection: "memories",
-      },
-      {
-        id: null,
-        path: "/app/data/people/alice.md",
-        title: "Alice Smith",
-        snippet: "Product manager at Acme Corp",
-        score: 0.78,
-        collection: "memories",
-      },
-    ]);
-  });
-
-  test("returns 400 when query is missing", async () => {
-    const app = makeApp({
-      searchFn: async () => [],
-    });
-    const res = await req(app, "/api/v1/search", {
-      method: "POST",
-      body: JSON.stringify({}),
-    });
-    expect(res.status).toBe(400);
-    const body = await res.json();
-    expect(body.code).toBe("VALIDATION_ERROR");
-  });
-
-  test("returns 503 when store is not initialized (no searchFn)", async () => {
-    const app = makeApp(); // no searchFn provided
-    const res = await req(app, "/api/v1/search", {
-      method: "POST",
-      body: JSON.stringify({ query: "test" }),
-    });
-    expect(res.status).toBe(503);
-    const body = await res.json();
-    expect(body.error).toBe("Search index not available");
-  });
-
-  test("returns 503 when searchFn throws", async () => {
-    const app = makeApp({
-      searchFn: async () => {
-        throw new Error("Store not ready");
-      },
-    });
-    const res = await req(app, "/api/v1/search", {
-      method: "POST",
-      body: JSON.stringify({ query: "test" }),
-    });
-    expect(res.status).toBe(503);
-    const body = await res.json();
-    expect(body.error).toBe("Search index not available");
-  });
-
-  test("requires bearer auth", async () => {
-    const app = makeApp({
-      searchFn: async () => [],
-    });
-    const res = await app.handle(
-      new Request("http://localhost/api/v1/search", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ query: "test" }),
-      })
-    );
-    expect(res.status).toBe(401);
-  });
-});
-
 // ─── DELETE /api/v1/memories ─────────────────────────────────────────
 
 describe("DELETE /api/v1/memories", () => {
@@ -480,10 +348,10 @@ describe("DELETE /api/v1/memories", () => {
     const res = await req(app, "/api/v1/memories", { method: "DELETE" });
     expect(res.status).toBe(200);
     const body = await res.json();
-    
+
     expect(body.status).toBe("reset");
     expect(body.deleted_tasks).toBe(1);
-    
+
     expect(queue.getQueueLength()).toBe(0);
   });
 });

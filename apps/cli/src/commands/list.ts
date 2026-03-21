@@ -1,17 +1,27 @@
 import Table from "cli-table3";
 import { apiFetch } from "../api.ts";
 
-interface MemorySummary {
+interface RecallResultItem {
   id: string;
   type: string;
   title: string;
   source: string;
   date_saved: string;
   tags: string[];
+  score: number;
+  confidence?: number;
   // Insight-specific fields
   insight_type?: string;
   status?: string;
-  source_ids_count?: number;
+  source_count?: number;
+}
+
+interface RecallOutput {
+  results: RecallResultItem[];
+  query: string;
+  total: number;
+  offset: number;
+  has_more: boolean;
 }
 
 interface ListOpts {
@@ -21,11 +31,15 @@ interface ListOpts {
 }
 
 export async function listCommand(opts: ListOpts): Promise<void> {
-  const params = new URLSearchParams();
-  if (opts.type) params.set("type", opts.type);
-  params.set("limit", String(opts.limit));
+  const body: Record<string, any> = {
+    limit: opts.limit,
+  };
+  if (opts.type) body.type = opts.type;
 
-  const result = await apiFetch<MemorySummary[]>(`/api/v1/memories?${params}`);
+  const result = await apiFetch<RecallOutput>(`/api/v1/recall`, {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
 
   if (!result.ok) {
     process.stderr.write(
@@ -36,7 +50,7 @@ export async function listCommand(opts: ListOpts): Promise<void> {
     process.exit(1);
   }
 
-  const memories = result.data;
+  const memories = result.data.results;
 
   if (opts.json) {
     process.stdout.write(JSON.stringify(memories, null, 2) + "\n");
@@ -63,8 +77,8 @@ export async function listCommand(opts: ListOpts): Promise<void> {
         m.title.slice(0, 30) + (m.title.length > 30 ? "…" : ""),
         m.insight_type ?? "",
         m.status ?? "",
-        (m as any).confidence !== undefined ? String((m as any).confidence) : "",
-        m.source_ids_count !== undefined ? String(m.source_ids_count) : "",
+        m.confidence !== undefined ? String(m.confidence) : "",
+        m.source_count !== undefined ? String(m.source_count) : "",
         tags.slice(0, 20) + (tags.length > 20 ? "…" : ""),
         m.date_saved ? new Date(m.date_saved).toLocaleDateString() : "",
       ]);

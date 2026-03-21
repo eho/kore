@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { randomUUID } from "crypto";
 import { slugify } from "./slugify";
 import type { InsightFrontmatter, InsightOutput, InsightType, InsightStatus } from "@kore/shared-types";
+import { parseFrontmatterWithBody as parseFrontmatterYaml, serializeFrontmatter } from "./lib/frontmatter";
 
 // ─── Types ───────────────────────────────────────────────────────────
 
@@ -190,67 +191,6 @@ export function checkDedup(
 }
 
 // ─── Supersession ────────────────────────────────────────────────────
-
-/**
- * Parse YAML frontmatter from a markdown file content string.
- * Handles arrays in bracket notation: [\"a\", \"b\"].
- */
-function parseFrontmatterYaml(content: string): {
-  frontmatter: Record<string, any>;
-  body: string;
-} {
-  const match = content.match(/^---\n([\s\S]*?)\n---/);
-  if (!match) return { frontmatter: {}, body: content };
-
-  const result: Record<string, any> = {};
-  for (const line of match[1].split("\n")) {
-    const colonIdx = line.indexOf(":");
-    if (colonIdx === -1) continue;
-    const key = line.slice(0, colonIdx).trim();
-    let value = line.slice(colonIdx + 1).trim();
-
-    // Parse arrays: ["a", "b"]
-    if (value.startsWith("[") && value.endsWith("]")) {
-      const inner = value.slice(1, -1).trim();
-      if (inner === "") {
-        result[key] = [];
-      } else {
-        result[key] = inner
-          .split(",")
-          .map((s) => s.trim().replace(/^["']|["']$/g, ""));
-      }
-    } else if (value === "null") {
-      result[key] = null;
-    } else if (!isNaN(Number(value)) && value !== "") {
-      result[key] = Number(value);
-    } else {
-      result[key] = value;
-    }
-  }
-
-  const endIdx = content.indexOf("---", 4);
-  const body = endIdx !== -1 ? content.slice(endIdx + 3) : "";
-
-  return { frontmatter: result, body };
-}
-
-/**
- * Serialize frontmatter back to YAML string.
- */
-function serializeFrontmatter(fm: Record<string, any>): string {
-  const lines = ["---"];
-  for (const [key, value] of Object.entries(fm)) {
-    if (Array.isArray(value)) {
-      lines.push(`${key}: [${value.map((v) => `"${v}"`).join(", ")}]`);
-    } else if (value === null) {
-      lines.push(`${key}: null`);
-    } else {
-      lines.push(`${key}: ${value}`);
-    }
-  }
-  lines.push("---");
-  return lines.join("\n");
-}
 
 /**
  * Mark an old insight as superseded by a new one.
