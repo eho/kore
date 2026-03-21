@@ -109,7 +109,7 @@ kore/
 ### Prerequisites
 
 - [Bun](https://bun.sh/) — `curl -fsSL https://bun.sh/install | bash`
-- [Ollama](https://ollama.ai/) — install, then `ollama pull qwen2.5:7b` *(or configure a cloud LLM — see below)*
+- [Ollama](https://ollama.ai/) — install, then pull a model (e.g. `ollama pull qwen2.5:7b`) *(or configure a cloud LLM — see below)*
 
 ### 1. Install dependencies
 
