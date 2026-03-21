@@ -31,6 +31,7 @@ export function createOperationsRoutes(deps: OperationsDeps) {
         });
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
+        console.error("[operations] POST /api/v1/recall failed:", message);
         set.status = 500;
         return { error: message };
       }
@@ -55,6 +56,7 @@ export function createOperationsRoutes(deps: OperationsDeps) {
         return result;
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
+        console.error("[operations] POST /api/v1/remember failed:", message);
         set.status = 500;
         return { error: message };
       }
@@ -70,6 +72,7 @@ export function createOperationsRoutes(deps: OperationsDeps) {
         return result;
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
+        console.error("[operations] GET /api/v1/inspect/:id failed:", message);
         set.status = 500;
         return { error: message };
       }
@@ -93,6 +96,7 @@ export function createOperationsRoutes(deps: OperationsDeps) {
         });
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
+        console.error("[operations] GET /api/v1/insights failed:", message);
         set.status = 500;
         return { error: message };
       }

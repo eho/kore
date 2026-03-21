@@ -6,7 +6,11 @@ import type { ConsolidationTracker } from "../consolidation-tracker";
 import type { ConsolidationHandle } from "../consolidation-loop";
 import type { SearchOptions, HybridQueryResult } from "@kore/qmd-client";
 import { consolidate as consolidateOp } from "../operations";
-import type { ConsolidateInput } from "../operations";
+
+interface ConsolidateBody {
+  dry_run?: boolean;
+  reset_failed?: boolean;
+}
 
 interface ConsolidationDeps {
   dataPath: string;
@@ -24,18 +28,17 @@ export function createConsolidationRoutes(deps: ConsolidationDeps) {
   return new Elysia()
     // ─── Consolidate ─────────────────────────────────────────────
     .post("/api/v1/consolidate", async ({ body, query, set }) => {
+      const typedBody = body as ConsolidateBody | null | undefined;
       // Support reset_failed as query param (backward compat) or body param
-      const resetFailed = query.reset_failed === "true" || (body as any)?.reset_failed === true;
+      const resetFailed = query.reset_failed === "true" || typedBody?.reset_failed === true;
       if (resetFailed) {
         if (consolidationTracker) consolidationTracker.resetFailed();
       }
 
-      const params = (body ?? {}) as ConsolidateInput;
-      // Also accept dry_run from query param for backward compat
-      if (query.dry_run === "true") params.dry_run = true;
+      const dryRun = typedBody?.dry_run ?? (query.dry_run === "true");
 
       try {
-        return await consolidateOp(params, {
+        return await consolidateOp({ dry_run: dryRun }, {
           dataPath,
           qmdSearch: searchFn!,
           consolidationTracker,
@@ -45,6 +48,7 @@ export function createConsolidationRoutes(deps: ConsolidationDeps) {
         });
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
+        console.error("[consolidation] POST /api/v1/consolidate failed:", message);
         set.status = message.includes("not available") ? 503 : 500;
         return { error: message };
       }

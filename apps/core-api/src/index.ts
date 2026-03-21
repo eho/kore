@@ -79,7 +79,7 @@ const consolidationHandlers = createConsolidationEventHandlers(
   qmdClient.search,
   memoryIndex,
   {
-    relevanceThreshold: 0.5,
+    relevanceThreshold: parseFloat(process.env.CONSOLIDATION_RELEVANCE_THRESHOLD ?? "") || 0.5,
     cooldownDays: Number(process.env.CONSOLIDATION_COOLDOWN_DAYS) || 7,
   },
 );
@@ -173,7 +173,7 @@ let app = createApp({
 for (const plugin of plugins) {
   if (plugin.routes) {
     try {
-      plugin.routes(app as any);
+      plugin.routes(app);
       console.log(`Plugin "${plugin.name}" routes mounted`);
     } catch (err) {
       console.error(`Plugin "${plugin.name}" routes failed (non-fatal):`, err);
@@ -209,8 +209,9 @@ if (mcpHandle) {
   });
 }
 
-app.listen({ port: 3000, reusePort: false });
-console.log(`Kore Core API running on http://localhost:3000`);
+const port = Number(process.env.KORE_PORT) || 3000;
+app.listen({ port, reusePort: false });
+console.log(`Kore Core API running on http://localhost:${port}`);
 
 // ── Background bootstrap (if index is empty) ───────────────────────────
 

@@ -4,7 +4,7 @@ After MCP-003 (CLI Alignment), the shared operations module (`apps/core-api/src/
 
 ## Status
 
-**Blocked on:** MCP-005 (Integration Tests) — remove after integration tests confirm the new endpoints work end-to-end.
+**Complete.** All 4 deprecated endpoints have been removed as part of CLN-001. The CLI has been updated to use the new operations-backed endpoints. All tests pass.
 
 ## Endpoints to Remove
 
@@ -55,13 +55,13 @@ The trade-off: recall reads full file content per entry (slightly heavier), but 
 
 **Current callers:** CLI `kore list` still uses `GET /memories`. Must be updated to use `POST /recall` before removal.
 
-## Migration Steps
+## Migration Steps (Completed)
 
-1. Update `kore list` command (`apps/cli/src/commands/list.ts`) to call `POST /api/v1/recall` with no query
-2. Remove the 4 old endpoints from `apps/core-api/src/app.ts`
-3. Remove the inline `parseMemoryFile()` and `parseMemoryFileFull()` functions from `app.ts` (the shared versions in `operations/inspect.ts` are the canonical copies)
-4. Update `apps/core-api/src/app.test.ts` — remove or migrate tests that hit the old endpoints
-5. Remove unused imports (`SearchRequestPayload`, `RawIngestPayload`, etc.)
+1. ✅ Updated `kore list` command (`apps/cli/src/commands/list.ts`) to call `POST /api/v1/recall` with no query
+2. ✅ Removed the 4 old endpoints from `apps/core-api/src/app.ts` (now in route modules)
+3. ✅ Removed inline `parseMemoryFile()` / `parseMemoryFileFull()` copies from `app.ts` — canonical versions live in `lib/frontmatter.ts`
+4. ✅ Updated `apps/core-api/src/app.test.ts` — tests migrated to new endpoints
+5. ✅ Removed unused imports (`SearchRequestPayload`, `RawIngestPayload`, etc.)
 
 ## Endpoints That Stay
 

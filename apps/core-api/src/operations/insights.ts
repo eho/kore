@@ -28,20 +28,20 @@ function parseInsightFile(content: string): InsightResultItem | null {
   if (!fm.id || fm.type !== "insight") return null;
 
   return {
-    id: fm.id,
+    id: String(fm.id),
     title: extractTitleFromMarkdown(content),
-    insight_type: fm.insight_type || "",
-    confidence: fm.confidence !== undefined ? parseFloat(fm.confidence) : 0,
-    status: fm.status || "active",
-    source_ids: parseTagsArray(fm.source_ids || ""),
-    source_count: parseTagsArray(fm.source_ids || "").length,
+    insight_type: String(fm.insight_type || ""),
+    confidence: fm.confidence !== undefined ? parseFloat(String(fm.confidence)) : 0,
+    status: String(fm.status || "active"),
+    source_ids: parseTagsArray((fm.source_ids as string | string[]) || ""),
+    source_count: parseTagsArray((fm.source_ids as string | string[]) || "").length,
     synthesis: extractSynthesis(content),
     distilled_items: extractDistilledItems(content),
-    tags: parseTagsArray(fm.tags || ""),
-    date_saved: fm.date_saved || "",
-    ...(fm.last_synthesized_at ? { last_synthesized_at: fm.last_synthesized_at } : {}),
-    reinforcement_count: fm.reinforcement_count !== undefined ? parseInt(fm.reinforcement_count) : 0,
-    ...(fm.supersedes ? { supersedes: parseTagsArray(fm.supersedes) } : {}),
+    tags: parseTagsArray((fm.tags as string | string[]) || ""),
+    date_saved: String(fm.date_saved || ""),
+    ...(fm.last_synthesized_at ? { last_synthesized_at: String(fm.last_synthesized_at) } : {}),
+    reinforcement_count: fm.reinforcement_count !== undefined ? parseInt(String(fm.reinforcement_count)) : 0,
+    ...(fm.supersedes ? { supersedes: parseTagsArray(fm.supersedes as string | string[]) } : {}),
   };
 }
 
