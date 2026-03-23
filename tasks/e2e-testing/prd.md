@@ -2,7 +2,7 @@
 
 ## 1. Introduction
 
-Kore is a personal memory engine that ingests saved content (bookmarks, notes, social media saves) and makes it retrievable via semantic search. This PRD covers the implementation of a comprehensive automated E2E test suite that validates the full ingestion → indexing → search pipeline using the Kore CLI.
+Kore is a personal memory bank that ingests saved content (bookmarks, notes, social media saves) and makes it retrievable via semantic search. This PRD covers the implementation of a comprehensive automated E2E test suite that validates the full ingestion → indexing → search pipeline using the Kore CLI.
 
 The tests serve two purposes: (1) confirm the pipeline works correctly, and (2) measure how well the memory system performs at contextual recall — the core product promise described in the [vision document](../../docs/vision/vision.md).
 

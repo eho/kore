@@ -1,6 +1,6 @@
 # Kore Documentation
 
-Welcome to the Kore documentation directory. This folder contains all the architectural and design documents for Kore, the Context-Aware Personal Memory Engine.
+Welcome to the Kore documentation directory. This folder contains all the architectural and design documents for Kore, the Context-Aware Personal Memory Bank.
 
 To make navigation easier, the documentation is organized into the following areas:
 

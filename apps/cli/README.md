@@ -1,6 +1,6 @@
 # @kore/cli
 
-The official command-line interface for Kore — a context-aware personal memory engine.
+The official command-line interface for Kore — a context-aware personal memory bank.
 
 ## Installation
 

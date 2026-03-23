@@ -1,10 +1,10 @@
-# I Built a Personal Memory Engine With AI. Here's My Experience.
+# I Built a Personal Memory Bank With AI. Here's My Experience.
 
 Those one-shot prompt demos on X to build a full app are impressive. But real projects are built incrementally: a new feature idea shows up, gets refined, designed, implemented, tested, then you're on to the next thing.
 
 So the more interesting question isn't "can AI build an app?" It's: how much can you hand over? And where do you still need to be in the loop?
 
-I've been poking at this while building [Kore](../../README.md), a personal memory engine that ingests your notes and makes them retrievable by AI — think of it as a local-first, searchable second brain. I'm a solo hobbyist — Claude Pro and Google AI Pro, not some corporate unlimited plan — so I can't just let AI go wild and see what sticks. Tokens are limited. And honestly, I genuinely enjoy the process. I want to understand what gets built and be able to steer it the way I would have done it myself.
+I've been poking at this while building [Kore](../../README.md), a personal memory bank that ingests your notes and makes them retrievable by AI — think of it as a local-first, searchable second brain. I'm a solo hobbyist — Claude Pro and Google AI Pro, not some corporate unlimited plan — so I can't just let AI go wild and see what sticks. Tokens are limited. And honestly, I genuinely enjoy the process. I want to understand what gets built and be able to steer it the way I would have done it myself.
 
 What I found: the overall process hasn't really changed. AI has taken over a large chunk — coding, testing, PRs — but design still needs human input. This is more a redistribution of responsibilities than a replacement of the process.
 

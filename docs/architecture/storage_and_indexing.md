@@ -1,6 +1,6 @@
 # Storage and Indexing Strategy for Kore
 
-To realize the vision of an autonomous, context-aware memory engine, the choice of storage and indexing is the most critical technical decision. It dictates how well "Agentic Retrieval" (the pull channel) and "Context Proactivity" (the push channel) can perform.
+To realize the vision of an autonomous, context-aware memory bank, the choice of storage and indexing is the most critical technical decision. It dictates how well "Agentic Retrieval" (the pull channel) and "Context Proactivity" (the push channel) can perform.
 
 ## 1. The Core Indexing Engine: QMD (Query Markup Documents)
 

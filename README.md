@@ -1,6 +1,6 @@
 # Kore
 
-**A context-aware personal memory engine.**
+**A context-aware personal memory bank.**
 
 Kore solves the "Recall Disconnect" — the gap between saving high-value inspiration and actually remembering it when it matters. It passively ingests content from your existing tools (Apple Notes, bookmarks, etc.), uses an LLM to distill it into structured memories, and surfaces it automatically — through an AI agent via MCP, the CLI, or proactive push nudges based on location and time.
 
@@ -15,7 +15,7 @@ Kore solves the "Recall Disconnect" — the gap between saving high-value inspir
 
 ### Why "Kore"?
 
-- **Greek:** Meaning "the core" or "the heart" — fitting for a personal memory engine.
+- **Greek:** Meaning "the core" or "the heart" — fitting for a personal memory bank.
 - **Japanese:** *Kore* (これ) is the demonstrative pronoun for "this" — a literal pointer to the memory being surfaced right now.
 
 ### Learn More

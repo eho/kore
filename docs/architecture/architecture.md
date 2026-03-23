@@ -1,6 +1,6 @@
 # Kore: System Architecture & Technical Design
 
-Based on the guiding principles in the `vision.md`, this document fleshes out the system architecture, component boundaries, data flows, and the technical stack required to realize the "Context-Aware Personal Memory Engine."
+Based on the guiding principles in the `vision.md`, this document fleshes out the system architecture, component boundaries, data flows, and the technical stack required to realize the "Context-Aware Personal Memory Bank."
 
 ## 1. High-Level Architecture
 
