@@ -177,7 +177,49 @@ curl -X POST http://localhost:3000/api/v1/remember \
   -d '{"source": "manual", "content": "Mutekiya in Ikebukuro — best tsukemen, cash only, 30 min wait."}'
 ```
 
-See `docs/testing/manual-e2e-testing.md` for a complete walkthrough of all scenarios.
+### 5. Connect your AI agent
+
+Kore exposes its memory via MCP so any compatible agent (Claude Desktop, Claude Code, etc.) can recall and save memories directly in conversation.
+
+Kore uses a **stdio proxy** pattern — you register the `kore mcp` command with your agent, and it spawns the proxy automatically at session start. The proxy connects to the running daemon at `localhost:3000`.
+
+**Claude Desktop** — add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "kore": {
+      "command": "kore",
+      "args": ["mcp"],
+      "env": {
+        "KORE_API_KEY": "your-api-key-here",
+        "KORE_API_URL": "http://localhost:3000"
+      }
+    }
+  }
+}
+```
+
+**Claude Code** — add to your project's `.mcp.json`:
+
+```json
+{
+  "mcpServers": {
+    "kore": {
+      "command": "kore",
+      "args": ["mcp"],
+      "env": {
+        "KORE_API_KEY": "your-api-key-here",
+        "KORE_API_URL": "http://localhost:3000"
+      }
+    }
+  }
+}
+```
+
+Once connected, your agent has access to 6 tools: `recall`, `remember`, `inspect`, `insights`, `health`, and `consolidate`.
+
+See [`apps/mcp-server/README.md`](apps/mcp-server/README.md) for the full MCP setup guide, tool reference, and troubleshooting.
 
 ---
 
