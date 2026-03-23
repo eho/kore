@@ -23,8 +23,13 @@ To make navigation easier, the documentation is organized into the following are
 * **[Design Effectiveness Review](analysis/design_effectiveness_review.md):** Honest gap analysis of the overall Kore architecture — extraction quality, consolidation, plugin system, retrieval weighting.
 * **[Apple Notes Integration Design](design/apple_notes_integration_design.md):** Plugin-based passive ingestion from Apple Notes — staging, manifest diffing, folder-aware context, content pipeline.
 * **[MCP Server Design](design/mcp_server_design.md):** Agent-facing MCP interface — 6 core tools (recall, remember, inspect, insights, status, consolidate), behavior-encoding descriptions, structured output.
+* **[macOS App Design](design/macos-app.md):** Tauri-based native macOS app — menu bar daemon manager, Settings window, onboarding, Apple Notes permission fix, and phased roadmap toward a self-contained distributable app.
 
-## 4. Blog
+## 4. Planning
+* **[Roadmap](planning/roadmap.md):** Living roadmap across all tracks — ingestion, retrieval, push channel, knowledge quality, and operations.
+* **[Assessment](planning/assessment.md):** Codebase health assessment, test coverage, and technical debt.
+
+## 5. Blog
 * **[Building Kore — My Experience](blogs/building-kore-my-experience.md):** How I built Kore using AI across the full dev cycle — from vision and architecture to PRDs, implementation, and review.
 
 ## 5. Analysis & Learnings

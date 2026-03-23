@@ -249,6 +249,33 @@ Track whether low-confidence extractions are actually useful and auto-tune thres
 
 ---
 
+## Track 6: macOS App
+
+A Tauri-based native macOS app that packages Kore as a proper `.app` bundle. See [full planning doc](macos-app.md) for details.
+
+**Core value:** Zero-friction setup (onboarding wizard), Apple Notes permission fixed (inherits app's TCC grants), daemon runs as a menu bar app (no terminal tab), Quick Search global hotkey (replaces Raycast extension), Dashboard UI (replaces web dashboard).
+
+### 6.1 Phase 1 — Shell (MVP)
+**Impact: High | Effort: Medium**
+Tauri scaffold, Rust daemon manager, menu bar icon, bundled Bun binary, launch at login, Apple Notes permission flow.
+_Done when: app starts, daemon runs in background, MCP still works, no terminal needed._
+
+### 6.2 Phase 2 — Onboarding & Settings
+**Impact: High | Effort: Medium**
+Full 5-step onboarding wizard, auto-write Claude Desktop/Code MCP config, Apple Notes folder picker, LLM connection tester, Keychain for API keys.
+_Done when: new user can go from DMG to first synced memory without touching terminal._
+
+### 6.3 Phase 3 — Dashboard & Quick Search
+**Impact: High | Effort: Medium**
+Global hotkey Quick Search window (replaces Raycast track), Dashboard with Overview/Memories/Insights tabs, native notifications, memory detail view.
+_Done when: app replaces CLI for day-to-day interaction._
+
+### 6.4 Phase 4 — Polish & Distribution
+**Impact: Medium | Effort: Medium**
+App icon, Apple notarization, DMG installer, auto-updater, graph view, iOS Shortcuts integration.
+
+---
+
 ## Track 5: Operations & Polish
 
 Make Kore reliable, observable, and easy to run.
@@ -324,12 +351,10 @@ When deciding what to work on next, weigh these factors:
 
 ## Suggested Next Moves
 
-Based on the above, three high-leverage starting points:
+1. **macOS App — Phase 1 shell (Track 6.1)** — Packages Kore as a proper `.app`, fixes Apple Notes permissions, eliminates the "keep a terminal tab open" requirement. Foundation for everything in Track 6.
 
-1. **Browser extension (Track 1.1)** — Dramatically widens the ingestion funnel with moderate effort. Every website you visit becomes a potential memory source. Start with a minimal Safari/Chrome "save to Kore" right-click action.
+2. **Browser extension (Track 1.1)** — Dramatically widens the ingestion funnel. Can be built in parallel with or after the macOS app. Start with a Safari right-click "Save to Kore" action.
 
-2. **Daily digest via Telegram (Track 3.4)** — The simplest possible push channel. No location infrastructure, no mobile app. Just a daily message with curated memory highlights. Gets the push channel pattern established and immediately useful.
+3. **Daily digest via Telegram (Track 3.4)** — Simplest possible push channel. No location infrastructure, no mobile app. Gets the push pattern established immediately.
 
-3. **Raycast extension (Track 2.2)** — Makes Kore accessible outside of Claude. Quick search from anywhere on macOS. Low effort, high daily-use value.
-
-These three together would transform Kore from "a system that works when I remember to ask Claude" into "a system that's always capturing, always accessible, and occasionally surprising me with what I forgot I knew."
+The macOS app (Track 6) subsumes Track 2.2 (Raycast extension) and Track 2.3 (Web Dashboard) and Track 5.5 (Onboarding) — building it first consolidates three separate tracks into one cohesive effort.
