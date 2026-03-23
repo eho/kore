@@ -24,7 +24,10 @@ To make navigation easier, the documentation is organized into the following are
 * **[Apple Notes Integration Design](design/apple_notes_integration_design.md):** Plugin-based passive ingestion from Apple Notes — staging, manifest diffing, folder-aware context, content pipeline.
 * **[MCP Server Design](design/mcp_server_design.md):** Agent-facing MCP interface — 6 core tools (recall, remember, inspect, insights, status, consolidate), behavior-encoding descriptions, structured output.
 
-## 4. Analysis & Learnings
+## 4. Blog
+* **[Building Kore — My Experience](blogs/building-kore-my-experience.md):** How I built Kore using AI across the full dev cycle — from vision and architecture to PRDs, implementation, and review.
+
+## 5. Analysis & Learnings
 * **[Architectural Analysis (QMD vs. MemU)](analysis/architecture_analysis.md):** An evaluation of QMD and MemU architectures and why Kore uses a hybrid approach.
 * **[Architecture Stress Test & Weaknesses](analysis/architecture_weaknesses.md):** Identification of edge cases and limitations of the hybrid model (e.g., State Synchronization, Concept Drift).
 * **[memU Learnings & Application](analysis/memu_learnings.md):** Specific takeaways from the memU architecture (Hierarchical Memory, Dual-Mode Retrieval) applied to Kore.
