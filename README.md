@@ -26,47 +26,28 @@ See the [Vision Document](docs/vision/vision.md) for the full strategic vision, 
 
 ## How It Works
 
-```
-  ┌─────────────────────────────────────────────────────────────────┐
-  │                       INGESTION SOURCES                          │
-  │     Apple Notes  ·  Bookmarks  ·  Web Clips  ·  Manual API     │
-  └───────────────────────────────┬─────────────────────────────────┘
-                                  │
-                                  ▼
-                  ┌───────────────────────────────┐
-                  │      POST /api/v1/remember     │
-                  │   ─────────────────────────   │
-                  │       SQLite Task Queue        │
-                  └───────────────┬───────────────┘
-                                  │  worker polls every 5s
-                                  ▼
-                  ┌───────────────────────────────┐
-                  │      LLM  (cloud or local)     │
-                  │   ─────────────────────────   │
-                  │      structured extraction     │
-                  └───────────────┬───────────────┘
-                                  │
-                                  ▼
-                  ┌───────────────────────────────┐
-                  │      $KORE_HOME/data/*.md      │
-                  │   ─────────────────────────   │
-                  │    YAML frontmatter + body     │
-                  └──────────────┬────────────────┘
-                                 │                │
-                      file watcher│                │ consolidation loop
-                                 ▼                ▼
-                  ┌──────────────────┐  ┌─────────────────────┐
-                  │    QMD Index     │◄─│    Insight .md       │
-                  │  BM25 + vectors  │  │  synthesized from    │
-                  │   + reranking    │  │   related clusters   │
-                  └────────┬─────────┘  └─────────────────────┘
-                           │
-              ┌────────────┼─────────────────┐
-              ▼            ▼                 ▼
-      ┌──────────────┐  ┌──────────┐  ┌──────────────┐
-      │  MCP Server  │  │   CLI    │  │ Push Nudges  │
-      │  any agent   │  │  & API   │  │  (roadmap)   │
-      └──────────────┘  └──────────┘  └──────────────┘
+```mermaid
+graph TD
+    subgraph Ingestion
+        A1[Apple Notes] --> B
+        A2[Bookmarks] --> B
+        A3[Web Clips] --> B
+        A4[Manual API] --> B
+    end
+
+    B[POST /api/v1/remember] --> C[(SQLite Task Queue)]
+    
+    C -->|worker polls every 5s| D[LLM Cloud/Local<br/>Structured Extraction]
+    
+    D --> E[$KORE_HOME/data/*.md<br/>YAML frontmatter + body]
+    
+    E -->|file watcher| F[QMD Index<br/>BM25 + vectors + reranking]
+    E -->|consolidation loop| G[Insight .md<br/>synthesized from clusters]
+    G --> F
+    
+    F --> H[MCP Server<br/>any agent]
+    F --> I[CLI & API]
+    F --> J[Push Nudges<br/>roadmap]
 ```
 
 1. **Ingest** — raw text arrives via REST API, Apple Notes plugin, or other source
