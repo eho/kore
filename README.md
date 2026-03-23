@@ -13,7 +13,7 @@ Kore solves the "Recall Disconnect" — the gap between saving high-value inspir
 - **File-system native** — every memory is a plain `.md` file; no proprietary database lock-in
 - **Privacy-first** — runs fully locally with Ollama, or with a cloud LLM if you prefer
 
-### Why "Kore"?
+### What does "Kore" mean?
 
 - **Greek:** Meaning "the core" or "the heart" — fitting for a personal memory bank.
 - **Japanese:** *Kore* (これ) is the demonstrative pronoun for "this" — a literal pointer to the memory being surfaced right now.
