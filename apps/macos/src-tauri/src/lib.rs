@@ -22,6 +22,20 @@ pub fn run() {
             if let Some(window) = app.get_webview_window("main") {
                 let _ = window.hide();
 
+                // Make the panel appear on all workspaces including over fullscreen apps
+                let _ = window.set_visible_on_all_workspaces(true);
+                #[cfg(target_os = "macos")]
+                {
+                    use objc2_app_kit::{NSWindow, NSWindowCollectionBehavior};
+                    let ptr = window.ns_window().expect("failed to get NSWindow");
+                    unsafe {
+                        let ns_window: *mut NSWindow = ptr.cast();
+                        let behavior = (*ns_window).collectionBehavior()
+                            | NSWindowCollectionBehavior::FullScreenAuxiliary;
+                        (*ns_window).setCollectionBehavior(behavior);
+                    }
+                }
+
                 // Close the panel when it loses focus (click outside)
                 let w = window.clone();
                 window.on_window_event(move |event| {
