@@ -29,7 +29,7 @@ pub fn run() {
                 let _ = window.set_visible_on_all_workspaces(true);
                 #[cfg(target_os = "macos")]
                 {
-                    use objc2_app_kit::{NSStatusWindowLevel, NSWindow, NSWindowCollectionBehavior};
+                    use objc2_app_kit::{NSWindow, NSWindowCollectionBehavior};
                     let ptr = window.ns_window().expect("failed to get NSWindow");
                     unsafe {
                         let ns_window: *mut NSWindow = ptr.cast();
@@ -37,7 +37,8 @@ pub fn run() {
                             | NSWindowCollectionBehavior::FullScreenAuxiliary
                             | NSWindowCollectionBehavior::MoveToActiveSpace;
                         (*ns_window).setCollectionBehavior(behavior);
-                        (*ns_window).setLevel(NSStatusWindowLevel);
+                        // NSStatusWindowLevel = 25
+                        (*ns_window).setLevel(25);
                     }
                 }
 
