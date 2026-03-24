@@ -755,14 +755,13 @@ These questions were open during the brainstorm phase and are now resolved:
 | 8 | **Daemon upgrades in Phase 1** | **Manual.** User runs `git pull && bun install` at the clone path. The app does not manage source updates. | Phase 1 assumes a developer user who cloned the repo. The app can surface a "New version available" notice by checking the remote git tag, but updating is the user's responsibility. Self-contained mode (Phase 3) bundles updates via Tauri's auto-updater. |
 | 9 | **Config change → daemon restart** | **Explicit restart required.** Settings shows a "Restart required" badge; user clicks Restart. | Silent auto-restarts on config change are surprising and could interrupt in-flight operations (sync, consolidation). Explicit is safer. |
 | 10 | **Zombie process prevention** | **PID file + startup adoption.** Rust writes `$KORE_HOME/.daemon.pid` on spawn, checks it on startup, and adopts or cleans up. App sends SIGTERM then SIGKILL on quit. | See "Daemon Lifecycle & Edge Cases" section for full details. |
+| 11 | **Tauri v2 menu bar support** — do `tauri-plugin-positioner` and system tray APIs work reliably on macOS with Tauri v2? | **Yes (APIs confirmed; reliability validated in MAC-001).** Use `@tauri-apps/plugin-system-tray` for the tray icon and `tauri-plugin-positioner` (with `tray-icon` feature) for tray-relative window positioning. MAC-001 includes a minimal tray POC that validates actual behavior before the backend is built. | Official Tauri v2 docs confirm support. Known edge cases: dual-monitor positioning can be inconsistent on the first 1–2 clicks; plan for a small workaround in the positioner logic. |
 
 ## Remaining Open Questions
 
-1. **Tauri v2 menu bar support**: Verify that `tauri-plugin-positioner` and system tray APIs work reliably on macOS with Tauri v2. Build a minimal proof-of-concept before committing to the full implementation.
+1. **Security-scoped bookmarks in Tauri**: Can Tauri's dialog plugin return a security-scoped bookmark for the Apple Notes folder, or do we need a custom Rust implementation? This determines whether we can avoid Full Disk Access entirely.
 
-2. **Security-scoped bookmarks in Tauri**: Can Tauri's dialog plugin return a security-scoped bookmark for the Apple Notes folder, or do we need a custom Rust implementation? This determines whether we can avoid Full Disk Access entirely.
-
-3. **First-run QMD download UX**: The first `embed()` call triggers a ~500MB model download. How should the app communicate this? Options: (a) show a progress bar in Settings, (b) show a notification, (c) just let it happen silently. Need to check if QMD exposes download progress events.
+2. **First-run QMD download UX**: The first `embed()` call triggers a ~500MB model download. How should the app communicate this? Options: (a) show a progress bar in Settings, (b) show a notification, (c) just let it happen silently. Need to check if QMD exposes download progress events.
 
 ---
 
@@ -788,9 +787,11 @@ Prefix: **MAC**
 
 These stories cover Phase 1 (MVP). Each is scoped to be completable in a single focused agent session. Stories are ordered by dependency — later stories depend on earlier ones.
 
-### MAC-001: Scaffold Tauri v2 Project
+### MAC-001: Scaffold Tauri v2 Project + Minimal Tray POC
 
-**Description:** As a developer, I want a properly scaffolded Tauri v2 project in `apps/macos/` so that I have the build infrastructure to develop the macOS app.
+**Description:** As a developer, I want a properly scaffolded Tauri v2 project in `apps/macos/` with a working menu bar icon and window, so that I have a validated foundation to build on.
+
+This story also serves as the proof-of-concept for Resolved Decision #11 — confirming that `tauri-plugin-positioner` and the system tray APIs work reliably on macOS before the backend is built.
 
 **Context:**
 - Files to read: `package.json` (root, for workspace config), `apps/core-api/package.json` (for reference on how existing apps are structured)
@@ -798,45 +799,60 @@ These stories cover Phase 1 (MVP). Each is scoped to be completable in a single 
 
 **Acceptance Criteria:**
 - [ ] `apps/macos/` directory created with Tauri v2 project structure: `src-tauri/` (Rust) and `src/` (React/TypeScript)
-- [ ] `src-tauri/Cargo.toml` configured with Tauri v2 dependencies, app identifier `com.kore.app`
-- [ ] `src-tauri/tauri.conf.json` configured for menu bar app (system tray enabled, no default window)
-- [ ] `src-tauri/src/main.rs` contains minimal Tauri app entry point with system tray setup
-- [ ] `apps/macos/package.json` created with React, TypeScript, and `@tauri-apps/api` dependencies
-- [ ] `apps/macos/src/App.tsx` renders a minimal "Kore" placeholder
+- [ ] `src-tauri/Cargo.toml` configured with Tauri v2 dependencies (`tauri`, `tauri-plugin-positioner` with `tray-icon` feature), app identifier `com.kore.app`
+- [ ] `src-tauri/tauri.conf.json` configured for menu bar app (system tray enabled, no default window on launch)
+- [ ] `apps/macos/package.json` created with React, TypeScript, `@tauri-apps/api`, and `@tauri-apps/plugin-positioner` dependencies
+- [ ] `apps/macos/src/App.tsx` renders a minimal placeholder panel (shown when tray icon is clicked)
 - [ ] `apps/macos/index.html` entry point exists
 - [ ] Root `package.json` workspaces already include `./apps/*` — verify no changes needed
 - [ ] `Info.plist` includes `NSAppleEventsUsageDescription` for Apple Notes access
 - [ ] `Kore.entitlements` includes `com.apple.security.files.user-selected.read-write`, `com.apple.security.files.bookmarks.app-scope`, and `com.apple.security.cs.allow-unsigned-executable-memory`
+- [ ] **Minimal tray POC:** `main.rs` creates a tray icon using `TrayIconBuilder`, registers a single "Quit Kore" menu item, and uses `tauri-plugin-positioner` to position the panel window relative to the tray icon on click
+- [ ] Tray icon visually appears in the macOS menu bar when the app runs
+- [ ] Clicking the tray icon opens/closes the placeholder panel window, positioned correctly below the icon
+- [ ] "Quit Kore" menu item exits the app cleanly
 - [ ] `bun install` succeeds from repo root
 - [ ] `cargo build` succeeds in `apps/macos/src-tauri/`
-- [ ] Typecheck/lint passes
+- [ ] Typecheck/lint passes (`cargo clippy` + TypeScript)
 - [ ] **Documentation:** Update `docs/README.md` to add the macOS app entry under the Design section
 
 ---
 
-### MAC-002: Add config.json Loading to Core API
+### MAC-002: Config System (TypeScript + Rust)
 
-**Description:** As a developer, I want `apps/core-api/src/config.ts` to load `$KORE_HOME/config.json` as default values (with env vars taking precedence) so that both the GUI app and CLI can share configuration.
+**Description:** As a developer, I want `config.json` loading in the core API and Rust IPC commands for reading/writing config and checking permissions, so that both the daemon and the GUI share the same configuration data contract.
 
 **Context:**
-- Files to read: `apps/core-api/src/config.ts`, `packages/qmd-client/src/index.ts` (for `resolveKoreHome()`)
+- Files to read: `apps/core-api/src/config.ts`, `packages/qmd-client/src/index.ts` (for `resolveKoreHome()`), `apps/macos/src-tauri/src/main.rs` (from MAC-001)
 - Relevant data contract: the `config.json` schema defined in the Configuration Strategy section of this document
-- Precedence order: env vars > `.env` (Bun auto-loads) > `config.json`
+- Precedence order (TypeScript side): env vars > `.env` (Bun auto-loads) > `config.json`
+- Permission check target (Rust side): `~/Library/Group Containers/group.com.apple.notes` directory read access
 
 **Acceptance Criteria:**
-- [ ] `config.ts` exports a new `loadConfig()` function that:
-  1. Calls `resolveKoreHome()` to get the KORE_HOME path
-  2. Checks if `config.json` exists at that path using `Bun.file()`
-  3. If it exists, parses it with JSON.parse and uses values as defaults
-  4. Env vars override any JSON value (e.g., `KORE_PORT` overrides `config.port`)
-  5. If `config.json` doesn't exist, behavior is identical to current (pure env var config)
-- [ ] Config values are accessible via exported getter functions (e.g., `getPort()`, `getLlmProvider()`, `getApiKey()`)
-- [ ] Existing env var names are preserved: `KORE_HOME`, `KORE_API_KEY`, `KORE_PORT`, `LLM_PROVIDER`, `GEMINI_API_KEY`, `OLLAMA_BASE_URL`, `OLLAMA_MODEL`, `KORE_APPLE_NOTES_ENABLED`, etc.
+
+*TypeScript — `apps/core-api/src/config.ts`:*
+- [ ] Exports a new `loadConfig()` function that calls `resolveKoreHome()`, reads `config.json` if present, and uses its values as defaults (env vars take precedence)
+- [ ] Config values accessible via exported getter functions (e.g., `getPort()`, `getLlmProvider()`, `getApiKey()`)
+- [ ] Existing env var names preserved: `KORE_HOME`, `KORE_API_KEY`, `KORE_PORT`, `LLM_PROVIDER`, `GEMINI_API_KEY`, `OLLAMA_BASE_URL`, `OLLAMA_MODEL`, `KORE_APPLE_NOTES_ENABLED`, etc.
 - [ ] `apps/core-api/src/index.ts` calls `loadConfig()` at startup before any other initialization
 - [ ] Existing behavior is 100% backwards-compatible — no `config.json` = no change
-- [ ] Typecheck/lint passes
-- [ ] Write unit tests in `apps/core-api/src/config.test.ts` covering: config.json present with all fields, config.json missing (fallback to env), env var overrides a JSON value, malformed JSON throws a clear error
-- [ ] **Documentation:** Add a "Configuration File" section to the root `README.md` explaining the `config.json` option and precedence order
+- [ ] Unit tests in `apps/core-api/src/config.test.ts`: config.json present, config.json missing (fallback to env), env var overrides JSON value, malformed JSON throws clear error
+
+*Rust — `apps/macos/src-tauri/src/`:*
+- [ ] `config.rs` created with:
+  - `KoreConfig` struct (serde-serializable) matching the `config.json` schema
+  - `read_config(kore_home: &str) -> Result<KoreConfig, String>` — reads and parses JSON, returns defaults if file missing
+  - `write_config(kore_home: &str, config: KoreConfig) -> Result<(), String>` — writes JSON with pretty formatting
+- [ ] `permissions.rs` created with:
+  - `PermissionStatus` enum: `Granted`, `Denied`, `Unknown`
+  - `check_notes_access() -> PermissionStatus` — attempts to read the Apple Notes database directory to detect TCC status
+  - `open_fda_settings() -> Result<(), String>` — opens `x-apple.systempreferences:com.apple.preference.security?Privacy_AllDiskAccess` via `std::process::Command`
+- [ ] `check_bun_installed() -> Result<String, String>` — runs `which bun` and returns version string or error
+- [ ] `check_ollama_running(url: &str) -> Result<bool, String>` — HTTP GET to Ollama API endpoint, returns true if reachable
+- [ ] All Rust functions exposed as `#[tauri::command]` in `main.rs`
+- [ ] Unit tests for `config.rs`: read valid JSON, read missing file returns defaults, write then read round-trip, malformed JSON returns error
+- [ ] Typecheck/lint passes (`cargo clippy` + TypeScript)
+- [ ] **Documentation:** Add a "Configuration File" section to the root `README.md` explaining the `config.json` option and precedence order. Add inline Rust doc comments on all public structs and functions.
 
 ---
 
@@ -845,7 +861,7 @@ These stories cover Phase 1 (MVP). Each is scoped to be completable in a single 
 **Description:** As a developer, I want a Rust module (`daemon.rs`) that manages the Bun daemon as a child process with start/stop/restart, PID file tracking, health polling, and crash recovery so that the Tauri app can reliably control the daemon lifecycle.
 
 **Context:**
-- Files to read: `apps/macos/src-tauri/src/main.rs` (from MAC-001), `apps/core-api/src/operations/health.ts` (health endpoint response schema)
+- Files to read: `apps/macos/src-tauri/src/main.rs` (from MAC-001), `apps/macos/src-tauri/src/config.rs` (from MAC-002), `apps/core-api/src/operations/health.ts` (health endpoint response schema)
 - The daemon is started via `bun run start` at the configured clone path
 - Health endpoint: `GET /api/v1/health` on `localhost:{port}` — returns JSON with `version`, `memories`, `queue`, `index` fields
 
@@ -867,66 +883,39 @@ These stories cover Phase 1 (MVP). Each is scoped to be completable in a single 
 
 ---
 
-### MAC-004: Rust Config and Permission Modules
+### MAC-004: Full System Tray with Status and Dropdown
 
-**Description:** As a developer, I want Rust modules for reading/writing `config.json` and checking macOS TCC permissions so that the React UI can manage configuration and permission state via Tauri IPC.
-
-**Context:**
-- Files to read: `apps/macos/src-tauri/src/main.rs` (from MAC-001)
-- Relevant data contract: the `config.json` schema from the Configuration Strategy section
-- Permission check target: `~/Library/Group Containers/group.com.apple.notes` directory read access
-
-**Acceptance Criteria:**
-- [ ] `apps/macos/src-tauri/src/config.rs` created with:
-  - `KoreConfig` struct (serde-serializable) matching the `config.json` schema
-  - `read_config(kore_home: &str) -> Result<KoreConfig, String>` — reads and parses JSON, returns defaults if file missing
-  - `write_config(kore_home: &str, config: KoreConfig) -> Result<(), String>` — writes JSON with pretty formatting
-- [ ] `apps/macos/src-tauri/src/permissions.rs` created with:
-  - `PermissionStatus` enum: `Granted`, `Denied`, `Unknown`
-  - `check_notes_access() -> PermissionStatus` — attempts to read the Apple Notes database directory to detect TCC status
-  - `open_fda_settings() -> Result<(), String>` — opens `x-apple.systempreferences:com.apple.preference.security?Privacy_AllDiskAccess` via `std::process::Command`
-- [ ] `check_bun_installed() -> Result<String, String>` — runs `which bun` and returns version string or error
-- [ ] `check_ollama_running(url: &str) -> Result<bool, String>` — HTTP GET to Ollama API endpoint, returns true if reachable
-- [ ] All functions exposed as `#[tauri::command]` in `main.rs`
-- [ ] Typecheck/lint passes (`cargo clippy`)
-- [ ] Write unit tests for `config.rs`: read valid JSON, read missing file returns defaults, write then read round-trip, malformed JSON returns error
-- [ ] **Documentation:** Add inline Rust doc comments on all public structs and functions
-
----
-
-### MAC-005: Menu Bar System Tray with Status and Dropdown
-
-**Description:** As a user, I want a menu bar icon that shows daemon status with a dropdown menu for quick actions so that I can monitor and control Kore without opening a window.
+**Description:** As a user, I want the menu bar icon to reflect daemon status and provide a dropdown menu for quick actions so that I can monitor and control Kore without opening a window.
 
 **Context:**
-- Files to read: `apps/macos/src-tauri/src/main.rs`, `apps/macos/src-tauri/src/daemon.rs` (from MAC-003)
-- Uses `tauri::tray::TrayIconBuilder` and `tauri::menu::Menu` APIs
+- Files to read: `apps/macos/src-tauri/src/main.rs` (from MAC-001), `apps/macos/src-tauri/src/daemon.rs` (from MAC-003), `apps/macos/src-tauri/src/config.rs` (from MAC-002)
+- Extends the minimal tray POC from MAC-001 with dynamic state and daemon integration
 - Icon states: filled circle (running), hollow circle (stopped), exclamation (error)
 
 **Acceptance Criteria:**
-- [ ] System tray icon appears in macOS menu bar on app launch
-- [ ] Icon reflects daemon state: filled (running), hollow (stopped), exclamation (error)
+- [ ] Tray icon updates to reflect daemon state: filled (running), hollow (stopped), exclamation (error)
 - [ ] Dropdown menu shows:
   - Status line: "Last sync: {time}" and "Daemon: {status} on :{port}" (from health poll data)
-  - "Sync Apple Notes Now" button — calls `POST /api/v1/remember` or equivalent sync trigger
-  - "Trigger Consolidation" button — calls `POST /api/v1/consolidate`
-  - "Settings..." menu item (with `⌘,` accelerator) — opens Settings window
-  - "Quit Kore" menu item — triggers clean daemon shutdown then app exit
+  - "Sync Apple Notes Now" — calls `POST /api/v1/remember` or equivalent sync trigger
+  - "Trigger Consolidation" — calls `POST /api/v1/consolidate`
+  - "Settings..." (with `⌘,` accelerator) — opens Settings window
+  - "Quit Kore" — triggers clean daemon shutdown then app exit
 - [ ] Health poll data from `daemon.rs` updates the menu status text every 5 seconds
-- [ ] Menu items that call the daemon API include the Bearer token from config
+- [ ] Daemon API calls include the Bearer token read from `config.rs`
 - [ ] Typecheck/lint passes (`cargo clippy`)
 - [ ] **Documentation:** Update `docs/design/macos-app.md` if any menu bar behavior deviates from the spec
 
 ---
 
-### MAC-006: Settings Window
+### MAC-005: Settings Window
 
 **Description:** As a user, I want a Settings window with tabs for General, LLM, Apple Notes, and MCP configuration so that I can manage all Kore settings through a GUI.
 
 **Context:**
-- Files to read: `apps/macos/src/App.tsx` (from MAC-001), `apps/macos/src-tauri/src/config.rs` (from MAC-004 — `KoreConfig` struct)
+- Files to read: `apps/macos/src/App.tsx` (from MAC-001), `apps/macos/src-tauri/src/config.rs` (from MAC-002 — `KoreConfig` struct)
 - UI reads config via `invoke('read_config')`, writes via `invoke('write_config')`
-- Settings window opens from menu bar "Settings..." item or `⌘,`
+- Settings window opens from tray "Settings..." item or `⌘,`
+- MCP install buttons call `invoke('install_mcp_config')` — implemented in MAC-006
 
 **Acceptance Criteria:**
 - [ ] `apps/macos/src/pages/Settings.tsx` created with a tabbed layout
@@ -934,7 +923,7 @@ These stories cover Phase 1 (MVP). Each is scoped to be completable in a single 
   - Clone path input with file picker (validated — path must contain `apps/core-api/`)
   - KORE_HOME directory display with "Reveal in Finder" button
   - Port input (number, default 3000)
-  - Launch at login toggle (stores preference; actual `SMAppService` wiring is MAC-008)
+  - Launch at login toggle (calls `invoke('set_launch_at_login')` — implemented in MAC-006)
   - Daemon status indicator (Running / Stopped / Error with message) + Start / Stop / Restart buttons calling IPC commands
   - "Restart required" badge when port or clone path changes
 - [ ] **LLM tab:**
@@ -962,52 +951,44 @@ These stories cover Phase 1 (MVP). Each is scoped to be completable in a single 
 
 ---
 
-### MAC-007: Onboarding Flow
+### MAC-006: MCP Config, Launch at Login, and Onboarding
 
-**Description:** As a first-time user, I want a guided setup wizard on first launch so that I can configure Kore without reading documentation.
-
-**Context:**
-- Files to read: `apps/macos/src/pages/Settings.tsx` (from MAC-006)
-- First launch detected by absence of `$KORE_HOME/config.json`
-- Onboarding reuses the Settings tabs with a stepper overlay — no separate wizard component
-
-**Acceptance Criteria:**
-- [ ] `apps/macos/src/pages/Onboarding.tsx` created as a stepper wrapper around Settings tabs
-- [ ] On app launch, Rust checks for `config.json` via `invoke('read_config')` — if file doesn't exist, opens onboarding window instead of starting daemon
-- [ ] **Step 1 — Welcome:** Brief explanation of Kore + "Let's configure your setup" button
-- [ ] **Step 2 — General:** Clone path (auto-detected from common locations like `~/dev/kore`), KORE_HOME, Bun installation check via `invoke('check_bun_installed')` with inline status
-- [ ] **Step 3 — LLM:** Provider selection (Ollama / Gemini) with connection test
-- [ ] **Step 4 — Apple Notes:** Enable/disable toggle, permission grant flow if enabled
-- [ ] **Step 5 — MCP:** Optional auto-config for Claude Desktop and Claude Code
-- [ ] **Step 6 — Start:** Writes `config.json` via `invoke('write_config')`, starts daemon via `invoke('start_daemon')`, shows "Kore is running" confirmation
-- [ ] Required fields (clone path, KORE_HOME) block step progression
-- [ ] Stepper shows current step number and allows going back to previous steps
-- [ ] After completion, app transitions to normal menu bar mode
-- [ ] Typecheck/lint passes
-- [ ] Write component tests: stepper advances, required fields block progression, final step calls write_config then start_daemon
-- [ ] **Documentation:** None required beyond inline code comments
-
----
-
-### MAC-008: MCP Config Writer and Launch at Login
-
-**Description:** As a user, I want the app to auto-write MCP configuration for Claude Desktop / Claude Code and support launch at login so that integration setup is one click.
+**Description:** As a user, I want one-click MCP installation, launch-at-login support, and a first-run setup wizard so that I can go from install to running without reading documentation.
 
 **Context:**
-- Files to read: `apps/macos/src-tauri/src/main.rs`, root `README.md` (MCP setup section for correct JSON format and file paths)
+- Files to read: `apps/macos/src-tauri/src/main.rs`, `apps/macos/src/pages/Settings.tsx` (from MAC-005), root `README.md` (MCP setup section for correct JSON format and file paths)
 - Claude Desktop config: `~/Library/Application Support/Claude/claude_desktop_config.json`
 - Claude Code config: `~/.claude/settings.json` or project-level `.mcp.json`
+- First launch detected by absence of `$KORE_HOME/config.json`
+- Onboarding reuses Settings tab content with a stepper overlay — no separate wizard component
 
 **Acceptance Criteria:**
-- [ ] `apps/macos/src-tauri/src/mcp.rs` created with `install_mcp_config(target: &str, daemon_url: &str, api_key: &str) -> Result<(), String>`
-- [ ] For `target = "claude-desktop"`: reads existing `claude_desktop_config.json` (or creates it), adds/updates the `kore` MCP server entry with correct `command`, `args`, and `env` fields pointing to the clone path
+
+*Rust — MCP config writer (`apps/macos/src-tauri/src/mcp.rs`):*
+- [ ] `install_mcp_config(target: &str, daemon_url: &str, api_key: &str) -> Result<(), String>` implemented
+- [ ] For `target = "claude-desktop"`: reads/creates `claude_desktop_config.json`, adds/updates the `kore` MCP server entry with correct `command`, `args`, and `env` fields pointing to the clone path
 - [ ] For `target = "claude-code"`: reads/creates the appropriate config file and adds the Kore MCP server entry
 - [ ] Existing entries in the config files are preserved — only the `kore` key is added/updated
 - [ ] `install_mcp_config` exposed as `#[tauri::command]`
-- [ ] Launch at login: `apps/macos/src-tauri/src/login.rs` created using `SMAppService` (via `objc2` crate or shell command to `launchctl`) to register/unregister the app for login launch
-- [ ] `set_launch_at_login(enabled: bool)` and `get_launch_at_login() -> bool` exposed as `#[tauri::command]`
-- [ ] Typecheck/lint passes (`cargo clippy`)
-- [ ] Write unit tests for MCP config: generates correct JSON structure, preserves existing config entries, handles missing config file
+- [ ] Unit tests: generates correct JSON structure, preserves existing config entries, handles missing config file
+
+*Rust — Launch at login (`apps/macos/src-tauri/src/login.rs`):*
+- [ ] `set_launch_at_login(enabled: bool)` and `get_launch_at_login() -> bool` implemented using `SMAppService` (via `objc2` crate or shell command to `launchctl`)
+- [ ] Both functions exposed as `#[tauri::command]`
+
+*React — Onboarding (`apps/macos/src/pages/Onboarding.tsx`):*
+- [ ] Stepper wrapper around Settings tab content
+- [ ] On app launch, Rust checks for `config.json` — if absent, opens onboarding window instead of starting daemon
+- [ ] **Step 1 — Welcome:** Brief explanation of Kore + "Let's configure your setup" button
+- [ ] **Step 2 — General:** Clone path (auto-detected from `~/dev/kore`), KORE_HOME, Bun check via `invoke('check_bun_installed')` with inline status
+- [ ] **Step 3 — LLM:** Provider selection (Ollama / Gemini) with connection test
+- [ ] **Step 4 — Apple Notes:** Enable/disable toggle, permission grant flow if enabled
+- [ ] **Step 5 — MCP:** Optional auto-config for Claude Desktop and Claude Code via `invoke('install_mcp_config')`
+- [ ] **Step 6 — Start:** Writes `config.json` via `invoke('write_config')`, starts daemon via `invoke('start_daemon')`, shows "Kore is running" confirmation
+- [ ] Required fields (clone path, KORE_HOME) block step progression; stepper allows going back
+- [ ] After completion, app transitions to normal menu bar mode
+- [ ] Component tests: stepper advances, required fields block progression, final step calls write_config then start_daemon
+- [ ] Typecheck/lint passes (`cargo clippy` + TypeScript)
 - [ ] **Documentation:** Update root `README.md` MCP setup section to mention the app's "Install MCP Config" button as an alternative to manual setup
 
 ---
