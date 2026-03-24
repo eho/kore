@@ -2,9 +2,8 @@ use tauri::{
     image::Image,
     menu::{Menu, MenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
-    AppHandle, Manager, Runtime,
+    AppHandle, LogicalPosition, Manager, Runtime,
 };
-use tauri_plugin_positioner::{Position, WindowExt};
 
 pub fn setup_tray<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
     let quit = MenuItem::with_id(app, "quit", "Quit Kore", true, None::<&str>)?;
@@ -28,18 +27,20 @@ pub fn setup_tray<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
             if let TrayIconEvent::Click {
                 button: MouseButton::Left,
                 button_state: MouseButtonState::Up,
+                position,
                 ..
             } = event
             {
                 let app = tray.app_handle();
                 if let Some(window) = app.get_webview_window("main") {
-                    // Position the panel relative to the tray icon.
-                    // Falls back to TopRight if positioner fails (e.g. dual-monitor edge case).
-                    let _ = window.as_ref().window().move_window(Position::TrayCenter);
-
                     if window.is_visible().unwrap_or(false) {
                         let _ = window.hide();
                     } else {
+                        // Position the panel centered below the click point
+                        let window_width = 280.0_f64;
+                        let x = position.x - (window_width / 2.0);
+                        let y = position.y;
+                        let _ = window.set_position(LogicalPosition::new(x, y));
                         let _ = window.show();
                         let _ = window.set_focus();
                     }
