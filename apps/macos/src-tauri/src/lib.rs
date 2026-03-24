@@ -21,6 +21,14 @@ pub fn run() {
             // Keep the panel window hidden until the tray icon is clicked
             if let Some(window) = app.get_webview_window("main") {
                 let _ = window.hide();
+
+                // Close the panel when it loses focus (click outside)
+                let w = window.clone();
+                window.on_window_event(move |event| {
+                    if let tauri::WindowEvent::Focused(false) = event {
+                        let _ = w.hide();
+                    }
+                });
             }
 
             Ok(())
