@@ -22,24 +22,19 @@ pub fn run() {
             if let Some(window) = app.get_webview_window("main") {
                 let _ = window.hide();
 
-                // Make the panel appear on all workspaces including over fullscreen apps.
-                // canJoinAllSpaces: show on every Space/desktop
-                // FullScreenAuxiliary: coexist with fullscreen windows
-                // NSStatusWindowLevel (25): float above fullscreen apps like native menu bar panels
+                // Make the panel appear on all workspaces including over fullscreen apps
                 let _ = window.set_visible_on_all_workspaces(true);
                 #[cfg(target_os = "macos")]
-                {
-                    use objc2_app_kit::{NSWindow, NSWindowCollectionBehavior};
-                    let ptr = window.ns_window().expect("failed to get NSWindow");
-                    unsafe {
-                        let ns_window: *mut NSWindow = ptr.cast();
-                        let behavior = (*ns_window).collectionBehavior()
-                            | NSWindowCollectionBehavior::FullScreenAuxiliary
-                            | NSWindowCollectionBehavior::MoveToActiveSpace;
-                        (*ns_window).setCollectionBehavior(behavior);
-                        // NSStatusWindowLevel = 25
-                        (*ns_window).setLevel(25);
-                    }
+                unsafe {
+                    use objc2::msg_send;
+                    use objc2::runtime::AnyObject;
+                    let ns_window = window.ns_window().expect("failed to get NSWindow") as *mut AnyObject;
+                    // Get current collectionBehavior, add FullScreenAuxiliary (1 << 8)
+                    let behavior: isize = msg_send![&*ns_window, collectionBehavior];
+                    let new_behavior = behavior | (1 << 8); // NSWindowCollectionBehaviorFullScreenAuxiliary
+                    let _: () = msg_send![&*ns_window, setCollectionBehavior: new_behavior];
+                    // NSStatusWindowLevel = 25
+                    let _: () = msg_send![&*ns_window, setLevel: 25_isize];
                 }
 
                 // Close the panel when it loses focus (click outside)
