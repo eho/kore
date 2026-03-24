@@ -761,7 +761,7 @@ These questions were open during the brainstorm phase and are now resolved:
 
 1. **Security-scoped bookmarks in Tauri**: Can Tauri's dialog plugin return a security-scoped bookmark for the Apple Notes folder, or do we need a custom Rust implementation? This determines whether we can avoid Full Disk Access entirely.
 
-2. **First-run QMD download UX**: The first `embed()` call triggers a ~500MB model download. How should the app communicate this? Options: (a) show a progress bar in Settings, (b) show a notification, (c) just let it happen silently. Need to check if QMD exposes download progress events.
+2. **First-run QMD download UX**: The first `embed()` call triggers a ~500MB model download. The preferred approach is: the daemon exposes an SSE endpoint that streams download progress, and the Tauri app subscribes and shows a non-intrusive progress bar in the tray panel. Two pre-conditions need verification before committing to this: (a) does `node-llama-cpp` expose an `onDownloadProgress` callback that the daemon can hook into? (b) is adding an SSE endpoint to the daemon in scope for MVP, or should we fall back to a simpler "Downloading model, please wait…" notice with a spinner? The daemon currently has no SSE infrastructure.
 
 ---
 
