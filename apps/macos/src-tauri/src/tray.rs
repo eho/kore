@@ -37,14 +37,13 @@ pub fn setup_tray<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
                         let _ = window.hide();
                     } else {
                         // Center the panel horizontally on the click point.
-                        // For Y, the click lands inside the menu bar (~24pt tall on macOS).
-                        // We need to clear the full menu bar height. On Retina displays
-                        // position is in physical pixels, so use a generous offset.
+                        // position is in physical pixels on whichever monitor was clicked.
+                        // The click lands inside the tray icon within the menu bar. Offset
+                        // downward to clear the menu bar bottom (~14pt below a mid-icon click).
                         let window_width = 280.0;
                         let scale = window.scale_factor().unwrap_or(2.0);
-                        let menu_bar_height = 25.0 * scale; // 25 logical points
                         let x = position.x - (window_width / 2.0);
-                        let y = menu_bar_height;
+                        let y = position.y + (14.0 * scale);
                         let _ = window.set_position(PhysicalPosition::new(x, y));
                         let _ = window.show();
                         let _ = window.set_focus();
