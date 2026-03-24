@@ -22,17 +22,22 @@ pub fn run() {
             if let Some(window) = app.get_webview_window("main") {
                 let _ = window.hide();
 
-                // Make the panel appear on all workspaces including over fullscreen apps
+                // Make the panel appear on all workspaces including over fullscreen apps.
+                // canJoinAllSpaces: show on every Space/desktop
+                // FullScreenAuxiliary: coexist with fullscreen windows
+                // NSStatusWindowLevel (25): float above fullscreen apps like native menu bar panels
                 let _ = window.set_visible_on_all_workspaces(true);
                 #[cfg(target_os = "macos")]
                 {
-                    use objc2_app_kit::{NSWindow, NSWindowCollectionBehavior};
+                    use objc2_app_kit::{NSStatusWindowLevel, NSWindow, NSWindowCollectionBehavior};
                     let ptr = window.ns_window().expect("failed to get NSWindow");
                     unsafe {
                         let ns_window: *mut NSWindow = ptr.cast();
                         let behavior = (*ns_window).collectionBehavior()
-                            | NSWindowCollectionBehavior::FullScreenAuxiliary;
+                            | NSWindowCollectionBehavior::FullScreenAuxiliary
+                            | NSWindowCollectionBehavior::MoveToActiveSpace;
                         (*ns_window).setCollectionBehavior(behavior);
+                        (*ns_window).setLevel(NSStatusWindowLevel);
                     }
                 }
 
