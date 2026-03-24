@@ -36,18 +36,16 @@ pub fn setup_tray<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
                     if window.is_visible().unwrap_or(false) {
                         let _ = window.hide();
                     } else {
-                        // Ensure the window can appear over fullscreen apps each time we show it
-                        configure_panel_for_menubar(&window);
-
-                        // Position centered on the click X, just below the menu bar.
-                        // The click position.y is within the menu bar; use it as the
-                        // top anchor since macOS menu bar height varies by display scale.
+                        // Center the panel horizontally on the click point.
+                        // For Y, the click lands inside the menu bar (~24pt tall on macOS).
+                        // We need to clear the full menu bar height. On Retina displays
+                        // position is in physical pixels, so use a generous offset.
                         let window_width = 280.0;
+                        let scale = window.scale_factor().unwrap_or(2.0);
+                        let menu_bar_height = 25.0 * scale; // 25 logical points
                         let x = position.x - (window_width / 2.0);
-                        // Use the bottom of the menu bar area. The click Y is inside the
-                        // menu bar, so add a small offset to clear it.
-                        let menu_bar_bottom = position.y + 12.0;
-                        let _ = window.set_position(PhysicalPosition::new(x, menu_bar_bottom));
+                        let y = menu_bar_height;
+                        let _ = window.set_position(PhysicalPosition::new(x, y));
                         let _ = window.show();
                         let _ = window.set_focus();
                     }
@@ -57,23 +55,4 @@ pub fn setup_tray<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
         .build(app)?;
 
     Ok(())
-}
-
-fn configure_panel_for_menubar<R: Runtime>(window: &tauri::WebviewWindow<R>) {
-    let _ = window.set_visible_on_all_workspaces(true);
-    #[cfg(target_os = "macos")]
-    {
-        if let Ok(ns_window_ptr) = window.ns_window() {
-            unsafe {
-                use objc2::msg_send;
-                use objc2::runtime::AnyObject;
-                let ns_window = ns_window_ptr as *mut AnyObject;
-                // CanJoinAllSpaces (1 << 0) | FullScreenAuxiliary (1 << 8)
-                let behavior: isize = (1 << 0) | (1 << 8);
-                let _: () = msg_send![&*ns_window, setCollectionBehavior: behavior];
-                // NSStatusWindowLevel = 25
-                let _: () = msg_send![&*ns_window, setLevel: 25_isize];
-            }
-        }
-    }
 }

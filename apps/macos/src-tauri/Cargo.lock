@@ -1682,12 +1682,10 @@ dependencies = [
 name = "kore"
 version = "0.1.0"
 dependencies = [
- "objc2",
  "serde",
  "serde_json",
  "tauri",
  "tauri-build",
- "tauri-plugin-positioner",
 ]
 
 [[package]]
@@ -3446,38 +3444,6 @@ dependencies = [
  "syn 2.0.117",
  "tauri-codegen",
  "tauri-utils",
-]
-
-[[package]]
-name = "tauri-plugin"
-version = "2.5.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ddde7d51c907b940fb573006cdda9a642d6a7c8153657e88f8a5c3c9290cd4aa"
-dependencies = [
- "anyhow",
- "glob",
- "plist",
- "schemars 0.8.22",
- "serde",
- "serde_json",
- "tauri-utils",
- "toml 0.9.12+spec-1.1.0",
- "walkdir",
-]
-
-[[package]]
-name = "tauri-plugin-positioner"
-version = "2.3.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "02dcd56dd4797bd4d6c4c658daed40ce563176f92df90fbd2c904ce145de17ef"
-dependencies = [
- "log",
- "serde",
- "serde_json",
- "serde_repr",
- "tauri",
- "tauri-plugin",
- "thiserror 2.0.18",
 ]
 
 [[package]]

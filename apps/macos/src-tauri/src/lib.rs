@@ -10,7 +10,6 @@ fn get_daemon_status() -> String {
 
 pub fn run() {
     tauri::Builder::default()
-        .plugin(tauri_plugin_positioner::init())
         .setup(|app| {
             // Hide the app from the Dock — this is a menu bar-only app
             #[cfg(target_os = "macos")]
