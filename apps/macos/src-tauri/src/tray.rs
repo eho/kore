@@ -1,4 +1,5 @@
 use tauri::{
+    image::Image,
     menu::{Menu, MenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
     AppHandle, Manager, Runtime,
@@ -9,9 +10,15 @@ pub fn setup_tray<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
     let quit = MenuItem::with_id(app, "quit", "Quit Kore", true, None::<&str>)?;
     let menu = Menu::with_items(app, &[&quit])?;
 
+    let icon = Image::from_path("icons/icon.png").unwrap_or_else(|_| {
+        app.default_window_icon().unwrap().clone()
+    });
+
     TrayIconBuilder::new()
         .menu(&menu)
-        .icon(app.default_window_icon().unwrap().clone())
+        .icon(icon)
+        .icon_as_template(true)
+        .show_menu_on_left_click(false)
         .on_menu_event(|app, event| {
             if event.id == "quit" {
                 app.exit(0);
