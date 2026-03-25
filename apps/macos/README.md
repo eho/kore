@@ -24,7 +24,7 @@ swift build && .build/debug/Kore
 
 A Kore icon appears in your menu bar. Left-click to open the panel, right-click for "Quit Kore".
 
-> **MAC-001 scope:** This is a scaffold POC. The panel shows a placeholder UI with a bridge test button — it does not connect to the Kore daemon yet. Daemon management (starting/stopping `bun run start`) is implemented in MAC-003.
+> **Current scope (MAC-001 + MAC-002):** The panel shows a placeholder UI with a bridge test button. The Swift layer includes `ConfigManager` (read/write `config.json`) and `Permissions` (Notes TCC check, Bun/Ollama detection) — all callable from the React UI via the JS bridge. Daemon management (starting/stopping `bun run start`) is implemented in MAC-003.
 
 ### Do I need to run the daemon separately?
 
@@ -55,13 +55,19 @@ The native app always loads from `dist/` (not the dev server), so run `bun run b
 apps/macos/
 ├── Kore/                          # Swift project (SPM)
 │   ├── Package.swift
-│   └── Sources/Kore/
-│       ├── KoreApp.swift          # Entry point, NSStatusItem, click handling
-│       ├── PanelManager.swift     # NSPanel + WKWebView setup, positioning
-│       ├── BridgeHandler.swift    # JS ↔ Swift bridge (WKScriptMessageHandler)
-│       └── Resources/
-│           ├── Info.plist         # Bundle config, Apple Notes usage description
-│           └── Kore.entitlements  # File access, bookmarks, JIT permissions
+│   ├── Sources/
+│   │   ├── KoreLib/               # Shared library target (testable)
+│   │   │   ├── BridgeHandler.swift    # JS ↔ Swift bridge (WKScriptMessageHandler)
+│   │   │   ├── ConfigManager.swift    # KoreConfig Codable struct + read/write helpers
+│   │   │   ├── PanelManager.swift     # NSPanel + WKWebView setup, positioning
+│   │   │   └── Permissions.swift      # Notes TCC check, Bun/Ollama detection
+│   │   └── Kore/                  # Executable entry point (imports KoreLib)
+│   │       ├── KoreApp.swift          # @main, NSStatusItem, click handling
+│   │       └── Resources/
+│   │           ├── Info.plist         # Bundle config, Apple Notes usage description
+│   │           └── Kore.entitlements  # File access, bookmarks, JIT permissions
+│   └── Tests/KoreTests/
+│       └── ConfigManagerTests.swift   # Unit tests for ConfigManager
 ├── src/                           # React/TypeScript UI
 │   ├── App.tsx                    # Panel UI component
 │   ├── main.tsx                   # React entry point
@@ -70,6 +76,16 @@ apps/macos/
 ├── vite.config.ts                 # Builds to dist/ with relative paths for file:// loading
 ├── package.json                   # @kore/macos workspace package
 └── tsconfig.json                  # TypeScript config (JSX enabled)
+```
+
+## Testing
+
+```sh
+# Swift unit tests (ConfigManager)
+cd Kore && swift test
+
+# TypeScript tests are run from repo root
+bun test apps/core-api/src/config.test.ts
 ```
 
 ## Prerequisites

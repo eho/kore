@@ -1,16 +1,16 @@
 import AppKit
 import WebKit
 
-class PanelManager: NSObject {
+public class PanelManager: NSObject {
     private var panel: NSPanel?
     private var webView: WKWebView?
     private var bridgeHandler: BridgeHandler?
 
-    var isVisible: Bool {
+    public var isVisible: Bool {
         panel?.isVisible ?? false
     }
 
-    override init() {
+    public override init() {
         super.init()
         setupPanel()
     }
@@ -69,16 +69,16 @@ class PanelManager: NSObject {
     // MARK: - Web Content Loading
 
     private func loadWebContent() {
-        // Look for index.html in the app bundle's Resources (packaged .app)
-        if let bundleURL = Bundle.module.url(forResource: "Resources/index", withExtension: "html") {
+        // Look for index.html in the main app bundle's Resources (packaged .app)
+        if let bundleURL = Bundle.main.url(forResource: "index", withExtension: "html") {
             webView?.loadFileURL(bundleURL, allowingReadAccessTo: bundleURL.deletingLastPathComponent())
             return
         }
 
         // Fallback: load dist/index.html relative to the Swift package root (for development).
-        // #file is Sources/Kore/PanelManager.swift; 4× up = apps/macos/
+        // #file is Sources/KoreLib/PanelManager.swift; 4× up = apps/macos/
         let distURL = URL(fileURLWithPath: #file)
-            .deletingLastPathComponent()  // Sources/Kore/
+            .deletingLastPathComponent()  // Sources/KoreLib/
             .deletingLastPathComponent()  // Sources/
             .deletingLastPathComponent()  // Kore/
             .deletingLastPathComponent()  // apps/macos/
@@ -145,7 +145,7 @@ class PanelManager: NSObject {
 
     // MARK: - Show / Hide
 
-    func showPanel(relativeTo button: NSStatusBarButton) {
+    public func showPanel(relativeTo button: NSStatusBarButton) {
         guard let panel = panel else { return }
 
         positionPanel(relativeTo: button)
@@ -161,7 +161,7 @@ class PanelManager: NSObject {
         installDismissMonitor()
     }
 
-    func hidePanel() {
+    public func hidePanel() {
         guard let panel = panel else { return }
 
         removeDismissMonitor()
@@ -233,7 +233,7 @@ class PanelManager: NSObject {
 // MARK: - NSWindowDelegate
 
 extension PanelManager: NSWindowDelegate {
-    func windowDidResignKey(_ notification: Notification) {
+    public func windowDidResignKey(_ notification: Notification) {
         // Panel is non-activating so this fires rarely, but hide if it does
         hidePanel()
     }

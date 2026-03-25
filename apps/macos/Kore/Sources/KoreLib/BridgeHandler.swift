@@ -1,0 +1,129 @@
+import WebKit
+import Foundation
+
+/// Handles bidirectional JS ↔ Swift communication via WKScriptMessageHandler.
+///
+/// JS → Swift: `window.webkit.messageHandlers.bridge.postMessage({ type: 'ping' })`
+/// Swift → JS: `window.bridgeCallback(data)` called via `webView.evaluateJavaScript`
+public class BridgeHandler: NSObject, WKScriptMessageHandler {
+    public weak var webView: WKWebView?
+
+    public override init() {
+        super.init()
+    }
+
+    public func userContentController(
+        _ userContentController: WKUserContentController,
+        didReceive message: WKScriptMessage
+    ) {
+        guard let body = message.body as? [String: Any],
+              let type = body["type"] as? String else {
+            return
+        }
+
+        handleMessage(type: type, payload: body)
+    }
+
+    // MARK: - Message Routing
+
+    private func handleMessage(type: String, payload: [String: Any]) {
+        switch type {
+        case "ping":
+            sendToJS(["type": "pong", "ts": Date().timeIntervalSince1970])
+
+        case "readConfig":
+            handleReadConfig(payload: payload)
+
+        case "writeConfig":
+            handleWriteConfig(payload: payload)
+
+        case "checkNotesAccess":
+            let status = Permissions.checkNotesAccess()
+            sendToJS(["type": "checkNotesAccess", "status": status.rawValue])
+
+        case "openFDASettings":
+            do {
+                try Permissions.openFDASettings()
+                sendToJS(["type": "openFDASettings", "success": true])
+            } catch {
+                sendToJS(["type": "openFDASettings", "success": false, "error": error.localizedDescription])
+            }
+
+        case "checkBunInstalled":
+            do {
+                let path = try checkBunInstalled()
+                sendToJS(["type": "checkBunInstalled", "path": path])
+            } catch {
+                sendToJS(["type": "checkBunInstalled", "error": error.localizedDescription])
+            }
+
+        case "checkOllamaRunning":
+            let url = payload["url"] as? String ?? "http://localhost:11434"
+            Task {
+                do {
+                    let running = try await checkOllamaRunning(url: url)
+                    self.sendToJS(["type": "checkOllamaRunning", "running": running])
+                } catch {
+                    self.sendToJS(["type": "checkOllamaRunning", "running": false, "error": error.localizedDescription])
+                }
+            }
+
+        default:
+            sendToJS(["type": "error", "message": "Unknown message type: \(type)"])
+        }
+    }
+
+    // MARK: - Config Handlers
+
+    private func handleReadConfig(payload: [String: Any]) {
+        let koreHome = payload["koreHome"] as? String ?? "~/.kore"
+        do {
+            let config = try ConfigManager.readConfig(koreHome: koreHome)
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+            let data = try encoder.encode(config)
+            let dict = try JSONSerialization.jsonObject(with: data) as? [String: Any] ?? [:]
+            sendToJS(["type": "readConfig", "config": dict])
+        } catch {
+            sendToJS(["type": "readConfig", "error": error.localizedDescription])
+        }
+    }
+
+    private func handleWriteConfig(payload: [String: Any]) {
+        let koreHome = payload["koreHome"] as? String ?? "~/.kore"
+        guard let configDict = payload["config"] as? [String: Any] else {
+            sendToJS(["type": "writeConfig", "success": false, "error": "Missing 'config' field"])
+            return
+        }
+        do {
+            let data = try JSONSerialization.data(withJSONObject: configDict)
+            let config = try JSONDecoder().decode(KoreConfig.self, from: data)
+            try ConfigManager.writeConfig(koreHome: koreHome, config: config)
+            sendToJS(["type": "writeConfig", "success": true])
+        } catch {
+            sendToJS(["type": "writeConfig", "success": false, "error": error.localizedDescription])
+        }
+    }
+
+    // MARK: - Swift → JS
+
+    public func sendToJS(_ data: [String: Any]) {
+        guard let webView = webView else { return }
+
+        do {
+            let jsonData = try JSONSerialization.data(withJSONObject: data)
+            let jsonString = String(data: jsonData, encoding: .utf8) ?? "{}"
+            let js = "window.bridgeCallback && window.bridgeCallback(\(jsonString));"
+
+            DispatchQueue.main.async {
+                webView.evaluateJavaScript(js) { _, error in
+                    if let error = error {
+                        print("[BridgeHandler] JS evaluation error: \(error)")
+                    }
+                }
+            }
+        } catch {
+            print("[BridgeHandler] JSON serialization error: \(error)")
+        }
+    }
+}
