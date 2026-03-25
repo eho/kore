@@ -76,13 +76,15 @@ class PanelManager: NSObject {
             return
         }
 
-        // Fallback: load from the package Resources directory (for development)
+        // Fallback: load dist/index.html relative to the Swift package root (for development).
+        // #file is Sources/Kore/PanelManager.swift; 3× up = apps/macos/Kore/; 1× ../  = apps/macos/
         let devPaths = [
             URL(fileURLWithPath: #file)
-                .deletingLastPathComponent()
-                .deletingLastPathComponent()
-                .deletingLastPathComponent()
-                .appendingPathComponent("../../src/dist/index.html"),
+                .deletingLastPathComponent()  // Sources/Kore/
+                .deletingLastPathComponent()  // Sources/
+                .deletingLastPathComponent()  // Kore/
+                .deletingLastPathComponent()  // apps/macos/  (one more needed)
+                .appendingPathComponent("dist/index.html"),
         ]
 
         for devURL in devPaths {
