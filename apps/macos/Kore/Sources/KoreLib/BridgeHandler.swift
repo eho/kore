@@ -94,6 +94,17 @@ public class BridgeHandler: NSObject, WKScriptMessageHandler {
         case "getDaemonStatus":
             handleGetDaemonStatus()
 
+        case "checkClaudeDesktopConfig":
+            let path = NSString("~/Library/Application Support/Claude/claude_desktop_config.json").expandingTildeInPath
+            let detected = FileManager.default.fileExists(atPath: path)
+            sendToJS(["type": "checkClaudeDesktopConfig", "detected": detected])
+
+        case "checkClaudeCodeConfig":
+            // Claude Code stores settings in ~/.claude/settings.json
+            let path = NSString("~/.claude/settings.json").expandingTildeInPath
+            let detected = FileManager.default.fileExists(atPath: path)
+            sendToJS(["type": "checkClaudeCodeConfig", "detected": detected])
+
         default:
             sendToJS(["type": "error", "message": "Unknown message type: \(type)"])
         }
