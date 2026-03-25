@@ -60,6 +60,21 @@ private final class LogCapture: @unchecked Sendable {
         }
     }
 
+    private let stderrLock = NSLock()
+    private var _stderrBuffer = Data()
+
+    var lastStderr: String {
+        stderrLock.lock()
+        defer { stderrLock.unlock() }
+        return String(data: _stderrBuffer, encoding: .utf8) ?? ""
+    }
+
+    func clearStderr() {
+        stderrLock.lock()
+        defer { stderrLock.unlock() }
+        _stderrBuffer.removeAll()
+    }
+
     /// Attaches readability handlers to the given pipes to forward output to the log file.
     func attach(stdout: Pipe, stderr: Pipe) {
         stdout.fileHandleForReading.readabilityHandler = { [weak self] handle in
@@ -68,7 +83,10 @@ private final class LogCapture: @unchecked Sendable {
         }
         stderr.fileHandleForReading.readabilityHandler = { [weak self] handle in
             let data = handle.availableData
-            if !data.isEmpty { self?.append(data) }
+            if !data.isEmpty {
+                self?.append(data)
+                self?.appendStderr(data)
+            }
         }
     }
 
@@ -84,6 +102,16 @@ private final class LogCapture: @unchecked Sendable {
             defer { try? handle.close() }
             handle.seekToEndOfFile()
             handle.write(data)
+        }
+    }
+
+    private func appendStderr(_ data: Data) {
+        stderrLock.lock()
+        defer { stderrLock.unlock() }
+        _stderrBuffer.append(data)
+        // Keep last ~4KB to avoid unbounded memory growth
+        if _stderrBuffer.count > 4096 {
+            _stderrBuffer = _stderrBuffer.suffix(4096)
         }
     }
 }
@@ -280,6 +308,7 @@ public actor DaemonManager {
         proc.standardOutput = stdout
         proc.standardError = stderr
 
+        logCapture.clearStderr()
         logCapture.attach(stdout: stdout, stderr: stderr)
 
         proc.terminationHandler = { [weak self] terminated in
@@ -329,9 +358,13 @@ public actor DaemonManager {
         if let firstCrash = firstCrashTime, now.timeIntervalSince(firstCrash) < 30 {
             firstCrashTime = nil
             deletePIDFile()
+            
+            let stderrStr = logCapture.lastStderr.trimmingCharacters(in: .whitespacesAndNewlines)
+            let errSuffix = stderrStr.isEmpty ? "" : "\n\nError output:\n\(stderrStr)"
+            
             transition(to: .error(
                 "Daemon crashed again within 30 seconds (exit \(exitCode)). " +
-                "Not restarting automatically."
+                "Not restarting automatically." + errSuffix
             ))
             return
         }
