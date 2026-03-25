@@ -229,14 +229,25 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     // MARK: - Menu Actions
 
     @objc private func syncAppleNotes() {
-        Task { await performAPIAction(path: "/api/v1/remember", body: ["source": "apple_notes"]) { [weak self] in
-            self?.lastSyncTime = Date()
-            self?.updateMenuStatusItems()
-        }}
+        guard case .running = currentState else { return }
+        Task {
+            let client = DaemonAPIClient.fromConfig(koreHome: koreHome)
+            let result = await client.syncAppleNotes()
+            if case .success = result {
+                DispatchQueue.main.async { [weak self] in
+                    self?.lastSyncTime = Date()
+                    self?.updateMenuStatusItems()
+                }
+            }
+        }
     }
 
     @objc private func triggerConsolidation() {
-        Task { await performAPIAction(path: "/api/v1/consolidate", body: [:]) }
+        guard case .running = currentState else { return }
+        Task {
+            let client = DaemonAPIClient.fromConfig(koreHome: koreHome)
+            _ = await client.triggerConsolidation()
+        }
     }
 
     @objc private func openSettings() {
@@ -248,39 +259,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     @objc private func quitApp() {
         // applicationWillTerminate calls terminateSync() for clean daemon shutdown.
         NSApp.terminate(nil)
-    }
-
-    // MARK: - API Calls
-
-    /// Sends a POST to `http://localhost:{port}{path}` with the configured Bearer token.
-    /// `onSuccess` is called on the main thread if the response is 2xx.
-    private func performAPIAction(
-        path: String,
-        body: [String: Any],
-        onSuccess: (() -> Void)? = nil
-    ) async {
-        guard case .running = currentState else { return }
-        guard let url = URL(string: "http://localhost:\(daemonPort)\(path)") else { return }
-
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.timeoutInterval = 10
-
-        if let token = (try? ConfigManager.readConfig(koreHome: koreHome))?.apiKey {
-            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-        }
-
-        request.httpBody = try? JSONSerialization.data(withJSONObject: body)
-
-        do {
-            let (_, response) = try await URLSession.shared.data(for: request)
-            if let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) {
-                DispatchQueue.main.async { onSuccess?() }
-            }
-        } catch {
-            // Silently fail — daemon may be busy or temporarily unavailable.
-        }
     }
 
     // MARK: - Panel Toggle (left-click)
