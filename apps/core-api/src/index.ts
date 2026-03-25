@@ -2,7 +2,7 @@ import { createApp, ensureDataDirectories } from "./app";
 import type { QmdHealthSummary } from "./app";
 import { QueueRepository } from "./queue";
 import { PluginRegistryRepository } from "./plugin-registry";
-import { resolveDataPath, resolveQueueDbPath, resolveQmdDbPath, ensureKoreDirectories } from "./config";
+import { resolveDataPath, resolveQueueDbPath, resolveQmdDbPath, ensureKoreDirectories, loadConfig } from "./config";
 import { initLogger, closeLogger } from "./logger";
 import { startWorker } from "./worker";
 import { startWatcher } from "./watcher";
@@ -23,6 +23,9 @@ import * as qmdClient from "@kore/qmd-client";
 import type { KorePlugin, PluginStartDeps } from "@kore/shared-types";
 
 initLogger();
+
+// Load config.json before any other initialization (env vars still take precedence)
+await loadConfig();
 
 const dataPath = resolveDataPath();
 

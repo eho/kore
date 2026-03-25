@@ -129,6 +129,47 @@ OLLAMA_MODEL=qwen2.5:7b
 | `CONSOLIDATION_COOLDOWN_DAYS` | `7` | Days before a memory can be re-consolidated |
 | `CONSOLIDATION_MAX_ATTEMPTS` | `3` | Max synthesis attempts before marking as failed |
 
+### Configuration File (`config.json`)
+
+As an alternative to `.env`, you can configure Kore using a `config.json` file in `$KORE_HOME` (default: `~/.kore/config.json`). This is the format the macOS app reads and writes.
+
+**Precedence order (highest wins):**
+1. Environment variables (explicit `VAR=value bun run start`)
+2. `.env` file (Bun auto-loads)
+3. `$KORE_HOME/config.json`
+
+**Example `~/.kore/config.json`:**
+
+```json
+{
+  "port": 3000,
+  "apiKey": "your-secret-key",
+  "llm": {
+    "provider": "gemini",
+    "geminiApiKey": "AIza...",
+    "geminiModel": "gemini-2.5-flash-lite",
+    "ollamaBaseUrl": "http://localhost:11434",
+    "ollamaModel": "qwen2.5:7b"
+  },
+  "appleNotes": {
+    "enabled": true,
+    "syncIntervalMs": 900000,
+    "includeHandwriting": false,
+    "folderAllowlist": [],
+    "folderBlocklist": []
+  },
+  "consolidation": {
+    "intervalMs": 1800000,
+    "cooldownDays": 7,
+    "maxAttempts": 3
+  },
+  "embedIntervalMs": 300000,
+  "mcpEnabled": true
+}
+```
+
+All fields are optional — missing fields fall back to the same defaults as the environment variables above. If `config.json` does not exist, Kore behaves exactly as before (no change to existing setups).
+
 ### 3. Start the API
 
 ```sh
