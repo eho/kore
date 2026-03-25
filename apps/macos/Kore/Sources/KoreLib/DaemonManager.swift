@@ -553,14 +553,20 @@ public actor DaemonManager {
     }
 
     private func performReconnectProbe(port: Int) async {
-        guard case .stopped = state else {
-            // No longer stopped — cancel ourselves.
+        // Continue probing from both .stopped and .error (externally-managed daemon
+        // that stopped responding may be restarted by the user at any time).
+        switch state {
+        case .stopped, .error: break
+        default:
             reconnectTask?.cancel()
             reconnectTask = nil
             return
         }
         let healthy = await checkHealthEndpoint(port: port)
-        guard case .stopped = state else { return }
+        switch state {
+        case .stopped, .error: break
+        default: return
+        }
         if healthy {
             reconnectTask?.cancel()
             reconnectTask = nil
@@ -573,10 +579,11 @@ public actor DaemonManager {
 
     private func transition(to newState: DaemonState) {
         state = newState
-        // Start reconnect probing when idle; cancel it when daemon becomes active.
-        if case .stopped = newState {
+        // Start reconnect probing when idle or errored; cancel when daemon is active.
+        switch newState {
+        case .stopped, .error:
             startReconnectProbing()
-        } else {
+        default:
             reconnectTask?.cancel()
             reconnectTask = nil
         }
