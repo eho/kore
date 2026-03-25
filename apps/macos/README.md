@@ -6,6 +6,49 @@ The app is a thin native shell (Swift/AppKit) hosting a React/TypeScript UI via 
 
 See the full [design document](../../docs/design/macos-app.md) for architecture details.
 
+## Running the app
+
+The app has two parts that must both be built before running:
+
+1. **React UI** — compiled by Vite to `dist/`, loaded by WKWebView at runtime
+2. **Swift binary** — the native shell that creates the menu bar icon and panel
+
+```sh
+# From apps/macos/ — build the React UI first
+bun run build
+
+# From apps/macos/Kore/ — build and launch the Swift app
+cd Kore
+swift build && .build/debug/Kore
+```
+
+A Kore icon appears in your menu bar. Left-click to open the panel, right-click for "Quit Kore".
+
+> **MAC-001 scope:** This is a scaffold POC. The panel shows a placeholder UI with a bridge test button — it does not connect to the Kore daemon yet. Daemon management (starting/stopping `bun run start`) is implemented in MAC-003.
+
+### Do I need to run the daemon separately?
+
+Not for this POC. In the final app the Swift shell will start/stop the daemon automatically as a child process. For now, if you want the daemon running alongside, start it separately:
+
+```sh
+# In a separate terminal
+bun run start   # from repo root — starts core-api on localhost:3000
+```
+
+### Iterating on the React UI
+
+For fast UI iteration without rebuilding Swift each time:
+
+```sh
+# Terminal 1 — Vite dev server (browser preview at http://localhost:5173)
+bun run dev
+
+# Terminal 2 — rebuild dist/ and the native app picks up changes on next open
+bun run build
+```
+
+The native app always loads from `dist/` (not the dev server), so run `bun run build` whenever you want to see UI changes in the actual panel.
+
 ## Structure
 
 ```
@@ -32,35 +75,13 @@ apps/macos/
 ## Prerequisites
 
 - macOS 13+
-- Bun (for building the React UI)
-- Xcode Command Line Tools (for `swift build`)
-
-## Build
-
-**React UI:**
-
-```sh
-bun install        # from repo root
-bun run build      # from apps/macos/ — produces dist/
-```
-
-**Swift app:**
-
-```sh
-cd apps/macos/Kore
-swift build
-```
-
-The compiled binary is at `Kore/.build/debug/Kore`. Run it directly to launch the menu bar app.
-
-## Development
-
-Run `bun run dev` from `apps/macos/` for Vite dev server with HMR (useful for iterating on the React UI in a browser). The Swift app loads `dist/index.html` from the file system, so run `bun run build` before testing the full native flow.
+- Bun (for the React UI)
+- Xcode Command Line Tools: `xcode-select --install`
 
 ## Key Design Decisions
 
 - **NSPanel** (not NSWindow) — required for appearing over fullscreen apps and on all Spaces
 - **WKWebView** — same rendering engine Tauri uses internally, but with full control over the native layer
 - **`base: "./"` in Vite** — ensures assets resolve correctly when loaded via `file://` in WKWebView
-- **`LSUIElement = true`** — app runs as menu bar only (no Dock icon)
+- **`LSUIElement = true`** — menu bar only, no Dock icon
 - **JS bridge** — `window.webkit.messageHandlers.bridge.postMessage()` for JS→Swift, `window.bridgeCallback()` for Swift→JS
