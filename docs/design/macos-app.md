@@ -183,6 +183,17 @@ Stopped → Starting → Running → Stopping → Stopped
 
 **Health polling:** While in `Running` state, the Swift layer polls `GET /api/v1/health` on `localhost:{port}` every 5 seconds. Three consecutive failures transition to `Error` state.
 
+### Environment PATH Resolution
+
+**Critical:** macOS GUI apps do not inherit the user's shell environment (`~/.zshrc`, `~/.bash_profile`). If the Swift app uses `Process` to run `which bun` or `bun run start`, it will fail when Bun is installed in user-specific paths like `~/.bun/bin/` rather than system paths like `/usr/local/bin/`.
+
+**Resolution strategy (ordered by preference):**
+1. **Login shell execution:** Spawn child processes through `/bin/zsh -l -c "bun run start"` to inherit the user's full PATH. This is the simplest approach and handles most cases.
+2. **Common path probing:** On startup, check common installation paths (`~/.bun/bin/bun`, `/opt/homebrew/bin/bun`, `/usr/local/bin/bun`) and cache the resolved path.
+3. **Settings fallback:** The General tab in Settings includes a "Bun executable path" field (auto-detected, manually overridable) for cases where neither approach finds Bun.
+
+The resolved Bun path is used for all `Process` invocations (`DaemonManager`, `checkBunInstalled`). The path is stored in memory (not persisted to config.json) and re-resolved on each app launch.
+
 ### Failure Scenarios
 
 | Scenario | Detection | Behavior |
@@ -619,6 +630,17 @@ The JS bridge replaces Tauri's `invoke()` system. It uses standard WebKit APIs:
 
 **TypeScript → Swift (requests):**
 ```typescript
+// Global bridge setup — injected once at app load
+window.__bridgeCallbacks = {};
+window.__bridgeResolve = (id: string, data: unknown) => {
+  window.__bridgeCallbacks[id]?.resolve(data);
+  delete window.__bridgeCallbacks[id];
+};
+window.__bridgeReject = (id: string, error: string) => {
+  window.__bridgeCallbacks[id]?.reject(new Error(error));
+  delete window.__bridgeCallbacks[id];
+};
+
 // In React, replaces: await invoke('read_config', { koreHome })
 function bridgeCall(method: string, args: Record<string, unknown>): Promise<unknown> {
   return new Promise((resolve, reject) => {
@@ -861,6 +883,7 @@ These questions were open during the brainstorm phase and are now resolved:
 
 3. **Swift Package Manager vs Xcode project**: Should the Swift shell use SPM (`Package.swift`) for simplicity, or a full Xcode project (`.xcodeproj`) for better IDE support, entitlements management, and build settings? SPM is simpler but may require manual setup for entitlements and Info.plist. A decision should be made in MAC-001.
 
+
 ---
 
 ## Context Required for Implementation
@@ -982,6 +1005,7 @@ This story validates that NSPanel + WKWebView can reliably show a panel over ful
 - [ ] Crash recovery: on child process termination with non-zero exit code, auto-restart once after 3s delay. If second attempt fails within 30s, stay in `Error` state
 - [ ] Startup adoption: on `DaemonManager.init()`, check for `$KORE_HOME/.daemon.pid` — if PID file exists and process is alive (`kill(pid, 0)`), adopt it; if process is dead, delete stale PID file
 - [ ] Daemon stdout/stderr captured via `Pipe` and written to `$KORE_HOME/logs/daemon.log` (simple append, no rotation in MVP)
+- [ ] Daemon startup errors (e.g. missing modules after `git pull` without `bun install`) are surfaced in the tray panel UI via the `Error(String)` state, showing stderr output so the user can diagnose and fix
 - [ ] All functions registered in `BridgeHandler.swift` for JS bridge access
 - [ ] Typecheck/lint passes (Swift)
 - [ ] Write unit tests covering: start writes PID file, stop cleans up PID file, crash triggers single auto-restart, double crash within 30s does not restart, stale PID file on startup is cleaned up
