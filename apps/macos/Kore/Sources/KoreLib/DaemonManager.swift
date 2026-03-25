@@ -146,6 +146,9 @@ public actor DaemonManager {
     private var healthPollTask: Task<Void, Never>?
     private var consecutiveHealthFailures = 0
 
+    /// Polls the health endpoint while stopped, waiting for an externally-started daemon.
+    private var reconnectTask: Task<Void, Never>?
+
     /// Timestamp of the first unexpected crash in the current restart window.
     private var firstCrashTime: Date?
 
@@ -222,6 +225,10 @@ public actor DaemonManager {
         if healthy {
             transition(to: .running)
             startHealthPolling()
+        } else {
+            // Daemon not found yet — start background probing so the icon
+            // updates automatically when the daemon is started later.
+            startReconnectProbing()
         }
     }
 
@@ -526,10 +533,53 @@ public actor DaemonManager {
         }
     }
 
+    // MARK: - Private: Reconnect Probing
+
+    /// Starts a loop that probes the health endpoint every 10 seconds while the
+    /// daemon is stopped, so a daemon started after the app launches is detected.
+    private func startReconnectProbing() {
+        guard !_disableHealthPolling else { return }
+
+        reconnectTask?.cancel()
+        let port = lastPort
+
+        reconnectTask = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 10_000_000_000)  // 10 seconds
+                guard !Task.isCancelled, let self else { break }
+                await self.performReconnectProbe(port: port)
+            }
+        }
+    }
+
+    private func performReconnectProbe(port: Int) async {
+        guard case .stopped = state else {
+            // No longer stopped — cancel ourselves.
+            reconnectTask?.cancel()
+            reconnectTask = nil
+            return
+        }
+        let healthy = await checkHealthEndpoint(port: port)
+        guard case .stopped = state else { return }
+        if healthy {
+            reconnectTask?.cancel()
+            reconnectTask = nil
+            transition(to: .running)
+            startHealthPolling()
+        }
+    }
+
     // MARK: - Private: State Transitions
 
     private func transition(to newState: DaemonState) {
         state = newState
+        // Start reconnect probing when idle; cancel it when daemon becomes active.
+        if case .stopped = newState {
+            startReconnectProbing()
+        } else {
+            reconnectTask?.cancel()
+            reconnectTask = nil
+        }
         let callback = onStateChange
         DispatchQueue.main.async {
             callback?(newState)
