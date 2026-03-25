@@ -50,6 +50,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func handleStatusItemClick(_ sender: NSStatusBarButton) {
         let event = NSApp.currentEvent
+        let typeDesc = event.map { "\($0.type)" } ?? "nil"
+        print("[AppDelegate] Status item clicked, event type: \(typeDesc)")
 
         if event?.type == .rightMouseUp {
             showContextMenu()
@@ -78,14 +80,20 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     // MARK: - Panel Toggle (left-click)
 
     private func togglePanel() {
-        guard let panelManager = panelManager else { return }
+        guard let panelManager = panelManager else {
+            print("[AppDelegate] togglePanel: panelManager is nil")
+            return
+        }
 
+        print("[AppDelegate] togglePanel: isVisible=\(panelManager.isVisible)")
         if panelManager.isVisible {
             panelManager.hidePanel()
         } else {
-            if let button = statusItem?.button {
-                panelManager.showPanel(relativeTo: button)
+            guard let button = statusItem?.button else {
+                print("[AppDelegate] togglePanel: statusItem button is nil")
+                return
             }
+            panelManager.showPanel(relativeTo: button)
         }
     }
 }

@@ -35,8 +35,10 @@ class PanelManager: NSObject {
         panel.isOpaque = false
         panel.backgroundColor = .clear
 
-        // Auto-hide when focus is lost
-        panel.hidesOnDeactivate = true
+        // Do NOT set hidesOnDeactivate — in .accessory mode the app is never
+        // "active", so the panel would immediately hide after orderFrontRegardless().
+        // We handle hiding manually via NSEvent global monitor instead.
+        panel.hidesOnDeactivate = false
         panel.becomesKeyOnlyIfNeeded = true
 
         // Setup WKWebView
@@ -48,14 +50,11 @@ class PanelManager: NSObject {
 
         let config = WKWebViewConfiguration()
         config.userContentController = userContentController
-
-        // Allow localhost connections for daemon API calls
         config.preferences.setValue(true, forKey: "allowFileAccessFromFileURLs")
 
         let webView = WKWebView(frame: NSRect(x: 0, y: 0, width: panelWidth, height: panelHeight), configuration: config)
         webView.setValue(false, forKey: "drawsBackground")
 
-        // Store reference so BridgeHandler can call back into JS
         bridgeHandler.webView = webView
 
         panel.contentView = webView
@@ -64,6 +63,7 @@ class PanelManager: NSObject {
         self.webView = webView
         self.panel = panel
 
+        print("[PanelManager] Panel created: \(panel.frame)")
         loadWebContent()
     }
 
@@ -72,29 +72,28 @@ class PanelManager: NSObject {
     private func loadWebContent() {
         // Look for index.html in the app bundle's Resources
         if let bundleURL = Bundle.module.url(forResource: "Resources/index", withExtension: "html") {
+            print("[PanelManager] Loading from bundle: \(bundleURL.path)")
             webView?.loadFileURL(bundleURL, allowingReadAccessTo: bundleURL.deletingLastPathComponent())
             return
         }
 
         // Fallback: load dist/index.html relative to the Swift package root (for development).
-        // #file is Sources/Kore/PanelManager.swift; 3× up = apps/macos/Kore/; 1× ../  = apps/macos/
-        let devPaths = [
-            URL(fileURLWithPath: #file)
-                .deletingLastPathComponent()  // Sources/Kore/
-                .deletingLastPathComponent()  // Sources/
-                .deletingLastPathComponent()  // Kore/
-                .deletingLastPathComponent()  // apps/macos/  (one more needed)
-                .appendingPathComponent("dist/index.html"),
-        ]
+        // #file is Sources/Kore/PanelManager.swift; 4× up = apps/macos/
+        let distURL = URL(fileURLWithPath: #file)
+            .deletingLastPathComponent()  // Sources/Kore/
+            .deletingLastPathComponent()  // Sources/
+            .deletingLastPathComponent()  // Kore/
+            .deletingLastPathComponent()  // apps/macos/
+            .appendingPathComponent("dist/index.html")
 
-        for devURL in devPaths {
-            if FileManager.default.fileExists(atPath: devURL.path) {
-                webView?.loadFileURL(devURL, allowingReadAccessTo: devURL.deletingLastPathComponent())
-                return
-            }
+        print("[PanelManager] Checking dev path: \(distURL.path)")
+        if FileManager.default.fileExists(atPath: distURL.path) {
+            print("[PanelManager] Loading from dist/")
+            webView?.loadFileURL(distURL, allowingReadAccessTo: distURL.deletingLastPathComponent())
+            return
         }
 
-        // Final fallback: inline placeholder HTML
+        print("[PanelManager] dist/ not found — using inline placeholder HTML")
         let placeholderHTML = """
         <!DOCTYPE html>
         <html>
@@ -151,9 +150,14 @@ class PanelManager: NSObject {
     // MARK: - Show / Hide
 
     func showPanel(relativeTo button: NSStatusBarButton) {
-        guard let panel = panel else { return }
+        guard let panel = panel else {
+            print("[PanelManager] showPanel called but panel is nil")
+            return
+        }
 
         positionPanel(relativeTo: button)
+        print("[PanelManager] Showing panel at: \(panel.frame)")
+
         panel.alphaValue = 0
         panel.orderFrontRegardless()
 
@@ -161,10 +165,16 @@ class PanelManager: NSObject {
             context.duration = 0.15
             panel.animator().alphaValue = 1
         }
+
+        // Hide panel when user clicks anywhere outside it
+        installDismissMonitor()
     }
 
     func hidePanel() {
         guard let panel = panel else { return }
+        print("[PanelManager] Hiding panel")
+
+        removeDismissMonitor()
 
         NSAnimationContext.runAnimationGroup({ context in
             context.duration = 0.1
@@ -175,15 +185,43 @@ class PanelManager: NSObject {
         })
     }
 
+    // MARK: - Outside-click dismiss
+
+    private var dismissMonitor: Any?
+
+    private func installDismissMonitor() {
+        removeDismissMonitor()
+        dismissMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] _ in
+            self?.hidePanel()
+        }
+    }
+
+    private func removeDismissMonitor() {
+        if let monitor = dismissMonitor {
+            NSEvent.removeMonitor(monitor)
+            dismissMonitor = nil
+        }
+    }
+
     // MARK: - Positioning
 
     private func positionPanel(relativeTo button: NSStatusBarButton) {
-        guard let panel = panel,
-              let buttonWindow = button.window else { return }
+        guard let panel = panel else { return }
 
         // Get the button's frame in screen coordinates
+        guard let buttonWindow = button.window else {
+            // Status bar button has no window — fall back to mouse position
+            let mouse = NSEvent.mouseLocation
+            print("[PanelManager] button.window is nil — positioning near mouse: \(mouse)")
+            let x = mouse.x - panel.frame.width / 2
+            let y = mouse.y - panel.frame.height - 4
+            panel.setFrameOrigin(NSPoint(x: x, y: y))
+            return
+        }
+
         let buttonFrameInWindow = button.convert(button.bounds, to: nil)
         let buttonFrameOnScreen = buttonWindow.convertToScreen(buttonFrameInWindow)
+        print("[PanelManager] Button frame on screen: \(buttonFrameOnScreen)")
 
         // Find the screen containing the tray icon (handles multi-monitor correctly)
         let targetScreen = NSScreen.screens.first { screen in
@@ -194,15 +232,14 @@ class PanelManager: NSObject {
         let panelHeight = panel.frame.height
         let margin: CGFloat = 4
 
-        // Position panel below the tray icon, centered horizontally on it
         var x = buttonFrameOnScreen.midX - panelWidth / 2
         let y = buttonFrameOnScreen.minY - panelHeight - margin
 
-        // Keep panel within screen bounds
         let screenLeft = targetScreen.visibleFrame.minX
         let screenRight = targetScreen.visibleFrame.maxX
         x = max(screenLeft + margin, min(x, screenRight - panelWidth - margin))
 
+        print("[PanelManager] Positioning panel at (\(x), \(y)) on screen \(targetScreen.localizedName)")
         panel.setFrameOrigin(NSPoint(x: x, y: y))
     }
 }
@@ -211,8 +248,8 @@ class PanelManager: NSObject {
 
 extension PanelManager: NSWindowDelegate {
     func windowDidResignKey(_ notification: Notification) {
-        // Panel auto-hides when it loses key status (hidesOnDeactivate handles most cases,
-        // but this ensures consistent behavior)
-        hidePanel()
+        print("[PanelManager] windowDidResignKey fired")
+        // Not hiding here — we use the global mouse monitor instead.
+        // (In .accessory mode, resignKey fires spuriously and would hide the panel immediately.)
     }
 }
