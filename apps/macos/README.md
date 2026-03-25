@@ -22,18 +22,30 @@ cd Kore
 swift build && .build/debug/Kore
 ```
 
-A Kore icon appears in your menu bar. Left-click to open the panel, right-click for "Quit Kore".
+A Kore icon appears in your menu bar:
 
-> **Current scope (MAC-001 + MAC-002):** The panel shows a placeholder UI with a bridge test button. The Swift layer includes `ConfigManager` (read/write `config.json`) and `Permissions` (Notes TCC check, Bun/Ollama detection) — all callable from the React UI via the JS bridge. Daemon management (starting/stopping `bun run start`) is implemented in MAC-003.
+- **Left-click** — toggle the WebView panel
+- **Right-click** — context menu with daemon status, Sync Apple Notes, Trigger Consolidation, Settings, and Quit
+
+The tray icon reflects daemon state: filled circle (running), empty circle (stopped), ellipsis (starting/stopping), exclamation (error).
+
+> **Current scope (MAC-001 through MAC-004):** The Swift layer includes `ConfigManager` (read/write `config.json`, `.env` parsing), `Permissions` (Notes TCC check, Bun/Ollama detection), `DaemonManager` (process lifecycle, health polling, crash recovery), and `DaemonAPIClient` (HTTP client for daemon API). The React UI in the WebView panel is still a placeholder.
 
 ### Do I need to run the daemon separately?
 
-Not for this POC. In the final app the Swift shell will start/stop the daemon automatically as a child process. For now, if you want the daemon running alongside, start it separately:
+The app can manage the daemon as a child process (`DaemonManager.start()`), or it can detect an externally-started daemon via health-endpoint probing. If you start the daemon separately, the app will detect it within ~10 seconds:
 
 ```sh
 # In a separate terminal
 bun run start   # from repo root — starts core-api on localhost:3000
 ```
+
+### KORE_HOME resolution
+
+The app resolves `KORE_HOME` in this order:
+1. `KORE_HOME` environment variable (must be **exported**)
+2. `KORE_HOME=…` in a `.env` file (walks up from cwd, max 10 levels)
+3. Fallback: `~/.kore`
 
 ### Iterating on the React UI
 
@@ -58,16 +70,20 @@ apps/macos/
 │   ├── Sources/
 │   │   ├── KoreLib/               # Shared library target (testable)
 │   │   │   ├── BridgeHandler.swift    # JS ↔ Swift bridge (WKScriptMessageHandler)
-│   │   │   ├── ConfigManager.swift    # KoreConfig Codable struct + read/write helpers
+│   │   │   ├── ConfigManager.swift    # KoreConfig Codable struct + read/write + .env parsing
+│   │   │   ├── DaemonAPIClient.swift  # HTTP client for daemon API (sync, consolidate, health)
+│   │   │   ├── DaemonManager.swift    # Daemon lifecycle actor (start/stop, health poll, crash recovery)
 │   │   │   ├── PanelManager.swift     # NSPanel + WKWebView setup, positioning
 │   │   │   └── Permissions.swift      # Notes TCC check, Bun/Ollama detection
 │   │   └── Kore/                  # Executable entry point (imports KoreLib)
-│   │       ├── KoreApp.swift          # @main, NSStatusItem, click handling
+│   │       ├── KoreApp.swift          # @main, NSStatusItem, tray menu, daemon callbacks
 │   │       └── Resources/
 │   │           ├── Info.plist         # Bundle config, Apple Notes usage description
 │   │           └── Kore.entitlements  # File access, bookmarks, JIT permissions
 │   └── Tests/KoreTests/
-│       └── ConfigManagerTests.swift   # Unit tests for ConfigManager
+│       ├── ConfigManagerTests.swift   # Unit tests for ConfigManager + .env parsing
+│       ├── DaemonAPIClientTests.swift # Unit + integration tests for DaemonAPIClient
+│       └── DaemonManagerTests.swift   # Unit tests for DaemonManager lifecycle
 ├── src/                           # React/TypeScript UI
 │   ├── App.tsx                    # Panel UI component
 │   ├── main.tsx                   # React entry point
@@ -81,12 +97,14 @@ apps/macos/
 ## Testing
 
 ```sh
-# Swift unit tests (ConfigManager)
-cd Kore && swift test
+# Swift unit tests (ConfigManager, DaemonManager, DaemonAPIClient)
+cd apps/macos/Kore && swift test
 
 # TypeScript tests are run from repo root
 bun test apps/core-api/src/config.test.ts
 ```
+
+Integration tests in `DaemonAPIClientTests.swift` require a running Kore server on port 3000 — they auto-skip via `XCTSkipUnless` when the server is unreachable.
 
 ## Prerequisites
 

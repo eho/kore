@@ -207,8 +207,8 @@ final class DaemonManagerTests: XCTestCase {
         }
 
         XCTAssertTrue(
-            msg.contains("30 seconds"),
-            "Error message should mention the 30-second crash window. Got: \(msg)"
+            msg.contains("30s"),
+            "Error message should mention the 30s crash window. Got: \(msg)"
         )
         XCTAssertEqual(spawnCount, 2, "Should have spawned exactly twice before giving up")
 

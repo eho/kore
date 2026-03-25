@@ -41,6 +41,16 @@ public enum DaemonState: Equatable, Sendable {
         return nil
     }
 
+    /// SF Symbol name for the menu bar icon.
+    public var symbolName: String {
+        switch self {
+        case .running:              return "circle.fill"
+        case .stopped:              return "circle"
+        case .starting, .stopping:  return "ellipsis.circle"
+        case .error:                return "exclamationmark.circle"
+        }
+    }
+
     /// `true` when the daemon is idle (`.stopped` or `.error`) and eligible
     /// for reconnect probing. Centralizes the state guard used by the
     /// reconnect loop and probe logic.
@@ -142,6 +152,25 @@ public struct DaemonHealthInfo: Sendable {
 /// All public methods are `async` and must be called with `await`. For synchronous
 /// termination at app shutdown, use `terminateSync()`.
 public actor DaemonManager {
+
+    // MARK: - Constants
+
+    /// Interval between health endpoint polls while the daemon is running.
+    private static let healthPollInterval: UInt64 = 5_000_000_000      // 5 seconds
+
+    /// Interval between reconnect probes while the daemon is idle.
+    private static let reconnectInterval: UInt64 = 10_000_000_000      // 10 seconds
+
+    /// Delay before auto-restart after an unexpected crash.
+    private static let restartDelay: UInt64 = 3_000_000_000            // 3 seconds
+
+    /// If the daemon crashes again within this window after a restart,
+    /// auto-restart is abandoned to avoid infinite loops.
+    private static let crashWindowSeconds: TimeInterval = 30
+
+    /// Number of consecutive health check failures before declaring the daemon
+    /// unresponsive and triggering recovery.
+    private static let maxHealthFailures = 3
 
     // MARK: - State
 
@@ -424,9 +453,9 @@ public actor DaemonManager {
         let exitCode = proc.terminationStatus
         let now = Date()
 
-        // Double-crash guard: if the daemon crashed again within 30 seconds of the
-        // first restart attempt, give up — no infinite restart loops.
-        if let firstCrash = firstCrashTime, now.timeIntervalSince(firstCrash) < 30 {
+        // Double-crash guard: if the daemon crashed again within the crash window
+        // of the first restart attempt, give up — no infinite restart loops.
+        if let firstCrash = firstCrashTime, now.timeIntervalSince(firstCrash) < Self.crashWindowSeconds {
             firstCrashTime = nil
             deletePIDFile()
             
@@ -434,7 +463,7 @@ public actor DaemonManager {
             let errSuffix = stderrStr.isEmpty ? "" : "\n\nError output:\n\(stderrStr)"
             
             transition(to: .error(
-                "Daemon crashed again within 30 seconds (exit \(exitCode)). " +
+                "Daemon crashed again within \(Int(Self.crashWindowSeconds))s (exit \(exitCode)). " +
                 "Not restarting automatically." + errSuffix
             ))
             return
@@ -449,7 +478,7 @@ public actor DaemonManager {
         transition(to: .starting)
 
         // Wait 3 seconds before the single auto-restart attempt.
-        try? await Task.sleep(nanoseconds: 3_000_000_000)
+        try? await Task.sleep(nanoseconds: Self.restartDelay)
 
         guard let clonePath = lastClonePath else {
             transition(to: .error("Cannot auto-restart: clone path is missing."))
@@ -468,7 +497,7 @@ public actor DaemonManager {
         consecutiveHealthFailures = 0
 
         let port = self.lastPort
-        let interval = _testPollIntervalNs ?? 5_000_000_000  // 5 seconds
+        let interval = _testPollIntervalNs ?? Self.healthPollInterval
 
         healthPollTask = Task { [weak self] in
             while !Task.isCancelled {
@@ -492,7 +521,7 @@ public actor DaemonManager {
             DispatchQueue.main.async { cb?(info) }
         } else {
             consecutiveHealthFailures += 1
-            if consecutiveHealthFailures >= 3 {
+            if consecutiveHealthFailures >= Self.maxHealthFailures {
                 await handleHealthFailure()
             }
         }
@@ -571,7 +600,7 @@ public actor DaemonManager {
 
         reconnectTask?.cancel()
         let port = lastPort
-        let interval = _testPollIntervalNs ?? 10_000_000_000  // 10 seconds
+        let interval = _testPollIntervalNs ?? Self.reconnectInterval
 
         reconnectTask = Task { [weak self] in
             while !Task.isCancelled {

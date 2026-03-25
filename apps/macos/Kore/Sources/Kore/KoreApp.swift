@@ -32,12 +32,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var menuSyncTimeItem: NSMenuItem?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        print("[Kore] KORE_HOME=\(koreHome)")
-
         // Seed port from config so the menu shows the right value immediately.
         let config = (try? ConfigManager.readConfig(koreHome: koreHome)) ?? .defaults
         daemonPort = config.port ?? 3000
-        print("[Kore] Config: port=\(daemonPort), apiKey=\(config.apiKey == nil ? "nil" : "***\(config.apiKey!.suffix(4))")")
+        print("[Kore] Starting — home=\(koreHome) port=\(daemonPort)")
 
         let dm = DaemonManager(koreHome: koreHome)
         daemonManager = dm
@@ -97,25 +95,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         updateTrayIcon(for: currentState)
     }
 
-    /// Updates the status-bar icon to reflect the current daemon state.
-    ///
-    /// Icon semantics:
-    ///   - `circle.fill`          — running (filled = active)
-    ///   - `circle`               — stopped (hollow = inactive)
-    ///   - `ellipsis.circle`      — starting / stopping (transitional)
-    ///   - `exclamationmark.circle` — error
     private func updateTrayIcon(for state: DaemonState) {
         guard let button = statusItem?.button else { return }
-
-        let symbolName: String
-        switch state {
-        case .running:           symbolName = "circle.fill"
-        case .stopped:           symbolName = "circle"
-        case .starting, .stopping: symbolName = "ellipsis.circle"
-        case .error:             symbolName = "exclamationmark.circle"
-        }
-
-        if let image = NSImage(systemSymbolName: symbolName, accessibilityDescription: "Kore") {
+        if let image = NSImage(systemSymbolName: state.symbolName, accessibilityDescription: "Kore") {
             image.isTemplate = true
             button.image = image
         } else {
