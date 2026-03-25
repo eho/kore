@@ -8,6 +8,9 @@ import Foundation
 public class BridgeHandler: NSObject, WKScriptMessageHandler {
     public weak var webView: WKWebView?
 
+    /// The daemon manager to use for daemon control messages. Set by the app delegate.
+    public var daemonManager: DaemonManager?
+
     public override init() {
         super.init()
     }
@@ -68,6 +71,18 @@ public class BridgeHandler: NSObject, WKScriptMessageHandler {
                 }
             }
 
+        case "startDaemon":
+            handleStartDaemon(payload: payload)
+
+        case "stopDaemon":
+            handleStopDaemon()
+
+        case "restartDaemon":
+            handleRestartDaemon()
+
+        case "getDaemonStatus":
+            handleGetDaemonStatus()
+
         default:
             sendToJS(["type": "error", "message": "Unknown message type: \(type)"])
         }
@@ -103,6 +118,66 @@ public class BridgeHandler: NSObject, WKScriptMessageHandler {
         } catch {
             sendToJS(["type": "writeConfig", "success": false, "error": error.localizedDescription])
         }
+    }
+
+    // MARK: - Daemon Handlers
+
+    private func handleStartDaemon(payload: [String: Any]) {
+        guard let dm = daemonManager else {
+            sendToJS(["type": "daemonStatus", "status": "error", "error": "DaemonManager not available."])
+            return
+        }
+        let clonePath = payload["clonePath"] as? String ?? "~/dev/kore"
+        let port = payload["port"] as? Int ?? 3000
+        Task {
+            await dm.startDaemon(clonePath: clonePath, port: port)
+            let state = await dm.daemonStatus()
+            self.sendDaemonStatus(state)
+        }
+    }
+
+    private func handleStopDaemon() {
+        guard let dm = daemonManager else {
+            sendToJS(["type": "daemonStatus", "status": "error", "error": "DaemonManager not available."])
+            return
+        }
+        Task {
+            await dm.stopDaemon()
+            let state = await dm.daemonStatus()
+            self.sendDaemonStatus(state)
+        }
+    }
+
+    private func handleRestartDaemon() {
+        guard let dm = daemonManager else {
+            sendToJS(["type": "daemonStatus", "status": "error", "error": "DaemonManager not available."])
+            return
+        }
+        Task {
+            await dm.restartDaemon()
+            let state = await dm.daemonStatus()
+            self.sendDaemonStatus(state)
+        }
+    }
+
+    private func handleGetDaemonStatus() {
+        guard let dm = daemonManager else {
+            sendToJS(["type": "daemonStatus", "status": "stopped"])
+            return
+        }
+        Task {
+            let state = await dm.daemonStatus()
+            self.sendDaemonStatus(state)
+        }
+    }
+
+    /// Pushes the current daemon state to the JS layer.
+    public func sendDaemonStatus(_ state: DaemonState) {
+        var msg: [String: Any] = ["type": "daemonStatus", "status": state.statusKey]
+        if let errMsg = state.errorMessage {
+            msg["error"] = errMsg
+        }
+        sendToJS(msg)
     }
 
     // MARK: - Swift → JS
