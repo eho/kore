@@ -130,6 +130,20 @@ public struct ConfigManager {
         return URL(fileURLWithPath: expanded).appendingPathComponent(configFileName)
     }
 
+    /// Resolves `KORE_HOME` by checking, in order:
+    /// 1. The `KORE_HOME` environment variable (if exported)
+    /// 2. `KORE_HOME=…` in a `.env` file found by walking up from `cwd`
+    /// 3. The fallback default `~/.kore`
+    public static func resolveKoreHome() -> String {
+        if let env = ProcessInfo.processInfo.environment["KORE_HOME"], !env.isEmpty {
+            return env
+        }
+        if let fromDotEnv = readDotEnvValue(key: "KORE_HOME") {
+            return fromDotEnv
+        }
+        return "~/.kore"
+    }
+
     /// Reads and parses config.json from `koreHome`. Returns defaults if file is missing.
     /// Throws `ConfigError.invalidJSON` if the file exists but cannot be parsed.
     public static func readConfig(koreHome: String) throws -> KoreConfig {
@@ -166,5 +180,54 @@ public struct ConfigManager {
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         let data = try encoder.encode(config)
         try data.write(to: url, options: .atomic)
+    }
+
+    // MARK: - .env File Support
+
+    /// Reads a value from a `.env` file by walking up from the current working
+    /// directory. Stops at the first `.env` that contains the key. Returns `nil`
+    /// if no `.env` is found or the key is absent.
+    ///
+    /// Only plain `KEY=VALUE` lines are supported (no `export`, no interpolation,
+    /// no multiline). This matches Bun's `.env` auto-loading behavior for simple
+    /// cases without introducing a full dotenv parser.
+    public static func readDotEnvValue(key: String) -> String? {
+        let fm = FileManager.default
+        var dir = URL(fileURLWithPath: fm.currentDirectoryPath)
+
+        // Walk up at most 10 levels to avoid scanning the entire filesystem.
+        for _ in 0..<10 {
+            let envFile = dir.appendingPathComponent(".env")
+            if let value = parseDotEnv(at: envFile.path, key: key) {
+                return value
+            }
+            let parent = dir.deletingLastPathComponent()
+            if parent.path == dir.path { break }  // hit filesystem root
+            dir = parent
+        }
+        return nil
+    }
+
+    /// Parses a single `KEY=VALUE` from a `.env` file. Returns `nil` if the
+    /// file doesn't exist or the key isn't present.
+    static func parseDotEnv(at path: String, key: String) -> String? {
+        guard let contents = try? String(contentsOfFile: path, encoding: .utf8) else {
+            return nil
+        }
+        let prefix = "\(key)="
+        for line in contents.components(separatedBy: .newlines) {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            if trimmed.hasPrefix("#") || trimmed.isEmpty { continue }
+            if trimmed.hasPrefix(prefix) {
+                var value = String(trimmed.dropFirst(prefix.count))
+                // Strip optional surrounding quotes.
+                if (value.hasPrefix("\"") && value.hasSuffix("\"")) ||
+                   (value.hasPrefix("'") && value.hasSuffix("'")) {
+                    value = String(value.dropFirst().dropLast())
+                }
+                return value
+            }
+        }
+        return nil
     }
 }

@@ -20,7 +20,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     var panelManager: PanelManager?
     var daemonManager: DaemonManager?
 
-    private let koreHome: String = ProcessInfo.processInfo.environment["KORE_HOME"] ?? "~/.kore"
+    private let koreHome: String = ConfigManager.resolveKoreHome()
 
     // State tracking — main-thread only
     private var currentState: DaemonState = .stopped
@@ -32,8 +32,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var menuSyncTimeItem: NSMenuItem?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        print("[Kore] KORE_HOME=\(koreHome)")
+
         // Seed port from config so the menu shows the right value immediately.
-        daemonPort = (try? ConfigManager.readConfig(koreHome: koreHome))?.port ?? 3000
+        let config = (try? ConfigManager.readConfig(koreHome: koreHome)) ?? .defaults
+        daemonPort = config.port ?? 3000
+        print("[Kore] Config: port=\(daemonPort), apiKey=\(config.apiKey == nil ? "nil" : "***\(config.apiKey!.suffix(4))")")
 
         let dm = DaemonManager(koreHome: koreHome)
         daemonManager = dm
