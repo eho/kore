@@ -34,9 +34,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         guard let button = statusItem?.button else { return }
 
-        // Use a system symbol as a template image (scales correctly in menu bar)
         if let image = NSImage(systemSymbolName: "brain", accessibilityDescription: "Kore") {
-            image.isTemplate = true // Renders correctly in light/dark mode
+            image.isTemplate = true
             button.image = image
         } else {
             button.title = "K"
@@ -50,9 +49,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func handleStatusItemClick(_ sender: NSStatusBarButton) {
         let event = NSApp.currentEvent
-        let typeDesc = event.map { "\($0.type)" } ?? "nil"
-        print("[AppDelegate] Status item clicked, event type: \(typeDesc)")
-
         if event?.type == .rightMouseUp {
             showContextMenu()
         } else {
@@ -67,7 +63,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(NSMenuItem(title: "Quit Kore", action: #selector(quitApp), keyEquivalent: "q"))
         statusItem?.menu = menu
         statusItem?.button?.performClick(nil)
-        // Reset menu so left-click doesn't open it next time
         DispatchQueue.main.async { [weak self] in
             self?.statusItem?.menu = nil
         }
@@ -80,19 +75,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     // MARK: - Panel Toggle (left-click)
 
     private func togglePanel() {
-        guard let panelManager = panelManager else {
-            print("[AppDelegate] togglePanel: panelManager is nil")
-            return
-        }
+        guard let panelManager = panelManager else { return }
 
-        print("[AppDelegate] togglePanel: isVisible=\(panelManager.isVisible)")
         if panelManager.isVisible {
             panelManager.hidePanel()
         } else {
-            guard let button = statusItem?.button else {
-                print("[AppDelegate] togglePanel: statusItem button is nil")
-                return
-            }
+            guard let button = statusItem?.button else { return }
             panelManager.showPanel(relativeTo: button)
         }
     }

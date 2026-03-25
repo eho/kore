@@ -63,16 +63,14 @@ class PanelManager: NSObject {
         self.webView = webView
         self.panel = panel
 
-        print("[PanelManager] Panel created: \(panel.frame)")
         loadWebContent()
     }
 
     // MARK: - Web Content Loading
 
     private func loadWebContent() {
-        // Look for index.html in the app bundle's Resources
+        // Look for index.html in the app bundle's Resources (packaged .app)
         if let bundleURL = Bundle.module.url(forResource: "Resources/index", withExtension: "html") {
-            print("[PanelManager] Loading from bundle: \(bundleURL.path)")
             webView?.loadFileURL(bundleURL, allowingReadAccessTo: bundleURL.deletingLastPathComponent())
             return
         }
@@ -86,14 +84,12 @@ class PanelManager: NSObject {
             .deletingLastPathComponent()  // apps/macos/
             .appendingPathComponent("dist/index.html")
 
-        print("[PanelManager] Checking dev path: \(distURL.path)")
         if FileManager.default.fileExists(atPath: distURL.path) {
-            print("[PanelManager] Loading from dist/")
             webView?.loadFileURL(distURL, allowingReadAccessTo: distURL.deletingLastPathComponent())
             return
         }
 
-        print("[PanelManager] dist/ not found — using inline placeholder HTML")
+        // Final fallback: inline placeholder HTML
         let placeholderHTML = """
         <!DOCTYPE html>
         <html>
@@ -150,13 +146,9 @@ class PanelManager: NSObject {
     // MARK: - Show / Hide
 
     func showPanel(relativeTo button: NSStatusBarButton) {
-        guard let panel = panel else {
-            print("[PanelManager] showPanel called but panel is nil")
-            return
-        }
+        guard let panel = panel else { return }
 
         positionPanel(relativeTo: button)
-        print("[PanelManager] Showing panel at: \(panel.frame)")
 
         panel.alphaValue = 0
         panel.orderFrontRegardless()
@@ -166,13 +158,11 @@ class PanelManager: NSObject {
             panel.animator().alphaValue = 1
         }
 
-        // Hide panel when user clicks anywhere outside it
         installDismissMonitor()
     }
 
     func hidePanel() {
         guard let panel = panel else { return }
-        print("[PanelManager] Hiding panel")
 
         removeDismissMonitor()
 
@@ -208,11 +198,9 @@ class PanelManager: NSObject {
     private func positionPanel(relativeTo button: NSStatusBarButton) {
         guard let panel = panel else { return }
 
-        // Get the button's frame in screen coordinates
         guard let buttonWindow = button.window else {
-            // Status bar button has no window — fall back to mouse position
+            // Fallback: position near the mouse cursor
             let mouse = NSEvent.mouseLocation
-            print("[PanelManager] button.window is nil — positioning near mouse: \(mouse)")
             let x = mouse.x - panel.frame.width / 2
             let y = mouse.y - panel.frame.height - 4
             panel.setFrameOrigin(NSPoint(x: x, y: y))
@@ -221,7 +209,6 @@ class PanelManager: NSObject {
 
         let buttonFrameInWindow = button.convert(button.bounds, to: nil)
         let buttonFrameOnScreen = buttonWindow.convertToScreen(buttonFrameInWindow)
-        print("[PanelManager] Button frame on screen: \(buttonFrameOnScreen)")
 
         // Find the screen containing the tray icon (handles multi-monitor correctly)
         let targetScreen = NSScreen.screens.first { screen in
@@ -239,7 +226,6 @@ class PanelManager: NSObject {
         let screenRight = targetScreen.visibleFrame.maxX
         x = max(screenLeft + margin, min(x, screenRight - panelWidth - margin))
 
-        print("[PanelManager] Positioning panel at (\(x), \(y)) on screen \(targetScreen.localizedName)")
         panel.setFrameOrigin(NSPoint(x: x, y: y))
     }
 }
@@ -248,8 +234,7 @@ class PanelManager: NSObject {
 
 extension PanelManager: NSWindowDelegate {
     func windowDidResignKey(_ notification: Notification) {
-        print("[PanelManager] windowDidResignKey fired")
-        // Not hiding here — we use the global mouse monitor instead.
-        // (In .accessory mode, resignKey fires spuriously and would hide the panel immediately.)
+        // Panel is non-activating so this fires rarely, but hide if it does
+        hidePanel()
     }
 }
