@@ -69,6 +69,7 @@ kore/
 ├── apps/
 │   ├── core-api/          # REST API server + extraction worker + file watcher + consolidation loop
 │   ├── cli/               # Command-line interface for Kore
+│   ├── macos/             # Swift + WebView hybrid macOS app
 │   └── mcp-server/        # Stdio-to-HTTP proxy for Claude Desktop, Claude Code, OpenClaw, etc.
 ├── packages/
 │   ├── shared-types/          # Zod schemas and TypeScript interfaces (single source of truth)
