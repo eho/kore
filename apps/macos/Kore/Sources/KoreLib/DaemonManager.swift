@@ -116,6 +116,14 @@ private final class LogCapture: @unchecked Sendable {
     }
 }
 
+// MARK: - Health Info
+
+/// Snapshot of a successful daemon health check, passed to `onHealthPoll`.
+public struct DaemonHealthInfo: Sendable {
+    public let date: Date
+    public let port: Int
+}
+
 // MARK: - DaemonManager
 
 /// Manages the Bun daemon child process lifecycle: start, stop, restart,
@@ -150,6 +158,9 @@ public actor DaemonManager {
     /// Called on every state transition, dispatched to the main queue.
     /// Assign this in `BridgeHandler` to push status updates to the JS layer.
     public var onStateChange: (@Sendable (DaemonState) -> Void)?
+
+    /// Called on each successful health check, dispatched to the main queue.
+    public var onHealthPoll: (@Sendable (DaemonHealthInfo) -> Void)?
 
     /// Internal: overrides the real process spawn for unit tests.
     /// The closure receives `(clonePath, port)` and returns a configured-but-not-yet-run `Process`.
@@ -241,6 +252,19 @@ public actor DaemonManager {
     /// Returns the current daemon lifecycle state.
     public func daemonStatus() -> DaemonState {
         state
+    }
+
+    /// Returns the port the daemon is (or was last) listening on.
+    public func currentPort() -> Int { lastPort }
+
+    /// Registers the state-change callback (actor-safe alternative to direct property assignment).
+    public func setStateChangeCallback(_ callback: (@Sendable (DaemonState) -> Void)?) {
+        onStateChange = callback
+    }
+
+    /// Registers the health-poll callback (actor-safe alternative to direct property assignment).
+    public func setHealthPollCallback(_ callback: (@Sendable (DaemonHealthInfo) -> Void)?) {
+        onHealthPoll = callback
     }
 
     /// Synchronously stops the daemon. Safe to call from `applicationWillTerminate`
@@ -415,6 +439,9 @@ public actor DaemonManager {
         if healthy {
             consecutiveHealthFailures = 0
             firstCrashTime = nil  // Clear crash history once the daemon is confirmed healthy.
+            let info = DaemonHealthInfo(date: Date(), port: lastPort)
+            let cb = onHealthPoll
+            DispatchQueue.main.async { cb?(info) }
         } else {
             consecutiveHealthFailures += 1
             if consecutiveHealthFailures >= 3 {
