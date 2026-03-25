@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- Allow user-selected file read/write for Apple Notes DB access via NSOpenPanel -->
+    <key>com.apple.security.files.user-selected.read-write</key>
+    <true/>
+    <!-- App-scoped security bookmarks for persistent folder access -->
+    <key>com.apple.security.files.bookmarks.app-scope</key>
+    <true/>
+    <!-- Required for Bun/Node.js JIT compilation in child processes -->
+    <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
+    <true/>
+</dict>
+</plist>
