@@ -34,14 +34,20 @@ beforeEach(() => {
 function renderAndLoad(configOverrides: Record<string, unknown> = {}) {
   const result = render(<Settings />);
 
-  // The component calls readConfig and getDaemonStatus on mount.
-  // Simulate config response.
+  // The component calls resolveKoreHome on mount, which triggers readConfig.
+  // Simulate the resolveKoreHome → readConfig flow.
+  act(() => {
+    (window as any).__simulateBridgeResponse({
+      type: "resolveKoreHome",
+      koreHome: "~/dev/kore/.kore",
+    });
+  });
+
   act(() => {
     (window as any).__simulateBridgeResponse({
       type: "readConfig",
       config: {
         port: 3000,
-        koreHome: "~/dev/kore",
         llm: {
           provider: "ollama",
           ollamaBaseUrl: "http://localhost:11434",

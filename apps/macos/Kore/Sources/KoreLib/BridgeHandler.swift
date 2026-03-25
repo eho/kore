@@ -34,6 +34,11 @@ public class BridgeHandler: NSObject, WKScriptMessageHandler {
         case "ping":
             sendToJS(["type": "pong", "ts": Date().timeIntervalSince1970])
 
+        case "resolveKoreHome":
+            let home = ConfigManager.resolveKoreHome()
+            let expanded = (home as NSString).expandingTildeInPath
+            sendToJS(["type": "resolveKoreHome", "koreHome": home, "koreHomeExpanded": expanded])
+
         case "readConfig":
             handleReadConfig(payload: payload)
 
@@ -51,6 +56,12 @@ public class BridgeHandler: NSObject, WKScriptMessageHandler {
             } catch {
                 sendToJS(["type": "openFDASettings", "success": false, "error": error.localizedDescription])
             }
+
+        case "revealInFinder":
+            let path = payload["path"] as? String ?? "~/.kore"
+            let expanded = (path as NSString).expandingTildeInPath
+            NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: expanded)
+            sendToJS(["type": "revealInFinder", "success": true])
 
         case "checkBunInstalled":
             do {

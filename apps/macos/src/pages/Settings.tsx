@@ -98,12 +98,18 @@ export function Settings() {
     (data: unknown) => {
       const msg = data as Record<string, unknown>;
       switch (msg.type) {
+        case "resolveKoreHome": {
+          const resolved = msg.koreHome as string;
+          setKoreHome(resolved);
+          // Now read config using the resolved home
+          bridgeCall("readConfig", { koreHome: resolved });
+          break;
+        }
         case "readConfig":
           if (msg.config) {
             const cfg = msg.config as KoreConfig;
             setConfig(cfg);
             setSavedConfig(cfg);
-            if (cfg.koreHome) setKoreHome(cfg.koreHome);
           }
           break;
         case "writeConfig":
@@ -139,8 +145,8 @@ export function Settings() {
 
   useEffect(() => {
     window.bridgeCallback = handleBridgeMessage;
-    // Load config on mount
-    bridgeCall("readConfig");
+    // Resolve KORE_HOME first, which triggers readConfig with the correct path
+    bridgeCall("resolveKoreHome");
     bridgeCall("getDaemonStatus");
     return () => {
       window.bridgeCallback = undefined;
@@ -173,7 +179,7 @@ export function Settings() {
 
   function handleSave() {
     setSaving(true);
-    bridgeCall("writeConfig", { config });
+    bridgeCall("writeConfig", { config, koreHome });
   }
 
   return (
