@@ -18,13 +18,23 @@ struct KoreApp {
 class AppDelegate: NSObject, NSApplicationDelegate {
     var statusItem: NSStatusItem?
     var panelManager: PanelManager?
+    var daemonManager: DaemonManager?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        let koreHome = ProcessInfo.processInfo.environment["KORE_HOME"] ?? "~/.kore"
+        let dm = DaemonManager(koreHome: koreHome)
+        daemonManager = dm
+
+        // Adopt any daemon process left over from a previous session.
+        Task { await dm.adoptOrphanedProcess() }
+
         setupStatusItem()
-        panelManager = PanelManager()
+        panelManager = PanelManager(daemonManager: dm)
     }
 
     func applicationWillTerminate(_ notification: Notification) {
+        // Stop the daemon synchronously before the process exits.
+        daemonManager?.terminateSync()
         panelManager = nil
     }
 

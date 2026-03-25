@@ -10,9 +10,11 @@ public class PanelManager: NSObject {
         panel?.isVisible ?? false
     }
 
-    public override init() {
+    /// Creates the panel manager and wires up the optional daemon manager to the bridge.
+    public init(daemonManager: DaemonManager? = nil) {
         super.init()
         setupPanel()
+        bridgeHandler?.daemonManager = daemonManager
     }
 
     // MARK: - Panel Setup
