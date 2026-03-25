@@ -83,7 +83,7 @@ export function Settings() {
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
 
   // Bridge response state
-  const [daemonStatus, setDaemonStatus] = useState<{ status: string; error?: string }>({ status: "stopped" });
+  const [daemonStatus, setDaemonStatus] = useState<{ status: string; error?: string; managed?: boolean }>({ status: "stopped" });
   const [notesAccess, setNotesAccess] = useState<string>("unknown");
   const [ollamaStatus, setOllamaStatus] = useState<string | null>(null);
   const [claudeDesktopDetected, setClaudeDesktopDetected] = useState<boolean | null>(null);
@@ -124,7 +124,11 @@ export function Settings() {
           }
           break;
         case "daemonStatus":
-          setDaemonStatus({ status: msg.status as string, error: msg.error as string | undefined });
+          setDaemonStatus({
+            status: msg.status as string,
+            error: msg.error as string | undefined,
+            managed: msg.managed as boolean | undefined,
+          });
           break;
         case "checkNotesAccess":
           setNotesAccess(msg.status as string);
@@ -251,11 +255,13 @@ function GeneralTab({
 }: {
   config: KoreConfig;
   koreHome: string;
-  daemonStatus: { status: string; error?: string };
+  daemonStatus: { status: string; error?: string; managed?: boolean };
   restartRequired: boolean;
   updateConfig: (patch: Partial<KoreConfig>) => void;
 }) {
   const statusClass = daemonStatus.status === "running" ? "running" : daemonStatus.status === "error" ? "error" : "stopped";
+  const managed = daemonStatus.managed !== false;
+  const isRunning = daemonStatus.status === "running";
 
   return (
     <div className="tab-content">
@@ -317,14 +323,17 @@ function GeneralTab({
           </span>
           {restartRequired && <span className="restart-badge">Restart required</span>}
         </div>
+        {isRunning && !managed && (
+          <span className="form-hint">Externally started — use your terminal to stop this server</span>
+        )}
         <div className="daemon-controls">
-          <button className="btn-secondary btn-small" onClick={() => bridgeCall("startDaemon", { clonePath: config.koreHome, port: config.port })}>
+          <button className="btn-secondary btn-small" disabled={isRunning} onClick={() => bridgeCall("startDaemon", { clonePath: config.koreHome, port: config.port })}>
             Start
           </button>
-          <button className="btn-secondary btn-small" onClick={() => bridgeCall("stopDaemon")}>
+          <button className="btn-secondary btn-small" disabled={!managed || !isRunning} onClick={() => bridgeCall("stopDaemon")}>
             Stop
           </button>
-          <button className="btn-secondary btn-small" onClick={() => bridgeCall("restartDaemon")}>
+          <button className="btn-secondary btn-small" disabled={!managed || !isRunning} onClick={() => bridgeCall("restartDaemon")}>
             Restart
           </button>
         </div>

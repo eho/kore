@@ -309,8 +309,13 @@ body {
   transition: background 0.1s;
 }
 
-.btn-secondary:hover {
+.btn-secondary:hover:not(:disabled) {
   background: rgba(255, 255, 255, 0.1);
+}
+
+.btn-secondary:disabled {
+  opacity: 0.35;
+  cursor: default;
 }
 
 .btn-small {

@@ -174,16 +174,37 @@ test("save button is disabled when no changes", () => {
 
 // ── Daemon control tests ────────────────────────────────────────────
 
-test("daemon start button calls bridgeCall", () => {
-  renderAndLoad();
+test("daemon start button calls bridgeCall when stopped", () => {
+  const result = render(<Settings />);
+  act(() => {
+    (window as any).__simulateBridgeResponse({ type: "resolveKoreHome", koreHome: "~/.kore" });
+  });
+  act(() => {
+    (window as any).__simulateBridgeResponse({ type: "readConfig", config: { port: 3000 } });
+  });
+  // Daemon is stopped (default state) — Start should be enabled
   fireEvent.click(screen.getByText("Start"));
   expect(findCall("startDaemon")).toBeTruthy();
+  result.unmount();
 });
 
-test("daemon stop button calls bridgeCall", () => {
-  renderAndLoad();
+test("daemon stop button calls bridgeCall when managed and running", () => {
+  renderAndLoad(); // sets status=running, but managed defaults to undefined
+  // Simulate managed daemon status
+  act(() => {
+    (window as any).__simulateBridgeResponse({ type: "daemonStatus", status: "running", managed: true });
+  });
   fireEvent.click(screen.getByText("Stop"));
   expect(findCall("stopDaemon")).toBeTruthy();
+});
+
+test("daemon stop button is disabled when not managed", () => {
+  renderAndLoad();
+  act(() => {
+    (window as any).__simulateBridgeResponse({ type: "daemonStatus", status: "running", managed: false });
+  });
+  const stopButton = screen.getByText("Stop") as HTMLButtonElement;
+  expect(stopButton.disabled).toBe(true);
 });
 
 // ── Ollama connection test ──────────────────────────────────────────
