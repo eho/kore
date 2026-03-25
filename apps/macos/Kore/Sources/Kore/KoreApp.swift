@@ -18,6 +18,7 @@ struct KoreApp {
 class AppDelegate: NSObject, NSApplicationDelegate {
     var statusItem: NSStatusItem?
     var panelManager: PanelManager?
+    var settingsWindowManager: SettingsWindowManager?
     var daemonManager: DaemonManager?
 
     private let koreHome: String = ConfigManager.resolveKoreHome()
@@ -59,6 +60,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         setupStatusItem()
         panelManager = PanelManager(daemonManager: dm)
+        settingsWindowManager = SettingsWindowManager(daemonManager: dm)
     }
 
     func applicationWillTerminate(_ notification: Notification) {
@@ -248,9 +250,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func openSettings() {
-        // Settings window is implemented in MAC-005.
-        // Toggle the main panel as a fallback until that story ships.
-        togglePanel()
+        settingsWindowManager?.showWindow()
     }
 
     @objc private func quitApp() {
