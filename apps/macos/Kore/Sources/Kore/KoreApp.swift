@@ -68,6 +68,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func handleDaemonStateChange(_ state: DaemonState) {
         currentState = state
+        print("[Kore] Daemon state → \(state.statusKey)\(state.errorMessage.map { ": \($0.prefix(80))" } ?? "")")
         updateTrayIcon(for: state)
         // Update any open menu's status row if available.
         updateMenuStatusItems()
@@ -229,10 +230,15 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     // MARK: - Menu Actions
 
     @objc private func syncAppleNotes() {
-        guard case .running = currentState else { return }
+        guard case .running = currentState else {
+            print("[Kore] Sync skipped — daemon not running")
+            return
+        }
         Task {
             let client = DaemonAPIClient.fromConfig(koreHome: koreHome)
+            print("[Kore] Triggering Apple Notes sync on :\(client.port)…")
             let result = await client.syncAppleNotes()
+            print("[Kore] Sync result: \(result)")
             if case .success = result {
                 DispatchQueue.main.async { [weak self] in
                     self?.lastSyncTime = Date()
@@ -243,10 +249,15 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func triggerConsolidation() {
-        guard case .running = currentState else { return }
+        guard case .running = currentState else {
+            print("[Kore] Consolidation skipped — daemon not running")
+            return
+        }
         Task {
             let client = DaemonAPIClient.fromConfig(koreHome: koreHome)
-            _ = await client.triggerConsolidation()
+            print("[Kore] Triggering consolidation on :\(client.port)…")
+            let result = await client.triggerConsolidation()
+            print("[Kore] Consolidation result: \(result)")
         }
     }
 
