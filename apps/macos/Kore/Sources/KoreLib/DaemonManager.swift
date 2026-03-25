@@ -209,6 +209,22 @@ public actor DaemonManager {
         }
     }
 
+    /// Probes the health endpoint at `port` to detect a daemon that was started
+    /// outside of the macOS app (no PID file). If responsive, transitions to
+    /// `.running` and begins health polling.
+    ///
+    /// No-op if the daemon is already in a non-stopped state.
+    public func probeForRunningDaemon(port: Int) async {
+        guard case .stopped = state else { return }
+        lastPort = port
+        let healthy = await checkHealthEndpoint(port: port)
+        guard case .stopped = state else { return }  // recheck after await
+        if healthy {
+            transition(to: .running)
+            startHealthPolling()
+        }
+    }
+
     // MARK: - Public API
 
     /// Starts the daemon by spawning `bun run start` at `clonePath` on `port`.

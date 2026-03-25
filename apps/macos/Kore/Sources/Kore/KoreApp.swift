@@ -49,7 +49,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 // Already dispatched to main queue by DaemonManager.
                 self?.handleHealthPoll(info)
             }
+            // Try PID-file adoption first; if that finds nothing, probe the
+            // health endpoint so a daemon started outside the app is detected.
             await dm.adoptOrphanedProcess()
+            await dm.probeForRunningDaemon(port: daemonPort)
         }
 
         setupStatusItem()
