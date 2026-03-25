@@ -31,7 +31,18 @@ final class DaemonManagerTests: XCTestCase {
         return mgr
     }
 
-    // MARK: - Start writes PID file
+    /// Returns a `DaemonManager` configured for health-check / reconnect tests
+    /// (polling enabled, fast intervals, fake health endpoint).
+    private func makeMonitoringManager(
+        healthCheck: @escaping (_ port: Int) async -> Bool
+    ) -> DaemonManager {
+        let mgr = DaemonManager(koreHome: tmpDir.path)
+        mgr._testHealthCheck = healthCheck
+        mgr._testPollIntervalNs = 50_000_000  // 50 ms for fast tests
+        return mgr
+    }
+
+    // MARK: - Process Lifecycle: Start writes PID file
 
     func testStartWritesPIDFile() async throws {
         let mgr = makeManager()
@@ -52,7 +63,7 @@ final class DaemonManagerTests: XCTestCase {
         await mgr.stopDaemon()
     }
 
-    // MARK: - Stop cleans up PID file
+    // MARK: - Process Lifecycle: Stop cleans up PID file
 
     func testStopCleansPIDFile() async throws {
         let mgr = makeManager()
@@ -72,7 +83,7 @@ final class DaemonManagerTests: XCTestCase {
         )
     }
 
-    // MARK: - Stale PID file on startup is cleaned up
+    // MARK: - Process Lifecycle: Stale PID file cleanup
 
     func testStalePIDFileCleanedUpOnAdoption() async throws {
         let mgr = DaemonManager(koreHome: tmpDir.path)
@@ -102,7 +113,7 @@ final class DaemonManagerTests: XCTestCase {
         )
     }
 
-    // MARK: - Adoption of live process
+    // MARK: - Process Lifecycle: Adoption of live process
 
     func testAdoptsLiveProcess() async throws {
         let mgr = DaemonManager(koreHome: tmpDir.path)
@@ -122,7 +133,7 @@ final class DaemonManagerTests: XCTestCase {
         XCTAssertEqual(status, .running, "Should adopt a live PID as running")
     }
 
-    // MARK: - Crash triggers single auto-restart
+    // MARK: - Crash Recovery: Single auto-restart
 
     func testCrashTriggersAutoRestart() async throws {
         // First spawn crashes; second spawn runs long (simulates successful restart).
@@ -144,9 +155,6 @@ final class DaemonManagerTests: XCTestCase {
 
         // Wait for the auto-restart cycle to complete.
         // The state machine goes: running (spawn #1) → starting (crash) → running (spawn #2).
-        // We must observe the intermediate .starting state to confirm a crash happened,
-        // then wait for the second .running (restart complete).
-        // Total expected time: ~3 seconds (DaemonManager's restart delay).
         let deadline = Date().addingTimeInterval(10)
         var observedCrash = false
         var finalState: DaemonState = .running
@@ -154,10 +162,10 @@ final class DaemonManagerTests: XCTestCase {
         while Date() < deadline {
             let current = await mgr.daemonStatus()
             if current == .starting {
-                observedCrash = true  // Crash confirmed
+                observedCrash = true
             } else if current == .running && observedCrash {
                 finalState = current
-                break  // Restart complete
+                break
             }
             try await Task.sleep(nanoseconds: 200_000_000)
         }
@@ -168,7 +176,7 @@ final class DaemonManagerTests: XCTestCase {
         await mgr.stopDaemon()
     }
 
-    // MARK: - Double crash within 30 seconds does not restart
+    // MARK: - Crash Recovery: Double crash gives up
 
     func testDoubleCrashWithin30sDoesNotAutoRestart() async throws {
         var spawnCount = 0
@@ -185,7 +193,6 @@ final class DaemonManagerTests: XCTestCase {
         await mgr.startDaemon(clonePath: tmpDir.path, port: 3000)
 
         // First crash → 3s delay → auto-restart → second crash → error state.
-        // Allow up to 10 seconds total.
         let deadline = Date().addingTimeInterval(10)
         var finalState: DaemonState = .starting
         while Date() < deadline {
@@ -200,8 +207,8 @@ final class DaemonManagerTests: XCTestCase {
         }
 
         XCTAssertTrue(
-            msg.contains("30 seconds"),
-            "Error message should mention the 30-second crash window. Got: \(msg)"
+            msg.contains("30s"),
+            "Error message should mention the 30s crash window. Got: \(msg)"
         )
         XCTAssertEqual(spawnCount, 2, "Should have spawned exactly twice before giving up")
 
@@ -210,5 +217,240 @@ final class DaemonManagerTests: XCTestCase {
             FileManager.default.fileExists(atPath: pidURL.path),
             "PID file should be cleaned up after terminal error state"
         )
+    }
+
+    // MARK: - Probe: Detects running daemon
+
+    func testProbeDetectsRunningDaemon() async throws {
+        let mgr = DaemonManager(koreHome: tmpDir.path)
+        mgr._disableHealthPolling = true
+        mgr._testHealthCheck = { _ in true }
+
+        await mgr.probeForRunningDaemon(port: 4000)
+
+        let status = await mgr.daemonStatus()
+        XCTAssertEqual(status, .running, "Probe should transition to .running when health check passes")
+
+        let port = await mgr.currentPort()
+        XCTAssertEqual(port, 4000, "currentPort should reflect the probed port")
+    }
+
+    // MARK: - Probe: No-op when already running
+
+    func testProbeNoopWhenAlreadyRunning() async throws {
+        let mgr = makeManager()
+        await mgr.startDaemon(clonePath: tmpDir.path, port: 3000)
+        let statusBefore = await mgr.daemonStatus()
+        XCTAssertEqual(statusBefore, .running)
+
+        // Probe at a different port — should be ignored.
+        mgr._testHealthCheck = { _ in true }
+        await mgr.probeForRunningDaemon(port: 9999)
+
+        let port = await mgr.currentPort()
+        XCTAssertEqual(port, 3000, "Port should not change when probe is no-op")
+
+        await mgr.stopDaemon()
+    }
+
+    // MARK: - Probe: Recovers from .error state
+
+    func testProbeRecoversFromErrorState() async throws {
+        // Get into an error state via double-crash.
+        var spawnCount = 0
+        let mgr = makeManager(spawn: { _, _ in
+            spawnCount += 1
+            let p = Process()
+            p.executableURL = URL(fileURLWithPath: "/bin/sh")
+            p.arguments = ["-c", "exit 1"]
+            return p
+        })
+
+        await mgr.startDaemon(clonePath: tmpDir.path, port: 3000)
+
+        // Wait for .error state.
+        let deadline = Date().addingTimeInterval(10)
+        while Date() < deadline {
+            let s = await mgr.daemonStatus()
+            if case .error = s { break }
+            try await Task.sleep(nanoseconds: 200_000_000)
+        }
+
+        let errorState = await mgr.daemonStatus()
+        guard case .error = errorState else {
+            XCTFail("Expected .error state, got \(errorState)")
+            return
+        }
+
+        // Now probe with a healthy endpoint — should recover.
+        mgr._testHealthCheck = { _ in true }
+        await mgr.probeForRunningDaemon(port: 5000)
+
+        let recovered = await mgr.daemonStatus()
+        XCTAssertEqual(recovered, .running, "Probe should recover from .error to .running")
+    }
+
+    // MARK: - Probe: Starts reconnect loop when daemon not found
+
+    func testProbeStartsReconnectLoopWhenDaemonNotFound() async throws {
+        // Health check starts false, then switches to true.
+        let healthy = LockedValue(false)
+        let mgr = makeMonitoringManager { _ in healthy.get() }
+
+        // Probe — daemon not found, reconnect loop should start.
+        await mgr.probeForRunningDaemon(port: 3000)
+        let initial = await mgr.daemonStatus()
+        XCTAssertEqual(initial, .stopped, "Should stay stopped when daemon not found")
+
+        // Simulate daemon starting — reconnect loop should detect it.
+        healthy.set(true)
+
+        let deadline = Date().addingTimeInterval(2)
+        var finalState: DaemonState = .stopped
+        while Date() < deadline {
+            finalState = await mgr.daemonStatus()
+            if finalState == .running { break }
+            try await Task.sleep(nanoseconds: 50_000_000)
+        }
+
+        XCTAssertEqual(finalState, .running, "Reconnect loop should detect the daemon and transition to .running")
+    }
+
+    // MARK: - Reconnect: Recovery from error state
+
+    func testReconnectLoopRecoversFromErrorState() async throws {
+        // Start with a healthy daemon, then make it fail, then recover.
+        let healthy = LockedValue(true)
+        let mgr = makeMonitoringManager { _ in healthy.get() }
+
+        await mgr.probeForRunningDaemon(port: 3000)
+        let initial = await mgr.daemonStatus()
+        XCTAssertEqual(initial, .running)
+
+        // Make health checks fail — after 3 consecutive failures, goes to .error.
+        healthy.set(false)
+
+        let errorDeadline = Date().addingTimeInterval(2)
+        while Date() < errorDeadline {
+            let s = await mgr.daemonStatus()
+            if s.isIdle { break }
+            try await Task.sleep(nanoseconds: 50_000_000)
+        }
+        let errorState = await mgr.daemonStatus()
+        XCTAssertTrue(errorState.isIdle, "Should be in an idle state after health failures, got \(errorState)")
+
+        // Restore health — reconnect loop should bring it back to .running.
+        healthy.set(true)
+
+        let recoverDeadline = Date().addingTimeInterval(2)
+        var recovered: DaemonState = errorState
+        while Date() < recoverDeadline {
+            recovered = await mgr.daemonStatus()
+            if recovered == .running { break }
+            try await Task.sleep(nanoseconds: 50_000_000)
+        }
+
+        XCTAssertEqual(recovered, .running, "Reconnect loop should recover from error to running")
+    }
+
+    // MARK: - Callbacks: onStateChange fires
+
+    func testStateChangeCallbackFires() async throws {
+        let mgr = makeManager()
+        let states = LockedValue<[DaemonState]>([])
+
+        await mgr.setStateChangeCallback { state in
+            states.mutate { $0.append(state) }
+        }
+
+        await mgr.startDaemon(clonePath: tmpDir.path, port: 3000)
+        await mgr.stopDaemon()
+
+        // Allow main-queue dispatches to land.
+        try await Task.sleep(nanoseconds: 100_000_000)
+
+        let observed = states.get()
+        // Expected: .starting → .running → .stopping → .stopped
+        XCTAssertTrue(observed.contains(.starting), "Should have observed .starting, got \(observed)")
+        XCTAssertTrue(observed.contains(.running), "Should have observed .running, got \(observed)")
+        XCTAssertTrue(observed.contains(.stopping), "Should have observed .stopping, got \(observed)")
+        XCTAssertTrue(observed.contains(.stopped), "Should have observed .stopped, got \(observed)")
+    }
+
+    // MARK: - Callbacks: onHealthPoll fires
+
+    func testHealthPollCallbackFires() async throws {
+        let mgr = makeMonitoringManager { _ in true }
+        let received = LockedValue<[DaemonHealthInfo]>([])
+
+        await mgr.setHealthPollCallback { info in
+            received.mutate { $0.append(info) }
+        }
+
+        // Probe to get into .running, which starts health polling.
+        await mgr.probeForRunningDaemon(port: 4000)
+
+        // Wait for at least one health poll to fire.
+        let deadline = Date().addingTimeInterval(2)
+        while Date() < deadline {
+            if !received.get().isEmpty { break }
+            try await Task.sleep(nanoseconds: 50_000_000)
+        }
+
+        let infos = received.get()
+        XCTAssertFalse(infos.isEmpty, "onHealthPoll should have been called at least once")
+        XCTAssertEqual(infos.first?.port, 4000, "Health info should contain the correct port")
+    }
+
+    // MARK: - Port: currentPort reflects last configuration
+
+    func testCurrentPortReflectsLastStart() async throws {
+        let mgr = makeManager()
+
+        let defaultPort = await mgr.currentPort()
+        XCTAssertEqual(defaultPort, 3000, "Default port should be 3000")
+
+        await mgr.startDaemon(clonePath: tmpDir.path, port: 8080)
+        let portAfterStart = await mgr.currentPort()
+        XCTAssertEqual(portAfterStart, 8080, "Port should update to 8080 after starting on that port")
+
+        await mgr.stopDaemon()
+    }
+
+    // MARK: - DaemonState.isIdle
+
+    func testIsIdle() {
+        XCTAssertTrue(DaemonState.stopped.isIdle)
+        XCTAssertTrue(DaemonState.error("something").isIdle)
+        XCTAssertFalse(DaemonState.running.isIdle)
+        XCTAssertFalse(DaemonState.starting.isIdle)
+        XCTAssertFalse(DaemonState.stopping.isIdle)
+    }
+}
+
+// MARK: - Thread-safe value wrapper for test assertions
+
+private final class LockedValue<T>: @unchecked Sendable {
+    private var value: T
+    private let lock = NSLock()
+
+    init(_ value: T) { self.value = value }
+
+    func get() -> T {
+        lock.lock()
+        defer { lock.unlock() }
+        return value
+    }
+
+    func set(_ newValue: T) {
+        lock.lock()
+        defer { lock.unlock() }
+        value = newValue
+    }
+
+    func mutate(_ transform: (inout T) -> Void) {
+        lock.lock()
+        defer { lock.unlock() }
+        transform(&value)
     }
 }

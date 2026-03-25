@@ -40,6 +40,26 @@ public enum DaemonState: Equatable, Sendable {
         if case .error(let msg) = self { return msg }
         return nil
     }
+
+    /// SF Symbol name for the menu bar icon.
+    public var symbolName: String {
+        switch self {
+        case .running:              return "circle.fill"
+        case .stopped:              return "circle"
+        case .starting, .stopping:  return "ellipsis.circle"
+        case .error:                return "exclamationmark.circle"
+        }
+    }
+
+    /// `true` when the daemon is idle (`.stopped` or `.error`) and eligible
+    /// for reconnect probing. Centralizes the state guard used by the
+    /// reconnect loop and probe logic.
+    public var isIdle: Bool {
+        switch self {
+        case .stopped, .error: return true
+        default: return false
+        }
+    }
 }
 
 // MARK: - Log Capture
@@ -116,6 +136,14 @@ private final class LogCapture: @unchecked Sendable {
     }
 }
 
+// MARK: - Health Info
+
+/// Snapshot of a successful daemon health check, passed to `onHealthPoll`.
+public struct DaemonHealthInfo: Sendable {
+    public let date: Date
+    public let port: Int
+}
+
 // MARK: - DaemonManager
 
 /// Manages the Bun daemon child process lifecycle: start, stop, restart,
@@ -124,6 +152,25 @@ private final class LogCapture: @unchecked Sendable {
 /// All public methods are `async` and must be called with `await`. For synchronous
 /// termination at app shutdown, use `terminateSync()`.
 public actor DaemonManager {
+
+    // MARK: - Constants
+
+    /// Interval between health endpoint polls while the daemon is running.
+    private static let healthPollInterval: UInt64 = 5_000_000_000      // 5 seconds
+
+    /// Interval between reconnect probes while the daemon is idle.
+    private static let reconnectInterval: UInt64 = 10_000_000_000      // 10 seconds
+
+    /// Delay before auto-restart after an unexpected crash.
+    private static let restartDelay: UInt64 = 3_000_000_000            // 3 seconds
+
+    /// If the daemon crashes again within this window after a restart,
+    /// auto-restart is abandoned to avoid infinite loops.
+    private static let crashWindowSeconds: TimeInterval = 30
+
+    /// Number of consecutive health check failures before declaring the daemon
+    /// unresponsive and triggering recovery.
+    private static let maxHealthFailures = 3
 
     // MARK: - State
 
@@ -138,6 +185,9 @@ public actor DaemonManager {
     private var healthPollTask: Task<Void, Never>?
     private var consecutiveHealthFailures = 0
 
+    /// Polls the health endpoint while stopped, waiting for an externally-started daemon.
+    private var reconnectTask: Task<Void, Never>?
+
     /// Timestamp of the first unexpected crash in the current restart window.
     private var firstCrashTime: Date?
 
@@ -151,15 +201,26 @@ public actor DaemonManager {
     /// Assign this in `BridgeHandler` to push status updates to the JS layer.
     public var onStateChange: (@Sendable (DaemonState) -> Void)?
 
+    /// Called on each successful health check, dispatched to the main queue.
+    public var onHealthPoll: (@Sendable (DaemonHealthInfo) -> Void)?
+
     /// Internal: overrides the real process spawn for unit tests.
     /// The closure receives `(clonePath, port)` and returns a configured-but-not-yet-run `Process`.
     /// Set this before calling `startDaemon`. Safe because it is only written before actor
     /// isolation begins in tests.
     nonisolated(unsafe) var _testSpawn: ((_ clonePath: String, _ port: Int) -> Process?)? = nil
 
-    /// Internal: disables health polling (5-second timer loop) for unit tests.
-    /// Set this before calling `startDaemon`.
+    /// Internal: disables health polling and reconnect probing for unit tests
+    /// that only care about process lifecycle, not monitoring.
     nonisolated(unsafe) var _disableHealthPolling: Bool = false
+
+    /// Internal: overrides `checkHealthEndpoint` for unit tests so probing and
+    /// health polling work without a real HTTP server.
+    nonisolated(unsafe) var _testHealthCheck: ((_ port: Int) async -> Bool)? = nil
+
+    /// Internal: overrides the poll/reconnect sleep intervals for fast tests.
+    /// Defaults to `nil`, which uses the production intervals (5s health, 10s reconnect).
+    nonisolated(unsafe) var _testPollIntervalNs: UInt64? = nil
 
     // MARK: - Init
 
@@ -195,6 +256,32 @@ public actor DaemonManager {
         } else {
             // Stale PID file — remove it.
             try? FileManager.default.removeItem(at: pidURL)
+        }
+    }
+
+    /// Probes the health endpoint at `port` to detect a daemon that was started
+    /// outside of the macOS app (no PID file). If responsive, transitions to
+    /// `.running` and begins health polling.
+    ///
+    /// No-op if the daemon is already in a non-stopped state.
+    /// Probes the health endpoint at `port` to detect a daemon that was started
+    /// outside of the macOS app (no PID file). If responsive, transitions to
+    /// `.running` and begins health polling. If not, starts the background
+    /// reconnect loop so the daemon is detected when it appears later.
+    ///
+    /// No-op if the daemon is already in an active state (`.running`, `.starting`, `.stopping`).
+    public func probeForRunningDaemon(port: Int) async {
+        guard state.isIdle else { return }
+        lastPort = port
+        let healthy = await checkHealthEndpoint(port: port)
+        guard state.isIdle else { return }  // recheck after async gap
+        if healthy {
+            transition(to: .running)
+            startHealthPolling()
+        } else {
+            // Daemon not found yet — start background probing so the icon
+            // updates automatically when the daemon is started later.
+            startReconnectProbing()
         }
     }
 
@@ -241,6 +328,19 @@ public actor DaemonManager {
     /// Returns the current daemon lifecycle state.
     public func daemonStatus() -> DaemonState {
         state
+    }
+
+    /// Returns the port the daemon is (or was last) listening on.
+    public func currentPort() -> Int { lastPort }
+
+    /// Registers the state-change callback (actor-safe alternative to direct property assignment).
+    public func setStateChangeCallback(_ callback: (@Sendable (DaemonState) -> Void)?) {
+        onStateChange = callback
+    }
+
+    /// Registers the health-poll callback (actor-safe alternative to direct property assignment).
+    public func setHealthPollCallback(_ callback: (@Sendable (DaemonHealthInfo) -> Void)?) {
+        onHealthPoll = callback
     }
 
     /// Synchronously stops the daemon. Safe to call from `applicationWillTerminate`
@@ -353,9 +453,9 @@ public actor DaemonManager {
         let exitCode = proc.terminationStatus
         let now = Date()
 
-        // Double-crash guard: if the daemon crashed again within 30 seconds of the
-        // first restart attempt, give up — no infinite restart loops.
-        if let firstCrash = firstCrashTime, now.timeIntervalSince(firstCrash) < 30 {
+        // Double-crash guard: if the daemon crashed again within the crash window
+        // of the first restart attempt, give up — no infinite restart loops.
+        if let firstCrash = firstCrashTime, now.timeIntervalSince(firstCrash) < Self.crashWindowSeconds {
             firstCrashTime = nil
             deletePIDFile()
             
@@ -363,7 +463,7 @@ public actor DaemonManager {
             let errSuffix = stderrStr.isEmpty ? "" : "\n\nError output:\n\(stderrStr)"
             
             transition(to: .error(
-                "Daemon crashed again within 30 seconds (exit \(exitCode)). " +
+                "Daemon crashed again within \(Int(Self.crashWindowSeconds))s (exit \(exitCode)). " +
                 "Not restarting automatically." + errSuffix
             ))
             return
@@ -378,7 +478,7 @@ public actor DaemonManager {
         transition(to: .starting)
 
         // Wait 3 seconds before the single auto-restart attempt.
-        try? await Task.sleep(nanoseconds: 3_000_000_000)
+        try? await Task.sleep(nanoseconds: Self.restartDelay)
 
         guard let clonePath = lastClonePath else {
             transition(to: .error("Cannot auto-restart: clone path is missing."))
@@ -397,10 +497,11 @@ public actor DaemonManager {
         consecutiveHealthFailures = 0
 
         let port = self.lastPort
+        let interval = _testPollIntervalNs ?? Self.healthPollInterval
 
         healthPollTask = Task { [weak self] in
             while !Task.isCancelled {
-                try? await Task.sleep(nanoseconds: 5_000_000_000)  // 5 seconds
+                try? await Task.sleep(nanoseconds: interval)
                 guard !Task.isCancelled, let self else { break }
                 await self.performHealthCheck(port: port)
             }
@@ -415,15 +516,22 @@ public actor DaemonManager {
         if healthy {
             consecutiveHealthFailures = 0
             firstCrashTime = nil  // Clear crash history once the daemon is confirmed healthy.
+            let info = DaemonHealthInfo(date: Date(), port: lastPort)
+            let cb = onHealthPoll
+            DispatchQueue.main.async { cb?(info) }
         } else {
             consecutiveHealthFailures += 1
-            if consecutiveHealthFailures >= 3 {
+            if consecutiveHealthFailures >= Self.maxHealthFailures {
                 await handleHealthFailure()
             }
         }
     }
 
     private nonisolated func checkHealthEndpoint(port: Int) async -> Bool {
+        if let testCheck = _testHealthCheck {
+            return await testCheck(port)
+        }
+
         guard let url = URL(string: "http://localhost:\(port)/api/v1/health") else { return false }
 
         var request = URLRequest(url: url)
@@ -483,10 +591,53 @@ public actor DaemonManager {
         }
     }
 
+    // MARK: - Private: Reconnect Probing
+
+    /// Starts a loop that probes the health endpoint every 10 seconds while the
+    /// daemon is stopped, so a daemon started after the app launches is detected.
+    private func startReconnectProbing() {
+        guard !_disableHealthPolling else { return }
+
+        reconnectTask?.cancel()
+        let port = lastPort
+        let interval = _testPollIntervalNs ?? Self.reconnectInterval
+
+        reconnectTask = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: interval)
+                guard !Task.isCancelled, let self else { break }
+                await self.performReconnectProbe(port: port)
+            }
+        }
+    }
+
+    private func performReconnectProbe(port: Int) async {
+        guard state.isIdle else {
+            reconnectTask?.cancel()
+            reconnectTask = nil
+            return
+        }
+        let healthy = await checkHealthEndpoint(port: port)
+        guard state.isIdle else { return }  // recheck after async gap
+        if healthy {
+            reconnectTask?.cancel()
+            reconnectTask = nil
+            transition(to: .running)
+            startHealthPolling()
+        }
+    }
+
     // MARK: - Private: State Transitions
 
     private func transition(to newState: DaemonState) {
         state = newState
+        // Start reconnect probing when idle; cancel when daemon is active.
+        if newState.isIdle {
+            startReconnectProbing()
+        } else {
+            reconnectTask?.cancel()
+            reconnectTask = nil
+        }
         let callback = onStateChange
         DispatchQueue.main.async {
             callback?(newState)

@@ -105,4 +105,67 @@ final class ConfigManagerTests: XCTestCase {
         let loaded = try ConfigManager.readConfig(koreHome: deepDir.path)
         XCTAssertEqual(loaded.port, 9090)
     }
+
+    // MARK: - parseDotEnv
+
+    func testParseDotEnvSimpleKeyValue() throws {
+        let envFile = tmpDir.appendingPathComponent(".env")
+        try "KORE_HOME=/my/path\nPORT=3000\n".write(to: envFile, atomically: true, encoding: .utf8)
+
+        XCTAssertEqual(ConfigManager.parseDotEnv(at: envFile.path, key: "KORE_HOME"), "/my/path")
+        XCTAssertEqual(ConfigManager.parseDotEnv(at: envFile.path, key: "PORT"), "3000")
+    }
+
+    func testParseDotEnvDoubleQuotedValue() throws {
+        let envFile = tmpDir.appendingPathComponent(".env")
+        try "SECRET=\"my secret value\"\n".write(to: envFile, atomically: true, encoding: .utf8)
+
+        XCTAssertEqual(ConfigManager.parseDotEnv(at: envFile.path, key: "SECRET"), "my secret value")
+    }
+
+    func testParseDotEnvSingleQuotedValue() throws {
+        let envFile = tmpDir.appendingPathComponent(".env")
+        try "SECRET='my secret value'\n".write(to: envFile, atomically: true, encoding: .utf8)
+
+        XCTAssertEqual(ConfigManager.parseDotEnv(at: envFile.path, key: "SECRET"), "my secret value")
+    }
+
+    func testParseDotEnvSkipsComments() throws {
+        let envFile = tmpDir.appendingPathComponent(".env")
+        try "# This is a comment\nKEY=value\n# Another comment\n".write(to: envFile, atomically: true, encoding: .utf8)
+
+        XCTAssertEqual(ConfigManager.parseDotEnv(at: envFile.path, key: "KEY"), "value")
+    }
+
+    func testParseDotEnvSkipsEmptyLines() throws {
+        let envFile = tmpDir.appendingPathComponent(".env")
+        try "\n\nKEY=value\n\n".write(to: envFile, atomically: true, encoding: .utf8)
+
+        XCTAssertEqual(ConfigManager.parseDotEnv(at: envFile.path, key: "KEY"), "value")
+    }
+
+    func testParseDotEnvMissingKeyReturnsNil() throws {
+        let envFile = tmpDir.appendingPathComponent(".env")
+        try "OTHER=value\n".write(to: envFile, atomically: true, encoding: .utf8)
+
+        XCTAssertNil(ConfigManager.parseDotEnv(at: envFile.path, key: "MISSING"))
+    }
+
+    func testParseDotEnvMissingFileReturnsNil() {
+        XCTAssertNil(ConfigManager.parseDotEnv(at: "/nonexistent/.env", key: "KEY"))
+    }
+
+    func testParseDotEnvEmptyValue() throws {
+        let envFile = tmpDir.appendingPathComponent(".env")
+        try "EMPTY=\n".write(to: envFile, atomically: true, encoding: .utf8)
+
+        XCTAssertEqual(ConfigManager.parseDotEnv(at: envFile.path, key: "EMPTY"), "")
+    }
+
+    func testParseDotEnvDoesNotMatchPartialKey() throws {
+        let envFile = tmpDir.appendingPathComponent(".env")
+        try "KORE_HOME_EXTRA=/wrong\nKORE_HOME=/right\n".write(to: envFile, atomically: true, encoding: .utf8)
+
+        XCTAssertEqual(ConfigManager.parseDotEnv(at: envFile.path, key: "KORE_HOME"), "/right")
+    }
 }
