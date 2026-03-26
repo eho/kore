@@ -49,12 +49,12 @@
     "user-story-implementer": {
       "source": "eho/agent-skills",
       "sourceType": "github",
-      "computedHash": "dbe5f74529b99a2064890f48c55baf4d2c2f83f2e02f370f209742f8656ba5ea"
+      "computedHash": "ae6f5426b16a99c13f9433e6827b364ac3de1f920117fe397990b2b913d798f8"
     },
     "user-story-reviewer": {
       "source": "eho/agent-skills",
       "sourceType": "github",
-      "computedHash": "340f02201036b5d1de1307fc415903296e851ffa796351d7afec1e317cd5b498"
+      "computedHash": "2ac3626a30887093777a9754ccc548552929c402dc00492316979d3d4e55c871"
     }
   }
 }
