@@ -11,10 +11,10 @@ public class PanelManager: NSObject {
     }
 
     /// Creates the panel manager and wires up the optional daemon manager to the bridge.
-    public init(daemonManager: DaemonManager? = nil) {
+    public init(processManager: ProcessManager? = nil) {
         super.init()
         setupPanel()
-        bridgeHandler?.daemonManager = daemonManager
+        bridgeHandler?.processManager = processManager
     }
 
     // MARK: - Panel Setup

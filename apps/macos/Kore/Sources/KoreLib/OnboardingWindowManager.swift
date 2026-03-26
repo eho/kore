@@ -17,14 +17,14 @@ public class OnboardingWindowManager: NSObject {
     /// Creates the onboarding window manager.
     ///
     /// - Parameters:
-    ///   - daemonManager: Optional daemon manager for bridge calls.
+    ///   - processManager: Optional daemon manager for bridge calls.
     ///   - onComplete: Called when the onboarding window is closed, signaling the app
     ///                 should transition to normal menu bar mode.
-    public init(daemonManager: DaemonManager? = nil, onComplete: (() -> Void)? = nil) {
+    public init(processManager: ProcessManager? = nil, onComplete: (() -> Void)? = nil) {
         self.onComplete = onComplete
         super.init()
         setupWindow()
-        bridgeHandler?.daemonManager = daemonManager
+        bridgeHandler?.processManager = processManager
     }
 
     // MARK: - Window Setup

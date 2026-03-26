@@ -68,7 +68,7 @@ function renderAndLoad(configOverrides: Record<string, unknown> = {}) {
 
   act(() => {
     (window as any).__simulateBridgeResponse({
-      type: "daemonStatus",
+      type: "serverStatus",
       status: "running",
     });
   });
@@ -83,7 +83,7 @@ test("renders General tab by default", () => {
   expect(screen.getByText("General", { selector: "h2" })).toBeTruthy();
   expect(screen.getByText("Clone Path")).toBeTruthy();
   expect(screen.getByText("Port")).toBeTruthy();
-  expect(screen.getByText("Daemon Status")).toBeTruthy();
+  expect(screen.getByText("Server Status")).toBeTruthy();
 });
 
 test("renders LLM tab when clicked", () => {
@@ -141,7 +141,7 @@ test("changing port shows restart required badge", () => {
   renderAndLoad();
   const portInput = screen.getByDisplayValue("3000") as HTMLInputElement;
   fireEvent.change(portInput, { target: { value: "5000" } });
-  // Two restart badges — one in footer, one in daemon status row
+  // Two restart badges — one in footer, one in server status row
   const badges = screen.getAllByText("Restart required");
   expect(badges.length).toBeGreaterThanOrEqual(1);
 });
@@ -188,9 +188,9 @@ test("save button is disabled when no changes", () => {
   expect(saveButton.disabled).toBe(true);
 });
 
-// ── Daemon control tests ────────────────────────────────────────────
+// ── Server control tests ────────────────────────────────────────────
 
-test("daemon start button calls bridgeCall when stopped", () => {
+test("server start button calls bridgeCall when stopped", () => {
   const result = render(<Settings />);
   act(() => {
     (window as any).__simulateBridgeResponse({ type: "resolveKoreHome", koreHome: "~/.kore" });
@@ -198,26 +198,26 @@ test("daemon start button calls bridgeCall when stopped", () => {
   act(() => {
     (window as any).__simulateBridgeResponse({ type: "readConfig", config: { port: 3000 } });
   });
-  // Daemon is stopped (default state) — Start should be enabled
+  // Server is stopped (default state) — Start should be enabled
   fireEvent.click(screen.getByText("Start"));
-  expect(findCall("startDaemon")).toBeTruthy();
+  expect(findCall("startServer")).toBeTruthy();
   result.unmount();
 });
 
-test("daemon stop button calls bridgeCall when managed and running", () => {
+test("server stop button calls bridgeCall when managed and running", () => {
   renderAndLoad(); // sets status=running, but managed defaults to undefined
-  // Simulate managed daemon status
+  // Simulate managed server status
   act(() => {
-    (window as any).__simulateBridgeResponse({ type: "daemonStatus", status: "running", managed: true });
+    (window as any).__simulateBridgeResponse({ type: "serverStatus", status: "running", managed: true });
   });
   fireEvent.click(screen.getByText("Stop"));
-  expect(findCall("stopDaemon")).toBeTruthy();
+  expect(findCall("stopServer")).toBeTruthy();
 });
 
-test("daemon stop button is disabled when not managed", () => {
+test("server stop button is disabled when not managed", () => {
   renderAndLoad();
   act(() => {
-    (window as any).__simulateBridgeResponse({ type: "daemonStatus", status: "running", managed: false });
+    (window as any).__simulateBridgeResponse({ type: "serverStatus", status: "running", managed: false });
   });
   const stopButton = screen.getByText("Stop") as HTMLButtonElement;
   expect(stopButton.disabled).toBe(true);

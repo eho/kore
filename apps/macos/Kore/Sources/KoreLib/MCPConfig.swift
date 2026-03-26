@@ -34,13 +34,13 @@ public struct MCPConfig {
     // MARK: - MCP server entry
 
     /// Builds the Kore MCP server entry for inclusion in config files.
-    static func koreMCPEntry(daemonURL: String, apiKey: String) -> [String: Any] {
+    static func koreMCPEntry(serverURL: String, apiKey: String) -> [String: Any] {
         return [
             "command": "kore",
             "args": ["mcp"],
             "env": [
                 "KORE_API_KEY": apiKey,
-                "KORE_API_URL": daemonURL
+                "KORE_API_URL": serverURL
             ]
         ]
     }
@@ -51,15 +51,15 @@ public struct MCPConfig {
     ///
     /// - Parameters:
     ///   - target: Either `"claude-desktop"` or `"claude-code"`.
-    ///   - daemonURL: The daemon URL (e.g. `"http://localhost:3000"`).
+    ///   - serverURL: The daemon URL (e.g. `"http://localhost:3000"`).
     ///   - apiKey: The API key for authenticating with the daemon.
     /// - Throws: `MCPConfigError` if the target is unknown or config I/O fails.
-    public static func installMCPConfig(target: String, daemonURL: String, apiKey: String) throws {
+    public static func installMCPConfig(target: String, serverURL: String, apiKey: String) throws {
         switch target {
         case "claude-desktop":
-            try installClaudeDesktop(daemonURL: daemonURL, apiKey: apiKey)
+            try installClaudeDesktop(serverURL: serverURL, apiKey: apiKey)
         case "claude-code":
-            try installClaudeCode(daemonURL: daemonURL, apiKey: apiKey)
+            try installClaudeCode(serverURL: serverURL, apiKey: apiKey)
         default:
             throw MCPConfigError.invalidTarget(target)
         }
@@ -68,13 +68,13 @@ public struct MCPConfig {
     // MARK: - Claude Desktop
 
     /// Reads/creates `claude_desktop_config.json` and adds/updates the `kore` MCP server entry.
-    static func installClaudeDesktop(daemonURL: String, apiKey: String) throws {
+    static func installClaudeDesktop(serverURL: String, apiKey: String) throws {
         let path = claudeDesktopConfigPath()
         var root = try readJSONObject(at: path)
 
         // Ensure mcpServers dict exists
         var mcpServers = root["mcpServers"] as? [String: Any] ?? [:]
-        mcpServers["kore"] = koreMCPEntry(daemonURL: daemonURL, apiKey: apiKey)
+        mcpServers["kore"] = koreMCPEntry(serverURL: serverURL, apiKey: apiKey)
         root["mcpServers"] = mcpServers
 
         try writeJSONObject(root, to: path)
@@ -83,13 +83,13 @@ public struct MCPConfig {
     // MARK: - Claude Code
 
     /// Reads/creates `~/.claude/settings.json` and adds/updates the `kore` MCP server entry.
-    static func installClaudeCode(daemonURL: String, apiKey: String) throws {
+    static func installClaudeCode(serverURL: String, apiKey: String) throws {
         let path = claudeCodeConfigPath()
         var root = try readJSONObject(at: path)
 
         // Claude Code uses "mcpServers" at the top level of settings.json
         var mcpServers = root["mcpServers"] as? [String: Any] ?? [:]
-        mcpServers["kore"] = koreMCPEntry(daemonURL: daemonURL, apiKey: apiKey)
+        mcpServers["kore"] = koreMCPEntry(serverURL: serverURL, apiKey: apiKey)
         root["mcpServers"] = mcpServers
 
         try writeJSONObject(root, to: path)

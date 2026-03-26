@@ -15,10 +15,10 @@ public class SettingsWindowManager: NSObject {
     }
 
     /// Creates the settings window manager and wires up the optional daemon manager to the bridge.
-    public init(daemonManager: DaemonManager? = nil) {
+    public init(processManager: ProcessManager? = nil) {
         super.init()
         setupWindow()
-        bridgeHandler?.daemonManager = daemonManager
+        bridgeHandler?.processManager = processManager
     }
 
     // MARK: - Window Setup

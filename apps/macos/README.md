@@ -1,6 +1,6 @@
 # Kore macOS App
 
-Native Swift + WebView hybrid menu bar app for managing the Kore daemon.
+Native Swift + WebView hybrid menu bar app for managing the Kore server.
 
 The app is a thin native shell (Swift/AppKit) hosting a React/TypeScript UI via WKWebView. The Swift layer handles platform integration (NSStatusItem, NSPanel, entitlements) while React handles all visual rendering.
 
@@ -25,15 +25,15 @@ swift build && .build/debug/Kore
 A Kore icon appears in your menu bar:
 
 - **Left-click** — toggle the WebView panel
-- **Right-click** — context menu with daemon status, Sync Apple Notes, Trigger Consolidation, Settings, and Quit
+- **Right-click** — context menu with server status, Sync Apple Notes, Trigger Consolidation, Settings, and Quit
 
-The tray icon reflects daemon state: filled circle (running), empty circle (stopped), ellipsis (starting/stopping), exclamation (error).
+The tray icon reflects server state: filled circle (running), empty circle (stopped), ellipsis (starting/stopping), exclamation (error).
 
-> **Current scope (MAC-001 through MAC-004):** The Swift layer includes `ConfigManager` (read/write `config.json`, `.env` parsing), `Permissions` (Notes TCC check, Bun/Ollama detection), `DaemonManager` (process lifecycle, health polling, crash recovery), and `DaemonAPIClient` (HTTP client for daemon API). The React UI in the WebView panel is still a placeholder.
+> **Current scope (MAC-001 through MAC-004):** The Swift layer includes `ConfigManager` (read/write `config.json`, `.env` parsing), `Permissions` (Notes TCC check, Bun/Ollama detection), `ProcessManager` (process lifecycle, health polling, crash recovery), and `ServerAPIClient` (HTTP client for server API). The React UI in the WebView panel is still a placeholder.
 
-### Do I need to run the daemon separately?
+### Do I need to run the server separately?
 
-The app can manage the daemon as a child process (`DaemonManager.start()`), or it can detect an externally-started daemon via health-endpoint probing. If you start the daemon separately, the app will detect it within ~10 seconds:
+The app can manage the server as a child process (`ProcessManager.start()`), or it can detect an externally-started server via health-endpoint probing. If you start the server separately, the app will detect it within ~10 seconds:
 
 ```sh
 # In a separate terminal
@@ -71,19 +71,19 @@ apps/macos/
 │   │   ├── KoreLib/               # Shared library target (testable)
 │   │   │   ├── BridgeHandler.swift    # JS ↔ Swift bridge (WKScriptMessageHandler)
 │   │   │   ├── ConfigManager.swift    # KoreConfig Codable struct + read/write + .env parsing
-│   │   │   ├── DaemonAPIClient.swift  # HTTP client for daemon API (sync, consolidate, health)
-│   │   │   ├── DaemonManager.swift    # Daemon lifecycle actor (start/stop, health poll, crash recovery)
+│   │   │   ├── ServerAPIClient.swift  # HTTP client for server API (sync, consolidate, health)
+│   │   │   ├── ProcessManager.swift    # Server lifecycle actor (start/stop, health poll, crash recovery)
 │   │   │   ├── PanelManager.swift     # NSPanel + WKWebView setup, positioning
 │   │   │   └── Permissions.swift      # Notes TCC check, Bun/Ollama detection
 │   │   └── Kore/                  # Executable entry point (imports KoreLib)
-│   │       ├── KoreApp.swift          # @main, NSStatusItem, tray menu, daemon callbacks
+│   │       ├── KoreApp.swift          # @main, NSStatusItem, tray menu, server callbacks
 │   │       └── Resources/
 │   │           ├── Info.plist         # Bundle config, Apple Notes usage description
 │   │           └── Kore.entitlements  # File access, bookmarks, JIT permissions
 │   └── Tests/KoreTests/
 │       ├── ConfigManagerTests.swift   # Unit tests for ConfigManager + .env parsing
-│       ├── DaemonAPIClientTests.swift # Unit + integration tests for DaemonAPIClient
-│       └── DaemonManagerTests.swift   # Unit tests for DaemonManager lifecycle
+│       ├── ServerAPIClientTests.swift # Unit + integration tests for ServerAPIClient
+│       └── ProcessManagerTests.swift   # Unit tests for ProcessManager lifecycle
 ├── src/                           # React/TypeScript UI
 │   ├── App.tsx                    # Panel UI component
 │   ├── main.tsx                   # React entry point
@@ -97,14 +97,14 @@ apps/macos/
 ## Testing
 
 ```sh
-# Swift unit tests (ConfigManager, DaemonManager, DaemonAPIClient)
+# Swift unit tests (ConfigManager, ProcessManager, ServerAPIClient)
 cd apps/macos/Kore && swift test
 
 # TypeScript tests are run from repo root
 bun test apps/core-api/src/config.test.ts
 ```
 
-Integration tests in `DaemonAPIClientTests.swift` require a running Kore server on port 3000 — they auto-skip via `XCTSkipUnless` when the server is unreachable.
+Integration tests in `ServerAPIClientTests.swift` require a running Kore server on port 3000 — they auto-skip via `XCTSkipUnless` when the server is unreachable.
 
 ## Prerequisites
 

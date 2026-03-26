@@ -1,18 +1,18 @@
 import Foundation
 
-/// Result of a daemon API call.
+/// Result of a server API call.
 public enum APIResult: Equatable, Sendable {
     case success(Int)       // HTTP status code
     case httpError(Int)     // Non-2xx status code
     case networkError(String)
-    case notRunning         // Daemon state is not .running
+    case notRunning         // Server state is not .running
 }
 
-/// Lightweight client for calling the Kore daemon's HTTP API.
+/// Lightweight client for calling the Kore server HTTP API.
 ///
 /// All methods are `async` and safe to call from any context. The client is
 /// a value type — create one with the current port and token, call it, done.
-public struct DaemonAPIClient: Sendable {
+public struct ServerAPIClient: Sendable {
     public let port: Int
     public let apiKey: String?
 
@@ -22,9 +22,9 @@ public struct DaemonAPIClient: Sendable {
     }
 
     /// Convenience: builds a client from the current `ConfigManager` state.
-    public static func fromConfig(koreHome: String) -> DaemonAPIClient {
+    public static func fromConfig(koreHome: String) -> ServerAPIClient {
         let config = (try? ConfigManager.readConfig(koreHome: koreHome)) ?? .defaults
-        return DaemonAPIClient(port: config.port ?? 3000, apiKey: config.apiKey)
+        return ServerAPIClient(port: config.port ?? 3000, apiKey: config.apiKey)
     }
 
     // MARK: - High-level Actions
@@ -41,7 +41,7 @@ public struct DaemonAPIClient: Sendable {
         await post(path: "/api/v1/consolidate")
     }
 
-    /// Checks whether the daemon health endpoint responds with 2xx.
+    /// Checks whether the server health endpoint responds with 2xx.
     /// Calls `GET /api/v1/health`.
     public func healthCheck() async -> APIResult {
         await request(method: "GET", path: "/api/v1/health")

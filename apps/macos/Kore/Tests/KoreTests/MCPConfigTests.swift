@@ -17,7 +17,7 @@ final class MCPConfigTests: XCTestCase {
     // MARK: - koreMCPEntry
 
     func testKoreMCPEntryStructure() {
-        let entry = MCPConfig.koreMCPEntry(daemonURL: "http://localhost:3000", apiKey: "test-key")
+        let entry = MCPConfig.koreMCPEntry(serverURL: "http://localhost:3000", apiKey: "test-key")
 
         XCTAssertEqual(entry["command"] as? String, "kore")
         XCTAssertEqual(entry["args"] as? [String], ["mcp"])
@@ -80,7 +80,7 @@ final class MCPConfigTests: XCTestCase {
         // Temporarily override the config path by writing directly via the helper
         var root: [String: Any] = [:]
         var mcpServers = root["mcpServers"] as? [String: Any] ?? [:]
-        mcpServers["kore"] = MCPConfig.koreMCPEntry(daemonURL: "http://localhost:3000", apiKey: "my-key")
+        mcpServers["kore"] = MCPConfig.koreMCPEntry(serverURL: "http://localhost:3000", apiKey: "my-key")
         root["mcpServers"] = mcpServers
         try MCPConfig.writeJSONObject(root, to: configPath)
 
@@ -111,7 +111,7 @@ final class MCPConfigTests: XCTestCase {
         // Add kore entry
         var root = try MCPConfig.readJSONObject(at: configPath)
         var mcpServers = root["mcpServers"] as? [String: Any] ?? [:]
-        mcpServers["kore"] = MCPConfig.koreMCPEntry(daemonURL: "http://localhost:4000", apiKey: "key2")
+        mcpServers["kore"] = MCPConfig.koreMCPEntry(serverURL: "http://localhost:4000", apiKey: "key2")
         root["mcpServers"] = mcpServers
         try MCPConfig.writeJSONObject(root, to: configPath)
 
@@ -137,7 +137,7 @@ final class MCPConfigTests: XCTestCase {
         // Update kore entry
         var root = try MCPConfig.readJSONObject(at: configPath)
         var mcpServers = root["mcpServers"] as? [String: Any] ?? [:]
-        mcpServers["kore"] = MCPConfig.koreMCPEntry(daemonURL: "http://localhost:5000", apiKey: "new-key")
+        mcpServers["kore"] = MCPConfig.koreMCPEntry(serverURL: "http://localhost:5000", apiKey: "new-key")
         root["mcpServers"] = mcpServers
         try MCPConfig.writeJSONObject(root, to: configPath)
 
@@ -154,7 +154,7 @@ final class MCPConfigTests: XCTestCase {
     // MARK: - Invalid target
 
     func testInstallMCPConfigInvalidTargetThrows() {
-        XCTAssertThrowsError(try MCPConfig.installMCPConfig(target: "invalid", daemonURL: "http://localhost:3000", apiKey: "key")) { error in
+        XCTAssertThrowsError(try MCPConfig.installMCPConfig(target: "invalid", serverURL: "http://localhost:3000", apiKey: "key")) { error in
             XCTAssertTrue(error.localizedDescription.contains("Unknown MCP target"))
         }
     }
