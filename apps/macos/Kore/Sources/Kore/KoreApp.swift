@@ -103,7 +103,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             // (e.g. already adopted/running from the onboarding path).
             let currentState = await dm.serverStatus()
             let currentOwnership = await dm.ownership
-            DispatchQueue.main.async { [weak self] in
+            await MainActor.run { [weak self] in
                 self?.handleOwnershipChange(currentOwnership)
                 self?.handleServerStateChange(currentState)
             }
@@ -397,7 +397,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             let result = await client.syncAppleNotes()
             print("[Kore] Sync result: \(result)")
             if case .success = result {
-                DispatchQueue.main.async { [weak self] in
+                await MainActor.run { [weak self] in
                     self?.lastSyncTime = Date()
                     self?.updateMenuStatusItems()
                 }
