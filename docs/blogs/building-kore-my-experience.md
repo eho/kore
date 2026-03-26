@@ -54,7 +54,7 @@ This took real time. I wasn't writing the design from scratch — but I was stee
 
 Once I had a solid design, the question was how to get AI to implement it without losing the thread.
 
-I didn't want to hand the whole thing over and get back a black box. So I created a `/prd` skill: give it the design doc, get back a PRD with user stories and acceptance criteria in a consistent format. Each story ends up looking like:
+I didn't want to hand the whole thing over and get back a black box. So I created a `/design-doc` skill: give it the design, get back a structured document with user stories and acceptance criteria in a consistent format. Each story ends up looking like:
 
 ```markdown
 ### KOR-001: Initialize plugin registry
@@ -66,7 +66,7 @@ I didn't want to hand the whole thing over and get back a black box. So I create
 
 That level of specificity matters. "Handle edge cases" produces nothing testable. Method signatures and explicit criteria produce actual code.
 
-I initially tracked story progress in a local markdown file — the agent would check things off as it went. That got annoying fast, so I wrote `/prd-to-github-milestone` to push the stories to GitHub issues. Much easier to track, and it gave me a natural place to coordinate the workflow.
+I initially tracked story progress in a local markdown file — the agent would check things off as it went. That got annoying fast, so I wrote `/design-to-issues` to push the stories to GitHub issues. Much easier to track, and it gave me a natural place to coordinate the workflow.
 
 ## Handing Off Implementation
 
@@ -78,7 +78,7 @@ One thing that made it work better: I made sure each agent started with a fresh 
 
 For reviews, I experimented with Gemini 3.1 Pro instead of Opus 4.6. It was noticeably better at catching systemic issues. It found a concurrency bug that the Opus reviewer missed.
 
-Once the initial set of stories was done, I had a basic working memory system. I then added new features — the Kore CLI, [Apple Notes integration](https://github.com/eho/kore/blob/main/docs/design/apple_notes_integration_design.md), [Memory Consolidation](https://github.com/eho/kore/blob/main/docs/design/consolidation_system_design.md) — each as its own design cycle. Same process each time: refine the design, generate a PRD with `/prd`, push stories to GitHub with `/prd-to-github-milestone`, then work through them with the implementer and reviewer skills.
+Once the initial set of stories was done, I had a basic working memory system. I then added new features — the Kore CLI, [Apple Notes integration](https://github.com/eho/kore/blob/main/docs/design/apple_notes_integration_design.md), [Memory Consolidation](https://github.com/eho/kore/blob/main/docs/design/consolidation_system_design.md) — each as its own design cycle. Same process each time: refine the design, generate user stories with `/design-doc`, push them to GitHub with `/design-to-issues`, then work through them with the implementer and reviewer skills.
 
 I'm still manually orchestrating the workflow — triggering each step myself. It wouldn't take much to automate it, and that's probably next.
 
