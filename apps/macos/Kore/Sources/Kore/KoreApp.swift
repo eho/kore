@@ -19,6 +19,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     var statusItem: NSStatusItem?
     var panelManager: PanelManager?
     var settingsWindowManager: SettingsWindowManager?
+    var onboardingWindowManager: OnboardingWindowManager?
     var daemonManager: DaemonManager?
 
     private let koreHome: String = ConfigManager.resolveKoreHome()
@@ -33,13 +34,42 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var menuSyncTimeItem: NSMenuItem?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // Check if this is a first launch (no config.json exists)
+        let configPath = (koreHome as NSString).expandingTildeInPath + "/config.json"
+        let isFirstLaunch = !FileManager.default.fileExists(atPath: configPath)
+
         // Seed port from config so the menu shows the right value immediately.
         let config = (try? ConfigManager.readConfig(koreHome: koreHome)) ?? .defaults
         daemonPort = config.port ?? 3000
-        print("[Kore] Starting — home=\(koreHome) port=\(daemonPort)")
+        print("[Kore] Starting — home=\(koreHome) port=\(daemonPort) firstLaunch=\(isFirstLaunch)")
 
         let dm = DaemonManager(koreHome: koreHome)
         daemonManager = dm
+
+        if isFirstLaunch {
+            // Show onboarding instead of starting daemon — daemon will start
+            // when the user completes the setup wizard.
+            setupStatusItem()
+            onboardingWindowManager = OnboardingWindowManager(
+                daemonManager: dm,
+                onComplete: { [weak self] in
+                    self?.onboardingWindowManager = nil
+                    self?.startNormalMode(dm: dm)
+                }
+            )
+            onboardingWindowManager?.showWindow()
+        } else {
+            startNormalMode(dm: dm)
+        }
+    }
+
+    /// Initializes daemon callbacks, probes for a running daemon, and sets up UI managers.
+    /// Called directly on normal launch, or after onboarding completes on first launch.
+    private func startNormalMode(dm: DaemonManager) {
+        // Re-read config in case onboarding just wrote it
+        if let freshConfig = try? ConfigManager.readConfig(koreHome: koreHome) {
+            daemonPort = freshConfig.port ?? 3000
+        }
 
         // Register callbacks, then adopt any orphaned daemon process — ordering matters
         // so no state transitions are missed.
@@ -58,7 +88,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             await dm.probeForRunningDaemon(port: daemonPort)
         }
 
-        setupStatusItem()
+        if statusItem == nil {
+            setupStatusItem()
+        }
         panelManager = PanelManager(daemonManager: dm)
         settingsWindowManager = SettingsWindowManager(daemonManager: dm)
     }

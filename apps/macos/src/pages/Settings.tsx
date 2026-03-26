@@ -91,6 +91,8 @@ export function Settings() {
   const [claudeCodeDetected, setClaudeCodeDetected] = useState<boolean | null>(null);
   const [lastSyncTime, setLastSyncTime] = useState<string | null>(null);
   const [koreHome, setKoreHome] = useState<string>("~/.kore");
+  const [launchAtLogin, setLaunchAtLogin] = useState(false);
+  const [mcpInstallStatus, setMcpInstallStatus] = useState<Record<string, string>>({});
 
   // Track which fields changed that require restart
   const [restartRequired, setRestartRequired] = useState(false);
@@ -151,6 +153,24 @@ export function Settings() {
             setTimeout(() => setSaveMessage(null), 3000);
           }
           break;
+        case "setLaunchAtLogin":
+          if (msg.success) {
+            setLaunchAtLogin(msg.enabled as boolean);
+          }
+          break;
+        case "getLaunchAtLogin":
+          setLaunchAtLogin(msg.enabled as boolean);
+          break;
+        case "installMCPConfig":
+          if (msg.success) {
+            setMcpInstallStatus((prev) => ({ ...prev, [msg.target as string]: "installed" }));
+            // Re-check detection status
+            bridgeCall("checkClaudeDesktopConfig");
+            bridgeCall("checkClaudeCodeConfig");
+          } else {
+            setMcpInstallStatus((prev) => ({ ...prev, [msg.target as string]: `error: ${msg.error}` }));
+          }
+          break;
       }
     },
     [config],
@@ -161,6 +181,7 @@ export function Settings() {
     // Resolve KORE_HOME first, which triggers readConfig with the correct path
     bridgeCall("resolveKoreHome");
     bridgeCall("getDaemonStatus");
+    bridgeCall("getLaunchAtLogin");
     return () => {
       window.bridgeCallback = undefined;
     };
@@ -217,6 +238,7 @@ export function Settings() {
               koreHome={koreHome}
               daemonStatus={daemonStatus}
               restartRequired={restartRequired}
+              launchAtLogin={launchAtLogin}
               updateConfig={updateConfig}
             />
           )}
@@ -234,8 +256,10 @@ export function Settings() {
           )}
           {activeTab === "mcp" && (
             <McpTab
+              config={config}
               claudeDesktopDetected={claudeDesktopDetected}
               claudeCodeDetected={claudeCodeDetected}
+              mcpInstallStatus={mcpInstallStatus}
             />
           )}
         </div>
@@ -260,12 +284,14 @@ function GeneralTab({
   koreHome,
   daemonStatus,
   restartRequired,
+  launchAtLogin,
   updateConfig,
 }: {
   config: KoreConfig;
   koreHome: string;
   daemonStatus: { status: string; error?: string; managed?: boolean };
   restartRequired: boolean;
+  launchAtLogin: boolean;
   updateConfig: (patch: Partial<KoreConfig>) => void;
 }) {
   const statusClass = daemonStatus.status === "running" ? "running" : daemonStatus.status === "error" ? "error" : "stopped";
@@ -320,11 +346,12 @@ function GeneralTab({
         <label className="toggle">
           <input
             type="checkbox"
+            checked={launchAtLogin}
             onChange={(e) => bridgeCall("setLaunchAtLogin", { enabled: e.target.checked })}
           />
           <span className="toggle-slider" />
         </label>
-        <span className="form-hint">Implemented in MAC-006</span>
+        <span className="form-hint">Start Kore automatically when you log in</span>
       </div>
 
       <div className="form-group">
@@ -588,14 +615,20 @@ function AppleNotesTab({
 // ── MCP Tab ─────────────────────────────────────────────────────────
 
 function McpTab({
+  config,
   claudeDesktopDetected,
   claudeCodeDetected,
+  mcpInstallStatus,
 }: {
+  config: KoreConfig;
   claudeDesktopDetected: boolean | null;
   claudeCodeDetected: boolean | null;
+  mcpInstallStatus: Record<string, string>;
 }) {
+  const daemonURL = `http://localhost:${config.port ?? 3000}`;
+  const apiKey = config.apiKey ?? "";
+
   useEffect(() => {
-    // Check for Claude Desktop config file
     bridgeCall("checkClaudeDesktopConfig");
     bridgeCall("checkClaudeCodeConfig");
   }, []);
@@ -611,32 +644,42 @@ function McpTab({
         <div className="mcp-card-header">
           <strong>Claude Desktop</strong>
           <span className={`mcp-status ${claudeDesktopDetected === true ? "detected" : claudeDesktopDetected === false ? "not-detected" : ""}`}>
-            {claudeDesktopDetected === null ? "Checking…" : claudeDesktopDetected ? "Config detected" : "Not detected"}
+            {mcpInstallStatus["claude-desktop"] === "installed"
+              ? "Installed"
+              : claudeDesktopDetected === null ? "Checking\u2026" : claudeDesktopDetected ? "Config detected" : "Not detected"}
           </span>
         </div>
         <button
           className="btn-secondary"
-          onClick={() => bridgeCall("installMCPConfig", { target: "claude-desktop" })}
-          title="Implementation in MAC-006"
+          onClick={() => bridgeCall("installMCPConfig", { target: "claude-desktop", daemonURL, apiKey })}
+          disabled={mcpInstallStatus["claude-desktop"] === "installed"}
         >
-          Install MCP Config
+          {mcpInstallStatus["claude-desktop"] === "installed" ? "Installed" : "Install MCP Config"}
         </button>
+        {mcpInstallStatus["claude-desktop"]?.startsWith("error") && (
+          <span className="form-hint" style={{ color: "var(--error)", marginTop: 4 }}>{mcpInstallStatus["claude-desktop"]}</span>
+        )}
       </div>
 
       <div className="mcp-card">
         <div className="mcp-card-header">
           <strong>Claude Code</strong>
           <span className={`mcp-status ${claudeCodeDetected === true ? "detected" : claudeCodeDetected === false ? "not-detected" : ""}`}>
-            {claudeCodeDetected === null ? "Checking…" : claudeCodeDetected ? "Config detected" : "Not detected"}
+            {mcpInstallStatus["claude-code"] === "installed"
+              ? "Installed"
+              : claudeCodeDetected === null ? "Checking\u2026" : claudeCodeDetected ? "Config detected" : "Not detected"}
           </span>
         </div>
         <button
           className="btn-secondary"
-          onClick={() => bridgeCall("installMCPConfig", { target: "claude-code" })}
-          title="Implementation in MAC-006"
+          onClick={() => bridgeCall("installMCPConfig", { target: "claude-code", daemonURL, apiKey })}
+          disabled={mcpInstallStatus["claude-code"] === "installed"}
         >
-          Install MCP Config
+          {mcpInstallStatus["claude-code"] === "installed" ? "Installed" : "Install MCP Config"}
         </button>
+        {mcpInstallStatus["claude-code"]?.startsWith("error") && (
+          <span className="form-hint" style={{ color: "var(--error)", marginTop: 4 }}>{mcpInstallStatus["claude-code"]}</span>
+        )}
       </div>
     </div>
   );
