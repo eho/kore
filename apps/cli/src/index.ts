@@ -16,6 +16,7 @@ import { consolidationResetCommand } from "./commands/consolidation-reset.ts";
 import { insightsCommand } from "./commands/insights.ts";
 import { mcpCommand } from "./commands/mcp.ts";
 import { startCommand } from "./commands/start.ts";
+import { stopCommand } from "./commands/stop.ts";
 
 // Read version from package.json
 const pkg = await import("../package.json", { with: { type: "json" } });
@@ -39,9 +40,18 @@ program.hook("preAction", (thisCommand) => {
 // ─── start ───────────────────────────────────────────────────────────────────
 program
   .command("start")
-  .description("Start the Kore daemon (core-api server)")
+  .description("Start the Kore server")
   .action(async () => {
     await startCommand();
+  });
+
+// ─── stop ────────────────────────────────────────────────────────────────────
+program
+  .command("stop")
+  .description("Stop the running Kore server")
+  .option("--force", "Discover process via lsof and stop it even without a PID file", false)
+  .action(async (opts) => {
+    await stopCommand(opts);
   });
 
 // ─── health ──────────────────────────────────────────────────────────────────

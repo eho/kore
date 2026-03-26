@@ -29,10 +29,11 @@ bun run --filter @kore/cli start
 
 The CLI reads configuration from environment variables. Bun auto-loads `.env` from the working directory.
 
-| Variable       | Default                   | Description                    |
-| -------------- | ------------------------- | ------------------------------ |
-| `KORE_API_URL` | `http://localhost:3000`   | Base URL of the Kore API       |
-| `KORE_API_KEY` | _(none)_                  | API key for authenticated calls |
+| Variable       | Default                   | Description                            |
+| -------------- | ------------------------- | -------------------------------------- |
+| `KORE_HOME`    | `~/.kore`                 | Kore data directory (PID file, config) |
+| `KORE_API_URL` | `http://localhost:3000`   | Base URL of the Kore API               |
+| `KORE_API_KEY` | _(none)_                  | API key for authenticated calls        |
 
 Example `.env`:
 
@@ -43,25 +44,67 @@ KORE_API_KEY=your-secret-key-here
 
 ## Commands
 
-### `kore health`
+### `kore stop`
 
-Check the health of the Kore API server.
+Stop the running Kore server.
 
 ```sh
-kore health
-kore health --json   # machine-readable JSON output
+kore stop           # stop via PID file
+kore stop --force   # discover process via lsof and stop it
 ```
 
 Example output:
 
 ```
-API Status:   ok
-Version:      1.0.0
-QMD Status:   ok
-Queue Length: 0
+Stopping Kore (pid 12345)... done.
 ```
 
-Exits with code `1` if the API is unreachable.
+If no PID file exists but the health endpoint responds, prints a warning and suggests `--force`. The `--force` flag discovers the process via `lsof -i :PORT` and sends SIGTERM/SIGKILL.
+
+Options:
+
+| Flag      | Description                                           |
+| --------- | ----------------------------------------------------- |
+| `--force` | Discover process via lsof and stop without PID file   |
+
+---
+
+### `kore health`
+
+Check the health of the Kore server and show process info.
+
+```sh
+kore health
+kore health --json   # machine-readable JSON output (includes pid and port)
+```
+
+Example output:
+
+```
+Kore is running on :3000 (pid 12345)
+
+Version:      1.0.0
+
+Memories
+  Total:      42
+
+Queue
+  Pending:    0
+  Processing: 0
+  Failed:     0
+
+Index
+  Status:     ok
+  Documents:  42
+  Embedded:   42
+```
+
+When the server is unreachable but a PID is alive: `Kore process exists (pid N) but health endpoint is not responding.`
+When nothing is found: `Kore is not running.`
+
+The `--json` output includes `pid` and `port` fields when available.
+
+Exits with code `1` if the server is unreachable.
 
 ---
 
