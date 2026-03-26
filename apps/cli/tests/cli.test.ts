@@ -183,7 +183,7 @@ describe("health command", () => {
     const exitCode = await proc.exited;
     expect(exitCode).toBe(1);
     const out = await new Response(proc.stderr).text();
-    expect(out).toContain("Cannot reach Kore API");
+    expect(out).toContain("Kore is not running.");
   });
 
   test("warns when KORE_API_KEY is not set", async () => {
