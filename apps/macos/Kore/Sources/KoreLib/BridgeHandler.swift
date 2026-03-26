@@ -63,6 +63,24 @@ public class BridgeHandler: NSObject, WKScriptMessageHandler {
             NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: expanded)
             sendToJS(["type": "revealInFinder", "success": true])
 
+        case "chooseClonePath":
+            DispatchQueue.main.async {
+                let panel = NSOpenPanel()
+                panel.canChooseFiles = false
+                panel.canChooseDirectories = true
+                panel.allowsMultipleSelection = false
+                panel.message = "Select the Kore clone directory"
+                if panel.runModal() == .OK, let url = panel.url {
+                    let path = url.path
+                    let coreApiPath = url.appendingPathComponent("apps/core-api").path
+                    if FileManager.default.fileExists(atPath: coreApiPath) {
+                        self.sendToJS(["type": "chooseClonePath", "path": path])
+                    } else {
+                        self.sendToJS(["type": "chooseClonePath", "error": "Invalid directory: must contain apps/core-api/"])
+                    }
+                }
+            }
+
         case "checkBunInstalled":
             do {
                 let path = try checkBunInstalled()

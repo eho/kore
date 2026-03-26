@@ -36,6 +36,7 @@ interface AppleNotesConfig {
 }
 
 interface KoreConfig {
+  clonePath?: string;
   koreHome?: string;
   port?: number;
   apiKey?: string;
@@ -142,6 +143,14 @@ export function Settings() {
         case "checkClaudeCodeConfig":
           setClaudeCodeDetected(msg.detected as boolean);
           break;
+        case "chooseClonePath":
+          if (msg.path) {
+            setConfig((prev) => ({ ...prev, clonePath: msg.path as string }));
+          } else if (msg.error) {
+            setSaveMessage(`Error: ${msg.error}`);
+            setTimeout(() => setSaveMessage(null), 3000);
+          }
+          break;
       }
     },
     [config],
@@ -165,9 +174,9 @@ export function Settings() {
   // Track restart-required (port or clonePath changed)
   useEffect(() => {
     const portChanged = config.port !== savedConfig.port;
-    const homeChanged = config.koreHome !== savedConfig.koreHome;
-    setRestartRequired(portChanged || homeChanged);
-  }, [config.port, config.koreHome, savedConfig.port, savedConfig.koreHome]);
+    const cloneChanged = config.clonePath !== savedConfig.clonePath;
+    setRestartRequired(portChanged || cloneChanged);
+  }, [config.port, config.clonePath, savedConfig.port, savedConfig.clonePath]);
 
   function updateConfig(patch: Partial<KoreConfig>) {
     setConfig((prev) => ({ ...prev, ...patch }));
@@ -269,13 +278,18 @@ function GeneralTab({
 
       <div className="form-group">
         <label className="form-label">Clone Path</label>
-        <input
-          type="text"
-          className="form-input"
-          value={config.koreHome ?? ""}
-          onChange={(e) => updateConfig({ koreHome: e.target.value })}
-          placeholder="~/dev/kore"
-        />
+        <div className="form-row">
+          <input
+            type="text"
+            className="form-input"
+            value={config.clonePath ?? ""}
+            onChange={(e) => updateConfig({ clonePath: e.target.value })}
+            placeholder="~/dev/kore"
+          />
+          <button className="btn-secondary btn-small" onClick={() => bridgeCall("chooseClonePath")}>
+            Choose...
+          </button>
+        </div>
         <span className="form-hint">Must contain apps/core-api/</span>
       </div>
 
@@ -327,7 +341,7 @@ function GeneralTab({
           <span className="form-hint">Externally started — use your terminal to stop this server</span>
         )}
         <div className="daemon-controls">
-          <button className="btn-secondary btn-small" disabled={isRunning} onClick={() => bridgeCall("startDaemon", { clonePath: config.koreHome, port: config.port })}>
+          <button className="btn-secondary btn-small" disabled={isRunning} onClick={() => bridgeCall("startDaemon", { clonePath: config.clonePath ?? "~/dev/kore", port: config.port })}>
             Start
           </button>
           <button className="btn-secondary btn-small" disabled={!managed || !isRunning} onClick={() => bridgeCall("stopDaemon")}>

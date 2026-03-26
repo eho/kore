@@ -4,6 +4,7 @@ import Foundation
 
 /// Mirrors the config.json schema written by the macOS app and read by the Bun daemon.
 public struct KoreConfig: Codable {
+    public var clonePath: String?
     public var koreHome: String?
     public var port: Int?
     public var apiKey: String?
@@ -63,10 +64,11 @@ public struct KoreConfig: Codable {
         }
     }
 
-    public init(koreHome: String? = nil, port: Int? = nil, apiKey: String? = nil,
+    public init(clonePath: String? = nil, koreHome: String? = nil, port: Int? = nil, apiKey: String? = nil,
                 llm: LlmConfig? = nil, appleNotes: AppleNotesConfig? = nil,
                 consolidation: ConsolidationConfig? = nil, embedIntervalMs: Int? = nil,
                 mcpEnabled: Bool? = nil) {
+        self.clonePath = clonePath
         self.koreHome = koreHome
         self.port = port
         self.apiKey = apiKey
@@ -80,6 +82,7 @@ public struct KoreConfig: Codable {
     /// A config populated with default values matching the TypeScript defaults.
     public static var defaults: KoreConfig {
         KoreConfig(
+            clonePath: nil,
             koreHome: nil,
             port: 3000,
             apiKey: nil,

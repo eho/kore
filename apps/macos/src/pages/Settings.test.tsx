@@ -146,6 +146,22 @@ test("changing port shows restart required badge", () => {
   expect(badges.length).toBeGreaterThanOrEqual(1);
 });
 
+test("changing clone path shows restart required badge", () => {
+  renderAndLoad();
+  act(() => {
+    (window as any).__simulateBridgeResponse({ type: "chooseClonePath", path: "/another/path" });
+  });
+  const badges = screen.getAllByText("Restart required");
+  expect(badges.length).toBeGreaterThanOrEqual(1);
+});
+
+test("choose clone path button calls bridge", () => {
+  renderAndLoad();
+  const btn = screen.getByText("Choose...");
+  fireEvent.click(btn);
+  expect(findCall("chooseClonePath")).toBeTruthy();
+});
+
 // ── Save tests ──────────────────────────────────────────────────────
 
 test("save button calls bridgeCall writeConfig with correct payload", () => {
