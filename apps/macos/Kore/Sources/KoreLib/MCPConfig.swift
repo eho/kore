@@ -141,7 +141,7 @@ public struct MCPConfig {
         }
 
         do {
-            let data = try JSONSerialization.data(withJSONObject: dict, options: [.prettyPrinted, .sortedKeys])
+            let data = try JSONSerialization.data(withJSONObject: dict, options: [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes])
             try data.write(to: url, options: .atomic)
         } catch {
             throw MCPConfigError.writeError(error.localizedDescription)

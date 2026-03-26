@@ -49,6 +49,7 @@ interface KoreConfig {
 }
 
 const DEFAULTS: KoreConfig = {
+  clonePath: "~/dev/kore",
   port: 3000,
   llm: {
     provider: "ollama",
@@ -100,8 +101,16 @@ export function Onboarding() {
         case "resolveKoreHome": {
           const resolved = msg.koreHome as string;
           setKoreHome(resolved);
+          // Load existing config so onboarding pre-populates with saved values
+          bridgeCall("readConfig", { koreHome: resolved });
           break;
         }
+        case "readConfig":
+          if (msg.config) {
+            const cfg = msg.config as KoreConfig;
+            setConfig((prev) => ({ ...prev, ...cfg }));
+          }
+          break;
         case "checkBunInstalled":
           if (msg.path) {
             setBunStatus({ path: msg.path as string });
@@ -171,13 +180,6 @@ export function Onboarding() {
     };
   }, [handleBridgeMessage]);
 
-  // Auto-detect clone path
-  useEffect(() => {
-    if (!config.clonePath) {
-      // Try common location
-      setConfig((prev) => ({ ...prev, clonePath: "~/dev/kore" }));
-    }
-  }, []);
 
   function updateConfig(patch: Partial<KoreConfig>) {
     setConfig((prev) => ({ ...prev, ...patch }));

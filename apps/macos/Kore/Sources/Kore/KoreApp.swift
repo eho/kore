@@ -65,12 +65,17 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     /// Initializes daemon callbacks, probes for a running daemon, and sets up UI managers.
     /// Called directly on normal launch, or after onboarding completes on first launch.
     private func startNormalMode(dm: DaemonManager) {
-        // Re-read config in case onboarding just wrote it, and stamp lastLaunchAt
+        // Re-read config in case onboarding just wrote it
         if var freshConfig = try? ConfigManager.readConfig(koreHome: koreHome) {
             daemonPort = freshConfig.port ?? 3000
-            let formatter = ISO8601DateFormatter()
-            freshConfig.lastLaunchAt = formatter.string(from: Date())
-            try? ConfigManager.writeConfig(koreHome: koreHome, config: freshConfig)
+            // Stamp lastLaunchAt only if already set (normal launch) or freshly written
+            // by onboarding. If the user cancelled onboarding, lastLaunchAt is still nil
+            // and we leave it that way so onboarding shows again next time.
+            if freshConfig.lastLaunchAt != nil {
+                let formatter = ISO8601DateFormatter()
+                freshConfig.lastLaunchAt = formatter.string(from: Date())
+                try? ConfigManager.writeConfig(koreHome: koreHome, config: freshConfig)
+            }
         }
 
         // Register callbacks, then adopt any orphaned daemon process — ordering matters
