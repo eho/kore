@@ -185,6 +185,10 @@ public class BridgeHandler: NSObject, WKScriptMessageHandler {
         let clonePath = payload["clonePath"] as? String ?? "~/dev/kore"
         let port = payload["port"] as? Int ?? 3000
         Task {
+            // Probe first — if an orphaned daemon is already running on this port,
+            // adopt it so startDaemon's guard (state == .stopped) becomes a no-op.
+            await dm.adoptOrphanedProcess()
+            await dm.probeForRunningDaemon(port: port)
             await dm.startDaemon(clonePath: clonePath, port: port)
             let state = await dm.daemonStatus()
             let managed = await dm.isManaged()
