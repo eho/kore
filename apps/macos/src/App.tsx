@@ -45,7 +45,7 @@ export function App() {
       <div className="panel-body">
         <div className="status-section">
           <div className="status-row">
-            <span className="label">Daemon</span>
+            <span className="label">Server</span>
             <span className="value running">Running</span>
           </div>
           <div className="status-row">

@@ -1,7 +1,7 @@
 import XCTest
 @testable import KoreLib
 
-final class DaemonAPIClientTests: XCTestCase {
+final class ServerAPIClientTests: XCTestCase {
 
     // MARK: - Construction
 
@@ -12,7 +12,7 @@ final class DaemonAPIClientTests: XCTestCase {
         try? FileManager.default.createDirectory(at: tmpDir, withIntermediateDirectories: true)
 
         // No config.json → should get defaults.
-        let client = DaemonAPIClient.fromConfig(koreHome: tmpDir.path)
+        let client = ServerAPIClient.fromConfig(koreHome: tmpDir.path)
         XCTAssertEqual(client.port, 3000)
         XCTAssertNil(client.apiKey)
     }
@@ -25,7 +25,7 @@ final class DaemonAPIClientTests: XCTestCase {
         let config = KoreConfig(port: 8080, apiKey: "test-key-123")
         try ConfigManager.writeConfig(koreHome: tmpDir.path, config: config)
 
-        let client = DaemonAPIClient.fromConfig(koreHome: tmpDir.path)
+        let client = ServerAPIClient.fromConfig(koreHome: tmpDir.path)
         XCTAssertEqual(client.port, 8080)
         XCTAssertEqual(client.apiKey, "test-key-123")
     }
@@ -34,7 +34,7 @@ final class DaemonAPIClientTests: XCTestCase {
 
     func testHealthCheckReturnsNetworkErrorWhenNothingListening() async {
         // Port 1 is almost certainly not serving HTTP.
-        let client = DaemonAPIClient(port: 1, apiKey: nil)
+        let client = ServerAPIClient(port: 1, apiKey: nil)
         let result = await client.healthCheck()
 
         if case .networkError = result {
@@ -48,7 +48,7 @@ final class DaemonAPIClientTests: XCTestCase {
         // We can't inspect the request directly without a mock server,
         // but we verify the client initializes with the key and the call
         // doesn't crash. The integration tests below verify auth end-to-end.
-        let client = DaemonAPIClient(port: 1, apiKey: "my-secret")
+        let client = ServerAPIClient(port: 1, apiKey: "my-secret")
         let result = await client.post(path: "/nonexistent")
 
         if case .networkError = result {
@@ -59,7 +59,7 @@ final class DaemonAPIClientTests: XCTestCase {
     }
 
     func testNotRunningPortReturnsNetworkError() async {
-        let client = DaemonAPIClient(port: 59999)
+        let client = ServerAPIClient(port: 59999)
         let result = await client.syncAppleNotes()
 
         if case .networkError = result {
@@ -86,12 +86,12 @@ final class DaemonAPIClientTests: XCTestCase {
 // These tests hit the real daemon. They are skipped automatically if the
 // health endpoint is not reachable, so they don't break CI.
 
-final class DaemonAPIClientIntegrationTests: XCTestCase {
-    private var client: DaemonAPIClient!
+final class ServerAPIClientIntegrationTests: XCTestCase {
+    private var client: ServerAPIClient!
     private var serverAvailable = false
 
     override func setUp() async throws {
-        client = DaemonAPIClient(port: 3000, apiKey: "random-key-for-testing")
+        client = ServerAPIClient(port: 3000, apiKey: "random-key-for-testing")
         let health = await client.healthCheck()
         if case .success = health {
             serverAvailable = true
@@ -128,7 +128,7 @@ final class DaemonAPIClientIntegrationTests: XCTestCase {
 
     func testUnauthorizedRequest() async throws {
         try XCTSkipUnless(serverAvailable, "Kore server not running on :3000")
-        let badClient = DaemonAPIClient(port: 3000, apiKey: "wrong-key")
+        let badClient = ServerAPIClient(port: 3000, apiKey: "wrong-key")
         let result = await badClient.healthCheck()
         // Health endpoint may or may not require auth — if it does, expect 401.
         // If it doesn't, expect 200. Either way, it should not be a network error.

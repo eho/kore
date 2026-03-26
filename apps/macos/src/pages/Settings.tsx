@@ -84,7 +84,7 @@ export function Settings() {
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
 
   // Bridge response state
-  const [daemonStatus, setDaemonStatus] = useState<{ status: string; error?: string; managed?: boolean }>({ status: "stopped" });
+  const [serverStatus, setServerStatus] = useState<{ status: string; error?: string; managed?: boolean }>({ status: "stopped" });
   const [notesAccess, setNotesAccess] = useState<string>("unknown");
   const [ollamaStatus, setOllamaStatus] = useState<string | null>(null);
   const [claudeDesktopDetected, setClaudeDesktopDetected] = useState<boolean | null>(null);
@@ -126,8 +126,8 @@ export function Settings() {
             setSaveMessage(`Error: ${msg.error}`);
           }
           break;
-        case "daemonStatus":
-          setDaemonStatus({
+        case "serverStatus":
+          setServerStatus({
             status: msg.status as string,
             error: msg.error as string | undefined,
             managed: msg.managed as boolean | undefined,
@@ -180,7 +180,7 @@ export function Settings() {
     window.bridgeCallback = handleBridgeMessage;
     // Resolve KORE_HOME first, which triggers readConfig with the correct path
     bridgeCall("resolveKoreHome");
-    bridgeCall("getDaemonStatus");
+    bridgeCall("getServerStatus");
     bridgeCall("getLaunchAtLogin");
     return () => {
       window.bridgeCallback = undefined;
@@ -236,7 +236,7 @@ export function Settings() {
             <GeneralTab
               config={config}
               koreHome={koreHome}
-              daemonStatus={daemonStatus}
+              serverStatus={serverStatus}
               restartRequired={restartRequired}
               launchAtLogin={launchAtLogin}
               updateConfig={updateConfig}
@@ -282,21 +282,21 @@ export function Settings() {
 function GeneralTab({
   config,
   koreHome,
-  daemonStatus,
+  serverStatus,
   restartRequired,
   launchAtLogin,
   updateConfig,
 }: {
   config: KoreConfig;
   koreHome: string;
-  daemonStatus: { status: string; error?: string; managed?: boolean };
+  serverStatus: { status: string; error?: string; managed?: boolean };
   restartRequired: boolean;
   launchAtLogin: boolean;
   updateConfig: (patch: Partial<KoreConfig>) => void;
 }) {
-  const statusClass = daemonStatus.status === "running" ? "running" : daemonStatus.status === "error" ? "error" : "stopped";
-  const managed = daemonStatus.managed !== false;
-  const isRunning = daemonStatus.status === "running";
+  const statusClass = serverStatus.status === "running" ? "running" : serverStatus.status === "error" ? "error" : "stopped";
+  const managed = serverStatus.managed !== false;
+  const isRunning = serverStatus.status === "running";
 
   return (
     <div className="tab-content">
@@ -355,26 +355,26 @@ function GeneralTab({
       </div>
 
       <div className="form-group">
-        <label className="form-label">Daemon Status</label>
-        <div className="daemon-status-row">
+        <label className="form-label">Server Status</label>
+        <div className="server-status-row">
           <span className={`status-indicator ${statusClass}`}>
             <span className={`status-dot ${statusClass}`} />
-            {daemonStatus.status.charAt(0).toUpperCase() + daemonStatus.status.slice(1)}
-            {daemonStatus.error ? `: ${daemonStatus.error}` : ""}
+            {serverStatus.status.charAt(0).toUpperCase() + serverStatus.status.slice(1)}
+            {serverStatus.error ? `: ${serverStatus.error}` : ""}
           </span>
           {restartRequired && <span className="restart-badge">Restart required</span>}
         </div>
         {isRunning && !managed && (
           <span className="form-hint">Externally started — use your terminal to stop this server</span>
         )}
-        <div className="daemon-controls">
-          <button className="btn-secondary btn-small" disabled={isRunning} onClick={() => bridgeCall("startDaemon", { clonePath: config.clonePath ?? "~/dev/kore", port: config.port })}>
+        <div className="server-controls">
+          <button className="btn-secondary btn-small" disabled={isRunning} onClick={() => bridgeCall("startServer", { clonePath: config.clonePath ?? "~/dev/kore", port: config.port })}>
             Start
           </button>
-          <button className="btn-secondary btn-small" disabled={!managed || !isRunning} onClick={() => bridgeCall("stopDaemon")}>
+          <button className="btn-secondary btn-small" disabled={!managed || !isRunning} onClick={() => bridgeCall("stopServer")}>
             Stop
           </button>
-          <button className="btn-secondary btn-small" disabled={!managed || !isRunning} onClick={() => bridgeCall("restartDaemon")}>
+          <button className="btn-secondary btn-small" disabled={!managed || !isRunning} onClick={() => bridgeCall("restartServer")}>
             Restart
           </button>
         </div>
@@ -509,7 +509,7 @@ function AppleNotesTab({
 
   function handleSyncNow() {
     setLastSyncTime("syncing…");
-    // Call daemon API to sync — this goes through the bridge
+    // Call server API to sync — this goes through the bridge
     bridgeCall("syncAppleNotes");
   }
 
@@ -625,7 +625,7 @@ function McpTab({
   claudeCodeDetected: boolean | null;
   mcpInstallStatus: Record<string, string>;
 }) {
-  const daemonURL = `http://localhost:${config.port ?? 3000}`;
+  const serverURL = `http://localhost:${config.port ?? 3000}`;
   const apiKey = config.apiKey ?? "";
 
   useEffect(() => {
@@ -651,7 +651,7 @@ function McpTab({
         </div>
         <button
           className="btn-secondary"
-          onClick={() => bridgeCall("installMCPConfig", { target: "claude-desktop", daemonURL, apiKey })}
+          onClick={() => bridgeCall("installMCPConfig", { target: "claude-desktop", serverURL, apiKey })}
           disabled={mcpInstallStatus["claude-desktop"] === "installed"}
         >
           {mcpInstallStatus["claude-desktop"] === "installed" ? "Installed" : "Install MCP Config"}
@@ -672,7 +672,7 @@ function McpTab({
         </div>
         <button
           className="btn-secondary"
-          onClick={() => bridgeCall("installMCPConfig", { target: "claude-code", daemonURL, apiKey })}
+          onClick={() => bridgeCall("installMCPConfig", { target: "claude-code", serverURL, apiKey })}
           disabled={mcpInstallStatus["claude-code"] === "installed"}
         >
           {mcpInstallStatus["claude-code"] === "installed" ? "Installed" : "Install MCP Config"}

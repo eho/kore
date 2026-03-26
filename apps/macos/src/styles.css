@@ -412,14 +412,14 @@ body {
   font-size: 13px;
 }
 
-.daemon-status-row {
+.server-status-row {
   display: flex;
   align-items: center;
   gap: 12px;
   margin-bottom: 8px;
 }
 
-.daemon-controls {
+.server-controls {
   display: flex;
   gap: 6px;
 }

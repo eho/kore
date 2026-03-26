@@ -20,37 +20,37 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     var panelManager: PanelManager?
     var settingsWindowManager: SettingsWindowManager?
     var onboardingWindowManager: OnboardingWindowManager?
-    var daemonManager: DaemonManager?
+    var processManager: ProcessManager?
 
     private let koreHome: String = ConfigManager.resolveKoreHome()
 
     // State tracking — main-thread only
-    private var currentState: DaemonState = .stopped
+    private var currentState: ServerState = .stopped
     private var lastSyncTime: Date?
-    private var daemonPort: Int = 3000
+    private var serverPort: Int = 3000
 
     // Retained menu items for in-place text updates
-    private var menuDaemonStatusItem: NSMenuItem?
+    private var menuServerStatusItem: NSMenuItem?
     private var menuSyncTimeItem: NSMenuItem?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Seed port from config so the menu shows the right value immediately.
         let config = (try? ConfigManager.readConfig(koreHome: koreHome)) ?? .defaults
-        daemonPort = config.port ?? 3000
+        serverPort = config.port ?? 3000
         // No lastLaunchAt means the app has never completed setup — show onboarding.
         // To re-trigger onboarding, remove the lastLaunchAt field from config.json.
         let isFirstLaunch = config.lastLaunchAt == nil
-        print("[Kore] Starting — home=\(koreHome) port=\(daemonPort) firstLaunch=\(isFirstLaunch)")
+        print("[Kore] Starting — home=\(koreHome) port=\(serverPort) firstLaunch=\(isFirstLaunch)")
 
-        let dm = DaemonManager(koreHome: koreHome)
-        daemonManager = dm
+        let dm = ProcessManager(koreHome: koreHome)
+        processManager = dm
 
         if isFirstLaunch {
             // Show onboarding instead of starting daemon — daemon will start
             // when the user completes the setup wizard.
             setupStatusItem()
             onboardingWindowManager = OnboardingWindowManager(
-                daemonManager: dm,
+                processManager: dm,
                 onComplete: { [weak self] in
                     self?.onboardingWindowManager = nil
                     self?.startNormalMode(dm: dm)
@@ -62,12 +62,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    /// Initializes daemon callbacks, probes for a running daemon, and sets up UI managers.
+    /// Initializes daemon callbacks, probes for a running server, and sets up UI managers.
     /// Called directly on normal launch, or after onboarding completes on first launch.
-    private func startNormalMode(dm: DaemonManager) {
+    private func startNormalMode(dm: ProcessManager) {
         // Re-read config in case onboarding just wrote it
         if var freshConfig = try? ConfigManager.readConfig(koreHome: koreHome) {
-            daemonPort = freshConfig.port ?? 3000
+            serverPort = freshConfig.port ?? 3000
             // Stamp lastLaunchAt only if already set (normal launch) or freshly written
             // by onboarding. If the user cancelled onboarding, lastLaunchAt is still nil
             // and we leave it that way so onboarding shows again next time.
@@ -78,53 +78,53 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
 
-        // Register callbacks, then adopt any orphaned daemon process — ordering matters
+        // Register callbacks, then adopt any orphaned server process — ordering matters
         // so no state transitions are missed.
         Task {
             await dm.setStateChangeCallback { [weak self] state in
-                // Already dispatched to main queue by DaemonManager.
-                self?.handleDaemonStateChange(state)
+                // Already dispatched to main queue by ProcessManager.
+                self?.handleServerStateChange(state)
             }
             await dm.setHealthPollCallback { [weak self] info in
-                // Already dispatched to main queue by DaemonManager.
+                // Already dispatched to main queue by ProcessManager.
                 self?.handleHealthPoll(info)
             }
-            // Sync tray immediately with whatever state the daemon is already in
+            // Sync tray immediately with whatever state the server is already in
             // (e.g. already adopted/running from the onboarding path).
-            let currentState = await dm.daemonStatus()
+            let currentState = await dm.serverStatus()
             DispatchQueue.main.async { [weak self] in
-                self?.handleDaemonStateChange(currentState)
+                self?.handleServerStateChange(currentState)
             }
             // Try PID-file adoption first; if that finds nothing, probe the
-            // health endpoint so a daemon started outside the app is detected.
+            // health endpoint so a server started outside the app is detected.
             await dm.adoptOrphanedProcess()
-            await dm.probeForRunningDaemon(port: daemonPort)
+            await dm.probeForRunningServer(port: serverPort)
         }
 
         if statusItem == nil {
             setupStatusItem()
         }
-        panelManager = PanelManager(daemonManager: dm)
-        settingsWindowManager = SettingsWindowManager(daemonManager: dm)
+        panelManager = PanelManager(processManager: dm)
+        settingsWindowManager = SettingsWindowManager(processManager: dm)
     }
 
     func applicationWillTerminate(_ notification: Notification) {
-        daemonManager?.terminateSync()
+        processManager?.terminateSync()
         panelManager = nil
     }
 
     // MARK: - State Handling
 
-    private func handleDaemonStateChange(_ state: DaemonState) {
+    private func handleServerStateChange(_ state: ServerState) {
         currentState = state
-        print("[Kore] Daemon state → \(state.statusKey)\(state.errorMessage.map { ": \($0.prefix(80))" } ?? "")")
+        print("[Kore] Server state → \(state.statusKey)\(state.errorMessage.map { ": \($0.prefix(80))" } ?? "")")
         updateTrayIcon(for: state)
         // Update any open menu's status row if available.
         updateMenuStatusItems()
     }
 
-    private func handleHealthPoll(_ info: DaemonHealthInfo) {
-        daemonPort = info.port
+    private func handleHealthPoll(_ info: ServerHealthInfo) {
+        serverPort = info.port
         updateMenuStatusItems()
     }
 
@@ -142,7 +142,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         updateTrayIcon(for: currentState)
     }
 
-    private func updateTrayIcon(for state: DaemonState) {
+    private func updateTrayIcon(for state: ServerState) {
         guard let button = statusItem?.button else { return }
         if let image = NSImage(systemSymbolName: state.symbolName, accessibilityDescription: "Kore") {
             image.isTemplate = true
@@ -158,10 +158,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let menu = NSMenu()
 
         // ── Status section ──────────────────────────────────────────
-        let daemonItem = NSMenuItem(title: daemonStatusLine(), action: nil, keyEquivalent: "")
-        daemonItem.isEnabled = false
-        menu.addItem(daemonItem)
-        menuDaemonStatusItem = daemonItem
+        let statusItem2 = NSMenuItem(title: serverStatusLine(), action: nil, keyEquivalent: "")
+        statusItem2.isEnabled = false
+        menu.addItem(statusItem2)
+        menuServerStatusItem = statusItem2
 
         let syncItem = NSMenuItem(title: lastSyncLine(), action: nil, keyEquivalent: "")
         syncItem.isEnabled = false
@@ -212,7 +212,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         return menu
     }
 
-    private func daemonStatusLine() -> String {
+    private func serverStatusLine() -> String {
         let label: String
         switch currentState {
         case .running:           label = "running"
@@ -221,7 +221,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         case .stopping:          label = "stopping"
         case .error(let msg):    label = "error: \(msg.prefix(40))"
         }
-        return "Daemon: \(label) on :\(daemonPort)"
+        return "Kore: \(label) on :\(serverPort)"
     }
 
     private func lastSyncLine() -> String {
@@ -235,7 +235,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// Refreshes the text of the two status rows while the menu is open.
     private func updateMenuStatusItems() {
-        menuDaemonStatusItem?.title = daemonStatusLine()
+        menuServerStatusItem?.title = serverStatusLine()
         menuSyncTimeItem?.title = lastSyncLine()
     }
 
@@ -255,7 +255,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         DispatchQueue.main.async { [weak self] in
             self?.statusItem?.menu = nil
             // Clear retained menu item refs so they don't outlive the menu.
-            self?.menuDaemonStatusItem = nil
+            self?.menuServerStatusItem = nil
             self?.menuSyncTimeItem = nil
         }
     }
@@ -264,11 +264,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func syncAppleNotes() {
         guard case .running = currentState else {
-            print("[Kore] Sync skipped — daemon not running")
+            print("[Kore] Sync skipped — server not running")
             return
         }
         Task {
-            let client = DaemonAPIClient.fromConfig(koreHome: koreHome)
+            let client = ServerAPIClient.fromConfig(koreHome: koreHome)
             print("[Kore] Triggering Apple Notes sync on :\(client.port)…")
             let result = await client.syncAppleNotes()
             print("[Kore] Sync result: \(result)")
@@ -283,11 +283,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func triggerConsolidation() {
         guard case .running = currentState else {
-            print("[Kore] Consolidation skipped — daemon not running")
+            print("[Kore] Consolidation skipped — server not running")
             return
         }
         Task {
-            let client = DaemonAPIClient.fromConfig(koreHome: koreHome)
+            let client = ServerAPIClient.fromConfig(koreHome: koreHome)
             print("[Kore] Triggering consolidation on :\(client.port)…")
             let result = await client.triggerConsolidation()
             print("[Kore] Consolidation result: \(result)")
@@ -299,7 +299,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func quitApp() {
-        // applicationWillTerminate calls terminateSync() for clean daemon shutdown.
+        // applicationWillTerminate calls terminateSync() for clean server shutdown.
         NSApp.terminate(nil)
     }
 

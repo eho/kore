@@ -8,8 +8,8 @@ import Foundation
 public class BridgeHandler: NSObject, WKScriptMessageHandler {
     public weak var webView: WKWebView?
 
-    /// The daemon manager to use for daemon control messages. Set by the app delegate.
-    public var daemonManager: DaemonManager?
+    /// The process manager to use for server control messages. Set by the app delegate.
+    public var processManager: ProcessManager?
 
     public override init() {
         super.init()
@@ -100,17 +100,17 @@ public class BridgeHandler: NSObject, WKScriptMessageHandler {
                 }
             }
 
-        case "startDaemon":
-            handleStartDaemon(payload: payload)
+        case "startServer":
+            handleStartServer(payload: payload)
 
-        case "stopDaemon":
-            handleStopDaemon()
+        case "stopServer":
+            handleStopServer()
 
-        case "restartDaemon":
-            handleRestartDaemon()
+        case "restartServer":
+            handleRestartServer()
 
-        case "getDaemonStatus":
-            handleGetDaemonStatus()
+        case "getServerStatus":
+            handleGetServerStatus()
 
         case "checkClaudeDesktopConfig":
             let path = NSString("~/Library/Application Support/Claude/claude_desktop_config.json").expandingTildeInPath
@@ -175,68 +175,68 @@ public class BridgeHandler: NSObject, WKScriptMessageHandler {
         }
     }
 
-    // MARK: - Daemon Handlers
+    // MARK: - Server Handlers
 
-    private func handleStartDaemon(payload: [String: Any]) {
-        guard let dm = daemonManager else {
-            sendToJS(["type": "daemonStatus", "status": "error", "managed": false, "error": "DaemonManager not available."])
+    private func handleStartServer(payload: [String: Any]) {
+        guard let dm = processManager else {
+            sendToJS(["type": "serverStatus", "status": "error", "managed": false, "error": "ProcessManager not available."])
             return
         }
         let clonePath = payload["clonePath"] as? String ?? "~/dev/kore"
         let port = payload["port"] as? Int ?? 3000
         Task {
-            // Probe first — if an orphaned daemon is already running on this port,
-            // adopt it so startDaemon's guard (state == .stopped) becomes a no-op.
+            // Probe first — if an orphaned server is already running on this port,
+            // adopt it so startServer's guard (state == .stopped) becomes a no-op.
             await dm.adoptOrphanedProcess()
-            await dm.probeForRunningDaemon(port: port)
-            await dm.startDaemon(clonePath: clonePath, port: port)
-            let state = await dm.daemonStatus()
+            await dm.probeForRunningServer(port: port)
+            await dm.startServer(clonePath: clonePath, port: port)
+            let state = await dm.serverStatus()
             let managed = await dm.isManaged()
-            self.sendDaemonStatus(state, managed: managed)
+            self.sendServerStatus(state, managed: managed)
         }
     }
 
-    private func handleStopDaemon() {
-        guard let dm = daemonManager else {
-            sendToJS(["type": "daemonStatus", "status": "error", "managed": false, "error": "DaemonManager not available."])
+    private func handleStopServer() {
+        guard let dm = processManager else {
+            sendToJS(["type": "serverStatus", "status": "error", "managed": false, "error": "ProcessManager not available."])
             return
         }
         Task {
-            await dm.stopDaemon()
-            let state = await dm.daemonStatus()
+            await dm.stopServer()
+            let state = await dm.serverStatus()
             let managed = await dm.isManaged()
-            self.sendDaemonStatus(state, managed: managed)
+            self.sendServerStatus(state, managed: managed)
         }
     }
 
-    private func handleRestartDaemon() {
-        guard let dm = daemonManager else {
-            sendToJS(["type": "daemonStatus", "status": "error", "managed": false, "error": "DaemonManager not available."])
+    private func handleRestartServer() {
+        guard let dm = processManager else {
+            sendToJS(["type": "serverStatus", "status": "error", "managed": false, "error": "ProcessManager not available."])
             return
         }
         Task {
-            await dm.restartDaemon()
-            let state = await dm.daemonStatus()
+            await dm.restartServer()
+            let state = await dm.serverStatus()
             let managed = await dm.isManaged()
-            self.sendDaemonStatus(state, managed: managed)
+            self.sendServerStatus(state, managed: managed)
         }
     }
 
-    private func handleGetDaemonStatus() {
-        guard let dm = daemonManager else {
-            sendToJS(["type": "daemonStatus", "status": "stopped", "managed": false])
+    private func handleGetServerStatus() {
+        guard let dm = processManager else {
+            sendToJS(["type": "serverStatus", "status": "stopped", "managed": false])
             return
         }
         Task {
-            let state = await dm.daemonStatus()
+            let state = await dm.serverStatus()
             let managed = await dm.isManaged()
-            self.sendDaemonStatus(state, managed: managed)
+            self.sendServerStatus(state, managed: managed)
         }
     }
 
-    /// Pushes the current daemon state to the JS layer.
-    public func sendDaemonStatus(_ state: DaemonState, managed: Bool = true) {
-        var msg: [String: Any] = ["type": "daemonStatus", "status": state.statusKey, "managed": managed]
+    /// Pushes the current server state to the JS layer.
+    public func sendServerStatus(_ state: ServerState, managed: Bool = true) {
+        var msg: [String: Any] = ["type": "serverStatus", "status": state.statusKey, "managed": managed]
         if let errMsg = state.errorMessage {
             msg["error"] = errMsg
         }
@@ -250,11 +250,11 @@ public class BridgeHandler: NSObject, WKScriptMessageHandler {
             sendToJS(["type": "installMCPConfig", "success": false, "error": "Missing 'target' field"])
             return
         }
-        let daemonURL = payload["daemonURL"] as? String ?? "http://localhost:\(payload["port"] as? Int ?? 3000)"
+        let serverURL = payload["serverURL"] as? String ?? "http://localhost:\(payload["port"] as? Int ?? 3000)"
         let apiKey = payload["apiKey"] as? String ?? ""
 
         do {
-            try MCPConfig.installMCPConfig(target: target, daemonURL: daemonURL, apiKey: apiKey)
+            try MCPConfig.installMCPConfig(target: target, serverURL: serverURL, apiKey: apiKey)
             sendToJS(["type": "installMCPConfig", "success": true, "target": target])
         } catch {
             sendToJS(["type": "installMCPConfig", "success": false, "error": error.localizedDescription])

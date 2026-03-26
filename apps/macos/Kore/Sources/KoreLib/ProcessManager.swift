@@ -3,17 +3,17 @@ import Foundation
 import Darwin
 #endif
 
-// MARK: - Daemon State
+// MARK: - Server State
 
-/// The lifecycle state of the Bun daemon child process.
-public enum DaemonState: Equatable, Sendable {
+/// The lifecycle state of the Bun server child process.
+public enum ServerState: Equatable, Sendable {
     case stopped
     case starting
     case running
     case stopping
     case error(String)
 
-    public static func == (lhs: DaemonState, rhs: DaemonState) -> Bool {
+    public static func == (lhs: ServerState, rhs: ServerState) -> Bool {
         switch (lhs, rhs) {
         case (.stopped, .stopped), (.starting, .starting), (.running, .running), (.stopping, .stopping):
             return true
@@ -51,7 +51,7 @@ public enum DaemonState: Equatable, Sendable {
         }
     }
 
-    /// `true` when the daemon is idle (`.stopped` or `.error`) and eligible
+    /// `true` when the server is idle (`.stopped` or `.error`) and eligible
     /// for reconnect probing. Centralizes the state guard used by the
     /// reconnect loop and probe logic.
     public var isIdle: Bool {
@@ -64,15 +64,15 @@ public enum DaemonState: Equatable, Sendable {
 
 // MARK: - Log Capture
 
-/// Thread-safe, append-only log writer for daemon stdout/stderr output.
+/// Thread-safe, append-only log writer for server stdout/stderr output.
 private final class LogCapture: @unchecked Sendable {
     private let logURL: URL
-    private let queue = DispatchQueue(label: "com.kore.daemon.log", qos: .utility)
+    private let queue = DispatchQueue(label: "com.kore.server.log", qos: .utility)
 
     init(koreHome: String) {
         let expanded = (koreHome as NSString).expandingTildeInPath
         let logsDir = URL(fileURLWithPath: expanded).appendingPathComponent("logs")
-        logURL = logsDir.appendingPathComponent("daemon.log")
+        logURL = logsDir.appendingPathComponent("server.log")
 
         try? FileManager.default.createDirectory(at: logsDir, withIntermediateDirectories: true)
         if !FileManager.default.fileExists(atPath: logURL.path) {
@@ -138,44 +138,44 @@ private final class LogCapture: @unchecked Sendable {
 
 // MARK: - Health Info
 
-/// Snapshot of a successful daemon health check, passed to `onHealthPoll`.
-public struct DaemonHealthInfo: Sendable {
+/// Snapshot of a successful server health check, passed to `onHealthPoll`.
+public struct ServerHealthInfo: Sendable {
     public let date: Date
     public let port: Int
 }
 
-// MARK: - DaemonManager
+// MARK: - ProcessManager
 
-/// Manages the Bun daemon child process lifecycle: start, stop, restart,
+/// Manages the Bun server child process lifecycle: start, stop, restart,
 /// health polling, crash recovery, PID file tracking, and log capture.
 ///
 /// All public methods are `async` and must be called with `await`. For synchronous
 /// termination at app shutdown, use `terminateSync()`.
-public actor DaemonManager {
+public actor ProcessManager {
 
     // MARK: - Constants
 
-    /// Interval between health endpoint polls while the daemon is running.
+    /// Interval between health endpoint polls while the server is running.
     private static let healthPollInterval: UInt64 = 5_000_000_000      // 5 seconds
 
-    /// Interval between reconnect probes while the daemon is idle.
+    /// Interval between reconnect probes while the server is idle.
     private static let reconnectInterval: UInt64 = 10_000_000_000      // 10 seconds
 
     /// Delay before auto-restart after an unexpected crash.
     private static let restartDelay: UInt64 = 3_000_000_000            // 3 seconds
 
-    /// If the daemon crashes again within this window after a restart,
+    /// If the server crashes again within this window after a restart,
     /// auto-restart is abandoned to avoid infinite loops.
     private static let crashWindowSeconds: TimeInterval = 30
 
-    /// Number of consecutive health check failures before declaring the daemon
+    /// Number of consecutive health check failures before declaring the server
     /// unresponsive and triggering recovery.
     private static let maxHealthFailures = 3
 
     // MARK: - State
 
-    /// The current lifecycle state of the daemon.
-    private(set) public var state: DaemonState = .stopped
+    /// The current lifecycle state of the server.
+    private(set) public var state: ServerState = .stopped
 
     private var process: Process?
     private var adoptedPID: pid_t?
@@ -199,14 +199,14 @@ public actor DaemonManager {
 
     /// Called on every state transition, dispatched to the main queue.
     /// Assign this in `BridgeHandler` to push status updates to the JS layer.
-    public var onStateChange: (@Sendable (DaemonState) -> Void)?
+    public var onStateChange: (@Sendable (ServerState) -> Void)?
 
     /// Called on each successful health check, dispatched to the main queue.
-    public var onHealthPoll: (@Sendable (DaemonHealthInfo) -> Void)?
+    public var onHealthPoll: (@Sendable (ServerHealthInfo) -> Void)?
 
     /// Internal: overrides the real process spawn for unit tests.
     /// The closure receives `(clonePath, port)` and returns a configured-but-not-yet-run `Process`.
-    /// Set this before calling `startDaemon`. Safe because it is only written before actor
+    /// Set this before calling `startServer`. Safe because it is only written before actor
     /// isolation begins in tests.
     nonisolated(unsafe) var _testSpawn: ((_ clonePath: String, _ port: Int) -> Process?)? = nil
 
@@ -224,8 +224,8 @@ public actor DaemonManager {
 
     // MARK: - Init
 
-    /// Creates a `DaemonManager` for the given `koreHome` directory.
-    /// After calling `init`, call `adoptOrphanedProcess()` to pick up any running daemon
+    /// Creates a `ProcessManager` for the given `koreHome` directory.
+    /// After calling `init`, call `adoptOrphanedProcess()` to pick up any running server
     /// left over from a previous app session.
     public init(koreHome: String) {
         self.koreHome = koreHome
@@ -234,7 +234,7 @@ public actor DaemonManager {
 
     // MARK: - Startup Adoption
 
-    /// Checks `$KORE_HOME/.daemon.pid` for a leftover daemon process.
+    /// Checks `$KORE_HOME/.kore.pid` for a leftover server process.
     /// If the process is still alive, adopts it and begins health polling.
     /// If the PID file is stale (process dead), removes it.
     /// Call once after `init` (actors cannot run async work in their initializer).
@@ -259,18 +259,18 @@ public actor DaemonManager {
         }
     }
 
-    /// Probes the health endpoint at `port` to detect a daemon that was started
+    /// Probes the health endpoint at `port` to detect a server that was started
     /// outside of the macOS app (no PID file). If responsive, transitions to
     /// `.running` and begins health polling.
     ///
-    /// No-op if the daemon is already in a non-stopped state.
-    /// Probes the health endpoint at `port` to detect a daemon that was started
+    /// No-op if the server is already in a non-stopped state.
+    /// Probes the health endpoint at `port` to detect a server that was started
     /// outside of the macOS app (no PID file). If responsive, transitions to
     /// `.running` and begins health polling. If not, starts the background
-    /// reconnect loop so the daemon is detected when it appears later.
+    /// reconnect loop so the server is detected when it appears later.
     ///
-    /// No-op if the daemon is already in an active state (`.running`, `.starting`, `.stopping`).
-    public func probeForRunningDaemon(port: Int) async {
+    /// No-op if the server is already in an active state (`.running`, `.starting`, `.stopping`).
+    public func probeForRunningServer(port: Int) async {
         guard state.isIdle else { return }
         lastPort = port
         let healthy = await checkHealthEndpoint(port: port)
@@ -279,30 +279,30 @@ public actor DaemonManager {
             transition(to: .running)
             startHealthPolling()
         } else {
-            // Daemon not found yet — start background probing so the icon
-            // updates automatically when the daemon is started later.
+            // Server not found yet — start background probing so the icon
+            // updates automatically when the server is started later.
             startReconnectProbing()
         }
     }
 
     // MARK: - Public API
 
-    /// Starts the daemon by spawning `bun run start` at `clonePath` on `port`.
-    /// No-op if the daemon is already running or starting.
-    public func startDaemon(clonePath: String, port: Int) async {
+    /// Starts the server by spawning `bun run start` at `clonePath` on `port`.
+    /// No-op if the server is already running or starting.
+    public func startServer(clonePath: String, port: Int) async {
         guard case .stopped = state else { return }
 
         lastClonePath = clonePath
         lastPort = port
 
         transition(to: .starting)
-        await spawnDaemon(clonePath: clonePath, port: port, isRestart: false)
+        await spawnServer(clonePath: clonePath, port: port, isRestart: false)
     }
 
-    /// Sends SIGTERM to the daemon (then SIGKILL after 5 seconds if needed),
+    /// Sends SIGTERM to the server (then SIGKILL after 5 seconds if needed),
     /// cancels health polling, removes the PID file, and transitions to `.stopped`.
-    /// No-op if the daemon is already stopped.
-    public func stopDaemon() async {
+    /// No-op if the server is already stopped.
+    public func stopServer() async {
         guard state == .running || state == .starting else { return }
 
         healthPollTask?.cancel()
@@ -315,46 +315,46 @@ public actor DaemonManager {
         transition(to: .stopped)
     }
 
-    /// Stops, then restarts the daemon with the last-used `clonePath` and `port`.
-    public func restartDaemon() async {
-        await stopDaemon()
+    /// Stops, then restarts the server with the last-used `clonePath` and `port`.
+    public func restartServer() async {
+        await stopServer()
         guard let clonePath = lastClonePath else {
             transition(to: .error("Cannot restart: no previous clone path recorded."))
             return
         }
-        await startDaemon(clonePath: clonePath, port: lastPort)
+        await startServer(clonePath: clonePath, port: lastPort)
     }
 
-    /// Returns the current daemon lifecycle state.
-    public func daemonStatus() -> DaemonState {
+    /// Returns the current server lifecycle state.
+    public func serverStatus() -> ServerState {
         state
     }
 
-    /// Returns the port the daemon is (or was last) listening on.
+    /// Returns the port the server is (or was last) listening on.
     public func currentPort() -> Int { lastPort }
 
-    /// Whether the daemon was started or adopted by this app (has a process handle or PID).
-    /// When `false`, the daemon was detected via health probe only — Stop/Restart won't work.
+    /// Whether the server was started or adopted by this app (has a process handle or PID).
+    /// When `false`, the server was detected via health probe only — Stop/Restart won't work.
     public func isManaged() -> Bool {
         process != nil || adoptedPID != nil
     }
 
     /// Registers the state-change callback (actor-safe alternative to direct property assignment).
-    public func setStateChangeCallback(_ callback: (@Sendable (DaemonState) -> Void)?) {
+    public func setStateChangeCallback(_ callback: (@Sendable (ServerState) -> Void)?) {
         onStateChange = callback
     }
 
     /// Registers the health-poll callback (actor-safe alternative to direct property assignment).
-    public func setHealthPollCallback(_ callback: (@Sendable (DaemonHealthInfo) -> Void)?) {
+    public func setHealthPollCallback(_ callback: (@Sendable (ServerHealthInfo) -> Void)?) {
         onHealthPoll = callback
     }
 
-    /// Synchronously stops the daemon. Safe to call from `applicationWillTerminate`
+    /// Synchronously stops the server. Safe to call from `applicationWillTerminate`
     /// where an async context is unavailable.
     public nonisolated func terminateSync() {
         let sema = DispatchSemaphore(value: 0)
         Task {
-            await self.stopDaemon()
+            await self.stopServer()
             sema.signal()
         }
         _ = sema.wait(timeout: .now() + 8)
@@ -362,7 +362,7 @@ public actor DaemonManager {
 
     // MARK: - Private: Spawning
 
-    private func spawnDaemon(clonePath: String, port: Int, isRestart: Bool) async {
+    private func spawnServer(clonePath: String, port: Int, isRestart: Bool) async {
 
         if let testSpawn = _testSpawn {
             // Test override: bypass bun/clone-path validation entirely.
@@ -442,7 +442,7 @@ public actor DaemonManager {
     // MARK: - Private: Termination Handling
 
     private func handleTermination(of proc: Process, isRestart: Bool) async {
-        // Intentional stop in progress — `stopDaemon()` manages the state transition.
+        // Intentional stop in progress — `stopServer()` manages the state transition.
         if case .stopping = state { return }
 
         healthPollTask?.cancel()
@@ -459,7 +459,7 @@ public actor DaemonManager {
         let exitCode = proc.terminationStatus
         let now = Date()
 
-        // Double-crash guard: if the daemon crashed again within the crash window
+        // Double-crash guard: if the server crashed again within the crash window
         // of the first restart attempt, give up — no infinite restart loops.
         if let firstCrash = firstCrashTime, now.timeIntervalSince(firstCrash) < Self.crashWindowSeconds {
             firstCrashTime = nil
@@ -469,7 +469,7 @@ public actor DaemonManager {
             let errSuffix = stderrStr.isEmpty ? "" : "\n\nError output:\n\(stderrStr)"
             
             transition(to: .error(
-                "Daemon crashed again within \(Int(Self.crashWindowSeconds))s (exit \(exitCode)). " +
+                "Server crashed again within \(Int(Self.crashWindowSeconds))s (exit \(exitCode)). " +
                 "Not restarting automatically." + errSuffix
             ))
             return
@@ -491,7 +491,7 @@ public actor DaemonManager {
             return
         }
 
-        await spawnDaemon(clonePath: clonePath, port: lastPort, isRestart: true)
+        await spawnServer(clonePath: clonePath, port: lastPort, isRestart: true)
     }
 
     // MARK: - Private: Health Polling
@@ -521,8 +521,8 @@ public actor DaemonManager {
 
         if healthy {
             consecutiveHealthFailures = 0
-            firstCrashTime = nil  // Clear crash history once the daemon is confirmed healthy.
-            let info = DaemonHealthInfo(date: Date(), port: lastPort)
+            firstCrashTime = nil  // Clear crash history once the server is confirmed healthy.
+            let info = ServerHealthInfo(date: Date(), port: lastPort)
             let cb = onHealthPoll
             DispatchQueue.main.async { cb?(info) }
         } else {
@@ -556,7 +556,7 @@ public actor DaemonManager {
         healthPollTask = nil
         consecutiveHealthFailures = 0
 
-        transition(to: .error("Daemon not responding (3 consecutive health check failures)."))
+        transition(to: .error("Server not responding (3 consecutive health check failures)."))
 
         // Attempt a graceful stop-then-restart.
         await terminateActiveProcess()
@@ -566,7 +566,7 @@ public actor DaemonManager {
 
         transition(to: .starting)
         try? await Task.sleep(nanoseconds: 1_000_000_000)
-        await spawnDaemon(clonePath: clonePath, port: lastPort, isRestart: true)
+        await spawnServer(clonePath: clonePath, port: lastPort, isRestart: true)
     }
 
     // MARK: - Private: Process Termination
@@ -600,7 +600,7 @@ public actor DaemonManager {
     // MARK: - Private: Reconnect Probing
 
     /// Starts a loop that probes the health endpoint every 10 seconds while the
-    /// daemon is stopped, so a daemon started after the app launches is detected.
+    /// server is stopped, so a server started after the app launches is detected.
     private func startReconnectProbing() {
         guard !_disableHealthPolling else { return }
 
@@ -635,9 +635,9 @@ public actor DaemonManager {
 
     // MARK: - Private: State Transitions
 
-    private func transition(to newState: DaemonState) {
+    private func transition(to newState: ServerState) {
         state = newState
-        // Start reconnect probing when idle; cancel when daemon is active.
+        // Start reconnect probing when idle; cancel when server is active.
         if newState.isIdle {
             startReconnectProbing()
         } else {
@@ -654,7 +654,7 @@ public actor DaemonManager {
 
     func pidFileURL() -> URL {
         let expanded = (koreHome as NSString).expandingTildeInPath
-        return URL(fileURLWithPath: expanded).appendingPathComponent(".daemon.pid")
+        return URL(fileURLWithPath: expanded).appendingPathComponent(".kore.pid")
     }
 
     private func writePIDFile(pid: Int32) {

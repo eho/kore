@@ -1,12 +1,12 @@
 import XCTest
 @testable import KoreLib
 
-final class DaemonManagerTests: XCTestCase {
+final class ProcessManagerTests: XCTestCase {
     private var tmpDir: URL!
 
     override func setUpWithError() throws {
         tmpDir = FileManager.default.temporaryDirectory
-            .appendingPathComponent("KoreDaemonTests-\(UUID().uuidString)")
+            .appendingPathComponent("KoreProcessTests-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: tmpDir, withIntermediateDirectories: true)
     }
 
@@ -16,7 +16,7 @@ final class DaemonManagerTests: XCTestCase {
 
     // MARK: - Helpers
 
-    /// Returns a `DaemonManager` with health polling disabled and a test spawn override.
+    /// Returns a `ProcessManager` with health polling disabled and a test spawn override.
     private func makeManager(
         spawn: @escaping (_ clonePath: String, _ port: Int) -> Process? = { _, _ in
             let p = Process()
@@ -24,19 +24,19 @@ final class DaemonManagerTests: XCTestCase {
             p.arguments = ["60"]
             return p
         }
-    ) -> DaemonManager {
-        let mgr = DaemonManager(koreHome: tmpDir.path)
+    ) -> ProcessManager {
+        let mgr = ProcessManager(koreHome: tmpDir.path)
         mgr._disableHealthPolling = true
         mgr._testSpawn = spawn
         return mgr
     }
 
-    /// Returns a `DaemonManager` configured for health-check / reconnect tests
+    /// Returns a `ProcessManager` configured for health-check / reconnect tests
     /// (polling enabled, fast intervals, fake health endpoint).
     private func makeMonitoringManager(
         healthCheck: @escaping (_ port: Int) async -> Bool
-    ) -> DaemonManager {
-        let mgr = DaemonManager(koreHome: tmpDir.path)
+    ) -> ProcessManager {
+        let mgr = ProcessManager(koreHome: tmpDir.path)
         mgr._testHealthCheck = healthCheck
         mgr._testPollIntervalNs = 50_000_000  // 50 ms for fast tests
         return mgr
@@ -47,9 +47,9 @@ final class DaemonManagerTests: XCTestCase {
     func testStartWritesPIDFile() async throws {
         let mgr = makeManager()
 
-        await mgr.startDaemon(clonePath: tmpDir.path, port: 3000)
+        await mgr.startServer(clonePath: tmpDir.path, port: 3000)
 
-        let status = await mgr.daemonStatus()
+        let status = await mgr.serverStatus()
         XCTAssertEqual(status, .running)
 
         let pidURL = await mgr.pidFileURL()
@@ -60,7 +60,7 @@ final class DaemonManagerTests: XCTestCase {
         XCTAssertNotNil(pid, "PID file should contain a valid integer")
         XCTAssertGreaterThan(pid!, 0)
 
-        await mgr.stopDaemon()
+        await mgr.stopServer()
     }
 
     // MARK: - Process Lifecycle: Stop cleans up PID file
@@ -68,25 +68,25 @@ final class DaemonManagerTests: XCTestCase {
     func testStopCleansPIDFile() async throws {
         let mgr = makeManager()
 
-        await mgr.startDaemon(clonePath: tmpDir.path, port: 3000)
+        await mgr.startServer(clonePath: tmpDir.path, port: 3000)
 
         let pidURL = await mgr.pidFileURL()
         XCTAssertTrue(FileManager.default.fileExists(atPath: pidURL.path))
 
-        await mgr.stopDaemon()
+        await mgr.stopServer()
 
-        let status = await mgr.daemonStatus()
+        let status = await mgr.serverStatus()
         XCTAssertEqual(status, .stopped)
         XCTAssertFalse(
             FileManager.default.fileExists(atPath: pidURL.path),
-            "PID file should be deleted after stopDaemon()"
+            "PID file should be deleted after stopServer()"
         )
     }
 
     // MARK: - Process Lifecycle: Stale PID file cleanup
 
     func testStalePIDFileCleanedUpOnAdoption() async throws {
-        let mgr = DaemonManager(koreHome: tmpDir.path)
+        let mgr = ProcessManager(koreHome: tmpDir.path)
 
         // Write a PID file pointing to a dead process.
         // Use a very high PID that is almost certainly not alive on macOS.
@@ -105,8 +105,8 @@ final class DaemonManagerTests: XCTestCase {
         mgr._disableHealthPolling = true
         await mgr.adoptOrphanedProcess()
 
-        let status = await mgr.daemonStatus()
-        XCTAssertEqual(status, .stopped, "Daemon should be stopped when stale PID file is found")
+        let status = await mgr.serverStatus()
+        XCTAssertEqual(status, .stopped, "Server should be stopped when stale PID file is found")
         XCTAssertFalse(
             FileManager.default.fileExists(atPath: pidURL.path),
             "Stale PID file should be removed during startup adoption"
@@ -116,7 +116,7 @@ final class DaemonManagerTests: XCTestCase {
     // MARK: - Process Lifecycle: Adoption of live process
 
     func testAdoptsLiveProcess() async throws {
-        let mgr = DaemonManager(koreHome: tmpDir.path)
+        let mgr = ProcessManager(koreHome: tmpDir.path)
 
         // Write the test process's own PID — it is definitely alive.
         let ownPID = ProcessInfo.processInfo.processIdentifier
@@ -129,7 +129,7 @@ final class DaemonManagerTests: XCTestCase {
         mgr._disableHealthPolling = true
         await mgr.adoptOrphanedProcess()
 
-        let status = await mgr.daemonStatus()
+        let status = await mgr.serverStatus()
         XCTAssertEqual(status, .running, "Should adopt a live PID as running")
     }
 
@@ -151,16 +151,16 @@ final class DaemonManagerTests: XCTestCase {
             return p
         })
 
-        await mgr.startDaemon(clonePath: tmpDir.path, port: 3000)
+        await mgr.startServer(clonePath: tmpDir.path, port: 3000)
 
         // Wait for the auto-restart cycle to complete.
         // The state machine goes: running (spawn #1) → starting (crash) → running (spawn #2).
         let deadline = Date().addingTimeInterval(10)
         var observedCrash = false
-        var finalState: DaemonState = .running
+        var finalState: ServerState = .running
 
         while Date() < deadline {
-            let current = await mgr.daemonStatus()
+            let current = await mgr.serverStatus()
             if current == .starting {
                 observedCrash = true
             } else if current == .running && observedCrash {
@@ -171,9 +171,9 @@ final class DaemonManagerTests: XCTestCase {
         }
 
         XCTAssertTrue(observedCrash, "State should have transitioned to .starting when process crashed")
-        XCTAssertEqual(finalState, .running, "Daemon should be running after auto-restart")
+        XCTAssertEqual(finalState, .running, "Server should be running after auto-restart")
 
-        await mgr.stopDaemon()
+        await mgr.stopServer()
     }
 
     // MARK: - Crash Recovery: Double crash gives up
@@ -190,13 +190,13 @@ final class DaemonManagerTests: XCTestCase {
             return p
         })
 
-        await mgr.startDaemon(clonePath: tmpDir.path, port: 3000)
+        await mgr.startServer(clonePath: tmpDir.path, port: 3000)
 
         // First crash → 3s delay → auto-restart → second crash → error state.
         let deadline = Date().addingTimeInterval(10)
-        var finalState: DaemonState = .starting
+        var finalState: ServerState = .starting
         while Date() < deadline {
-            finalState = await mgr.daemonStatus()
+            finalState = await mgr.serverStatus()
             if case .error = finalState { break }
             try await Task.sleep(nanoseconds: 200_000_000)
         }
@@ -219,16 +219,16 @@ final class DaemonManagerTests: XCTestCase {
         )
     }
 
-    // MARK: - Probe: Detects running daemon
+    // MARK: - Probe: Detects running server
 
-    func testProbeDetectsRunningDaemon() async throws {
-        let mgr = DaemonManager(koreHome: tmpDir.path)
+    func testProbeDetectsRunningServer() async throws {
+        let mgr = ProcessManager(koreHome: tmpDir.path)
         mgr._disableHealthPolling = true
         mgr._testHealthCheck = { _ in true }
 
-        await mgr.probeForRunningDaemon(port: 4000)
+        await mgr.probeForRunningServer(port: 4000)
 
-        let status = await mgr.daemonStatus()
+        let status = await mgr.serverStatus()
         XCTAssertEqual(status, .running, "Probe should transition to .running when health check passes")
 
         let port = await mgr.currentPort()
@@ -239,18 +239,18 @@ final class DaemonManagerTests: XCTestCase {
 
     func testProbeNoopWhenAlreadyRunning() async throws {
         let mgr = makeManager()
-        await mgr.startDaemon(clonePath: tmpDir.path, port: 3000)
-        let statusBefore = await mgr.daemonStatus()
+        await mgr.startServer(clonePath: tmpDir.path, port: 3000)
+        let statusBefore = await mgr.serverStatus()
         XCTAssertEqual(statusBefore, .running)
 
         // Probe at a different port — should be ignored.
         mgr._testHealthCheck = { _ in true }
-        await mgr.probeForRunningDaemon(port: 9999)
+        await mgr.probeForRunningServer(port: 9999)
 
         let port = await mgr.currentPort()
         XCTAssertEqual(port, 3000, "Port should not change when probe is no-op")
 
-        await mgr.stopDaemon()
+        await mgr.stopServer()
     }
 
     // MARK: - Probe: Recovers from .error state
@@ -266,17 +266,17 @@ final class DaemonManagerTests: XCTestCase {
             return p
         })
 
-        await mgr.startDaemon(clonePath: tmpDir.path, port: 3000)
+        await mgr.startServer(clonePath: tmpDir.path, port: 3000)
 
         // Wait for .error state.
         let deadline = Date().addingTimeInterval(10)
         while Date() < deadline {
-            let s = await mgr.daemonStatus()
+            let s = await mgr.serverStatus()
             if case .error = s { break }
             try await Task.sleep(nanoseconds: 200_000_000)
         }
 
-        let errorState = await mgr.daemonStatus()
+        let errorState = await mgr.serverStatus()
         guard case .error = errorState else {
             XCTFail("Expected .error state, got \(errorState)")
             return
@@ -284,36 +284,36 @@ final class DaemonManagerTests: XCTestCase {
 
         // Now probe with a healthy endpoint — should recover.
         mgr._testHealthCheck = { _ in true }
-        await mgr.probeForRunningDaemon(port: 5000)
+        await mgr.probeForRunningServer(port: 5000)
 
-        let recovered = await mgr.daemonStatus()
+        let recovered = await mgr.serverStatus()
         XCTAssertEqual(recovered, .running, "Probe should recover from .error to .running")
     }
 
-    // MARK: - Probe: Starts reconnect loop when daemon not found
+    // MARK: - Probe: Starts reconnect loop when server not found
 
-    func testProbeStartsReconnectLoopWhenDaemonNotFound() async throws {
+    func testProbeStartsReconnectLoopWhenServerNotFound() async throws {
         // Health check starts false, then switches to true.
         let healthy = LockedValue(false)
         let mgr = makeMonitoringManager { _ in healthy.get() }
 
-        // Probe — daemon not found, reconnect loop should start.
-        await mgr.probeForRunningDaemon(port: 3000)
-        let initial = await mgr.daemonStatus()
-        XCTAssertEqual(initial, .stopped, "Should stay stopped when daemon not found")
+        // Probe — server not found, reconnect loop should start.
+        await mgr.probeForRunningServer(port: 3000)
+        let initial = await mgr.serverStatus()
+        XCTAssertEqual(initial, .stopped, "Should stay stopped when server not found")
 
         // Simulate daemon starting — reconnect loop should detect it.
         healthy.set(true)
 
         let deadline = Date().addingTimeInterval(2)
-        var finalState: DaemonState = .stopped
+        var finalState: ServerState = .stopped
         while Date() < deadline {
-            finalState = await mgr.daemonStatus()
+            finalState = await mgr.serverStatus()
             if finalState == .running { break }
             try await Task.sleep(nanoseconds: 50_000_000)
         }
 
-        XCTAssertEqual(finalState, .running, "Reconnect loop should detect the daemon and transition to .running")
+        XCTAssertEqual(finalState, .running, "Reconnect loop should detect the server and transition to .running")
     }
 
     // MARK: - Reconnect: Recovery from error state
@@ -323,8 +323,8 @@ final class DaemonManagerTests: XCTestCase {
         let healthy = LockedValue(true)
         let mgr = makeMonitoringManager { _ in healthy.get() }
 
-        await mgr.probeForRunningDaemon(port: 3000)
-        let initial = await mgr.daemonStatus()
+        await mgr.probeForRunningServer(port: 3000)
+        let initial = await mgr.serverStatus()
         XCTAssertEqual(initial, .running)
 
         // Make health checks fail — after 3 consecutive failures, goes to .error.
@@ -332,20 +332,20 @@ final class DaemonManagerTests: XCTestCase {
 
         let errorDeadline = Date().addingTimeInterval(2)
         while Date() < errorDeadline {
-            let s = await mgr.daemonStatus()
+            let s = await mgr.serverStatus()
             if s.isIdle { break }
             try await Task.sleep(nanoseconds: 50_000_000)
         }
-        let errorState = await mgr.daemonStatus()
+        let errorState = await mgr.serverStatus()
         XCTAssertTrue(errorState.isIdle, "Should be in an idle state after health failures, got \(errorState)")
 
         // Restore health — reconnect loop should bring it back to .running.
         healthy.set(true)
 
         let recoverDeadline = Date().addingTimeInterval(2)
-        var recovered: DaemonState = errorState
+        var recovered: ServerState = errorState
         while Date() < recoverDeadline {
-            recovered = await mgr.daemonStatus()
+            recovered = await mgr.serverStatus()
             if recovered == .running { break }
             try await Task.sleep(nanoseconds: 50_000_000)
         }
@@ -357,14 +357,14 @@ final class DaemonManagerTests: XCTestCase {
 
     func testStateChangeCallbackFires() async throws {
         let mgr = makeManager()
-        let states = LockedValue<[DaemonState]>([])
+        let states = LockedValue<[ServerState]>([])
 
         await mgr.setStateChangeCallback { state in
             states.mutate { $0.append(state) }
         }
 
-        await mgr.startDaemon(clonePath: tmpDir.path, port: 3000)
-        await mgr.stopDaemon()
+        await mgr.startServer(clonePath: tmpDir.path, port: 3000)
+        await mgr.stopServer()
 
         // Allow main-queue dispatches to land.
         try await Task.sleep(nanoseconds: 100_000_000)
@@ -381,14 +381,14 @@ final class DaemonManagerTests: XCTestCase {
 
     func testHealthPollCallbackFires() async throws {
         let mgr = makeMonitoringManager { _ in true }
-        let received = LockedValue<[DaemonHealthInfo]>([])
+        let received = LockedValue<[ServerHealthInfo]>([])
 
         await mgr.setHealthPollCallback { info in
             received.mutate { $0.append(info) }
         }
 
         // Probe to get into .running, which starts health polling.
-        await mgr.probeForRunningDaemon(port: 4000)
+        await mgr.probeForRunningServer(port: 4000)
 
         // Wait for at least one health poll to fire.
         let deadline = Date().addingTimeInterval(2)
@@ -410,21 +410,21 @@ final class DaemonManagerTests: XCTestCase {
         let defaultPort = await mgr.currentPort()
         XCTAssertEqual(defaultPort, 3000, "Default port should be 3000")
 
-        await mgr.startDaemon(clonePath: tmpDir.path, port: 8080)
+        await mgr.startServer(clonePath: tmpDir.path, port: 8080)
         let portAfterStart = await mgr.currentPort()
         XCTAssertEqual(portAfterStart, 8080, "Port should update to 8080 after starting on that port")
 
-        await mgr.stopDaemon()
+        await mgr.stopServer()
     }
 
-    // MARK: - DaemonState.isIdle
+    // MARK: - ServerState.isIdle
 
     func testIsIdle() {
-        XCTAssertTrue(DaemonState.stopped.isIdle)
-        XCTAssertTrue(DaemonState.error("something").isIdle)
-        XCTAssertFalse(DaemonState.running.isIdle)
-        XCTAssertFalse(DaemonState.starting.isIdle)
-        XCTAssertFalse(DaemonState.stopping.isIdle)
+        XCTAssertTrue(ServerState.stopped.isIdle)
+        XCTAssertTrue(ServerState.error("something").isIdle)
+        XCTAssertFalse(ServerState.running.isIdle)
+        XCTAssertFalse(ServerState.starting.isIdle)
+        XCTAssertFalse(ServerState.stopping.isIdle)
     }
 }
 

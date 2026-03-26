@@ -35,7 +35,7 @@
 - **Not a rewrite of Kore's core** — the app wraps the existing Bun daemon, it does not replace it
 - **Not a custom LLM chat UI** — Kore's interaction model is MCP-based (Claude Desktop / Claude Code), not a standalone chat window
 - **Not an Ollama manager** — the app checks Ollama connectivity but does not start, stop, or update Ollama
-- **Not a Mac App Store app** — sandboxing is too constrained for a daemon manager that needs Full Disk Access and child process spawning
+- **Not a Mac App Store app** — sandboxing is too constrained for a process manager that needs Full Disk Access and child process spawning
 - **Not a multi-user or server deployment** — this is a single-user desktop app for personal use
 
 ### Design Principles
@@ -49,7 +49,7 @@
 
 ## Vision Alignment
 
-This design directly advances the vision's "background engine" architecture. The vision (`docs/vision/vision.md`) emphasizes passive ingestion, agentic retrieval via MCP, and proactive nudges — all without a complex user-facing UI. The macOS app serves exactly this role: a silent menu bar daemon manager that keeps the Kore backend running so that the Pull Channel (MCP via Claude Desktop / Claude Code) and Push Channel (notifications, future location-based nudges) work reliably. By intentionally deferring a chat UI and focusing on daemon management + Apple Notes permissions, the app supports the vision's "Passive Ingestion" and "Agentic Retrieval" pillars without introducing competing interaction models. The future Dashboard and Quick Search features align with the vision's intent to make memories browseable, but the MVP correctly prioritizes the invisible infrastructure over UI polish.
+This design directly advances the vision's "background engine" architecture. The vision (`docs/vision/vision.md`) emphasizes passive ingestion, agentic retrieval via MCP, and proactive nudges — all without a complex user-facing UI. The macOS app serves exactly this role: a silent menu bar process manager that keeps the Kore backend running so that the Pull Channel (MCP via Claude Desktop / Claude Code) and Push Channel (notifications, future location-based nudges) work reliably. By intentionally deferring a chat UI and focusing on daemon management + Apple Notes permissions, the app supports the vision's "Passive Ingestion" and "Agentic Retrieval" pillars without introducing competing interaction models. The future Dashboard and Quick Search features align with the vision's intent to make memories browseable, but the MVP correctly prioritizes the invisible infrastructure over UI polish.
 
 ---
 
@@ -170,11 +170,11 @@ This means:
 
 ## Daemon Lifecycle & Edge Cases
 
-The Swift process manager (`DaemonManager`) is responsible for the full lifecycle of the Bun child process. This section defines behavior for every failure mode.
+The Swift process manager (`ProcessManager`) is responsible for the full lifecycle of the Bun child process. This section defines behavior for every failure mode.
 
 ### Process Management Model
 
-The Swift layer holds a `Process` handle. The daemon manager maintains a state machine:
+The Swift layer holds a `Process` handle. The process manager maintains a state machine:
 
 ```
 Stopped → Starting → Running → Stopping → Stopped
@@ -192,7 +192,7 @@ Stopped → Starting → Running → Stopping → Stopped
 2. **Common path probing:** On startup, check common installation paths (`~/.bun/bin/bun`, `/opt/homebrew/bin/bun`, `/usr/local/bin/bun`) and cache the resolved path.
 3. **Settings fallback:** The General tab in Settings includes a "Bun executable path" field (auto-detected, manually overridable) for cases where neither approach finds Bun.
 
-The resolved Bun path is used for all `Process` invocations (`DaemonManager`, `checkBunInstalled`). The path is stored in memory (not persisted to config.json) and re-resolved on each app launch.
+The resolved Bun path is used for all `Process` invocations (`ProcessManager`, `checkBunInstalled`). The path is stored in memory (not persisted to config.json) and re-resolved on each app launch.
 
 ### Failure Scenarios
 
@@ -205,12 +205,12 @@ The resolved Bun path is used for all `Process` invocations (`DaemonManager`, `c
 | **Daemon killed externally** (Activity Monitor, `kill`) | Child process exits with signal (SIGTERM/SIGKILL) | Same as crash — single auto-restart attempt. If killed again within 30 seconds, stay in `Error` and surface: "Daemon was terminated externally." |
 | **Health poll failures (daemon hangs)** | 3 consecutive failed health polls (15 seconds) | Transition to `Error` state. Attempt graceful stop (SIGTERM), wait 5 seconds, then SIGKILL. Then auto-restart once. |
 | **App quit (normal)** | User clicks "Quit Kore" or Cmd+Q | Send SIGTERM to child process, wait up to 5 seconds for clean exit, then SIGKILL if still alive. App exits only after child is confirmed dead. |
-| **App crash** | App process terminates unexpectedly | **Zombie prevention:** On startup, the Swift layer checks for a PID file at `$KORE_HOME/.daemon.pid`. If the PID file exists and the process is still running, adopt it (store the PID, begin health polling). If the process is dead, delete the stale PID file and start fresh. |
+| **App crash** | App process terminates unexpectedly | **Zombie prevention:** On startup, the Swift layer checks for a PID file at `$KORE_HOME/.kore.pid`. If the PID file exists and the process is still running, adopt it (store the PID, begin health polling). If the process is dead, delete the stale PID file and start fresh. |
 | **Config change requiring restart** | User changes port, clone path, or LLM provider in Settings | Settings UI shows "Restart required" badge on the daemon status. User clicks "Restart" explicitly — no silent auto-restart on config change. |
 
 ### PID File
 
-The Swift layer writes `$KORE_HOME/.daemon.pid` containing the child process PID immediately after a successful spawn. The file is deleted on clean shutdown. This enables:
+The Swift layer writes `$KORE_HOME/.kore.pid` containing the child process PID immediately after a successful spawn. The file is deleted on clean shutdown. This enables:
 - Zombie detection on app startup (see above)
 - External tooling to check if the daemon is running
 
@@ -574,7 +574,7 @@ Kore.app/
 ### Distribution Options
 - **MVP:** Unsigned `.app` for personal use (requires Gatekeeper bypass: right-click → Open)
 - **Future:** Notarized DMG — Apple-notarized, no Gatekeeper warnings, requires Apple Developer account ($99/yr)
-- **Not planned:** Mac App Store — sandboxed, too constrained for a daemon manager
+- **Not planned:** Mac App Store — sandboxed, too constrained for a process manager
 
 ---
 
@@ -592,7 +592,7 @@ apps/
       Sources/
         KoreApp.swift        # App entry point, NSStatusItem, activation policy
         PanelManager.swift   # NSPanel creation, positioning, show/hide
-        DaemonManager.swift  # Child process management (Process)
+        ProcessManager.swift  # Child process management (Process)
         ConfigManager.swift  # config.json read/write
         Permissions.swift    # TCC checks, NSOpenPanel, FDA deep link
         LoginItem.swift      # SMAppService launch at login
@@ -714,7 +714,7 @@ The Swift layer is tested with XCTest:
 
 | Module | Test scenarios |
 |--------|---------------|
-| `DaemonManager` | Spawn mock process, verify PID file written. Kill process, verify PID file cleaned up. Simulate crash (non-zero exit), verify single auto-restart. Simulate double crash within 30s, verify no further restarts. |
+| `ProcessManager` | Spawn mock process, verify PID file written. Kill process, verify PID file cleaned up. Simulate crash (non-zero exit), verify single auto-restart. Simulate double crash within 30s, verify no further restarts. |
 | `ConfigManager` | Read valid `config.json`, verify all fields parsed. Read missing file, verify defaults returned. Write config, read back, verify round-trip. Malformed JSON returns clear error. |
 | `Permissions` | Mock TCC query responses for granted/denied/unknown states. Verify correct `PermissionStatus` enum returned. |
 | `BridgeHandler` | Verify message parsing, method routing, and JSON response formatting. |
@@ -784,7 +784,7 @@ Get a working `.app` that manages the daemon lifecycle and provides a Settings U
 - [ ] Swift project scaffold in `apps/macos/` with Xcode project or Swift Package
 - [ ] NSStatusItem tray icon + NSPanel for dropdown
 - [ ] WKWebView loading React bundle with JS bridge
-- [ ] Swift daemon manager: start, stop, restart Bun process via `Process`
+- [ ] Swift process manager: start, stop, restart Bun process via `Process`
 - [ ] `config.json` read/write from Swift (`Codable` + `JSONDecoder`)
 - [ ] Update `apps/core-api/src/config.ts` to load `$KORE_HOME/config.json` as defaults
 
@@ -872,7 +872,7 @@ These questions were open during the brainstorm phase and are now resolved:
 | 7 | **Multiple Claude clients** | **Yes.** Settings has install buttons for both Claude Desktop and Claude Code. | Both use the same MCP config format with different file paths. |
 | 8 | **Daemon upgrades in Phase 1** | **Manual.** User runs `git pull && bun install` at the clone path. The app does not manage source updates. | Phase 1 assumes a developer user who cloned the repo. The app can surface a "New version available" notice by checking the remote git tag, but updating is the user's responsibility. Self-contained mode (Phase 3) bundles updates via Sparkle. |
 | 9 | **Config change → daemon restart** | **Explicit restart required.** Settings shows a "Restart required" badge; user clicks Restart. | Silent auto-restarts on config change are surprising and could interrupt in-flight operations (sync, consolidation). Explicit is safer. |
-| 10 | **Zombie process prevention** | **PID file + startup adoption.** Swift writes `$KORE_HOME/.daemon.pid` on spawn, checks it on startup, and adopts or cleans up. App sends SIGTERM then SIGKILL on quit. | See "Daemon Lifecycle & Edge Cases" section for full details. |
+| 10 | **Zombie process prevention** | **PID file + startup adoption.** Swift writes `$KORE_HOME/.kore.pid` on spawn, checks it on startup, and adopts or cleans up. App sends SIGTERM then SIGKILL on quit. | See "Daemon Lifecycle & Edge Cases" section for full details. |
 | 11 | **App framework** — Tauri v2 vs native vs hybrid? | **Swift + WebView hybrid.** Tauri v2 was prototyped in MAC-001 but has structural limitations: panels cannot appear over fullscreen apps (NSWindow vs NSPanel), multi-monitor positioning is buggy, and workarounds are fragile. | Every polished macOS menu bar utility uses native Swift/AppKit. The hybrid approach gives native NSPanel behavior while keeping the UI in TypeScript/React via WKWebView. See "Technology Decision" section. |
 
 ## Remaining Open Questions
@@ -987,7 +987,7 @@ This story validates that NSPanel + WKWebView can reliably show a panel over ful
 
 ### MAC-003: Swift Daemon Process Manager
 
-**Description:** As a developer, I want a Swift module (`DaemonManager`) that manages the Bun daemon as a child process with start/stop/restart, PID file tracking, health polling, and crash recovery so that the app can reliably control the daemon lifecycle.
+**Description:** As a developer, I want a Swift module (`ProcessManager`) that manages the Bun daemon as a child process with start/stop/restart, PID file tracking, health polling, and crash recovery so that the app can reliably control the daemon lifecycle.
 
 **Context:**
 - Files to read: `apps/macos/Kore/Sources/KoreApp.swift` (from MAC-001), `apps/macos/Kore/Sources/ConfigManager.swift` (from MAC-002), `apps/core-api/src/operations/health.ts` (health endpoint response schema)
@@ -995,15 +995,15 @@ This story validates that NSPanel + WKWebView can reliably show a panel over ful
 - Health endpoint: `GET /api/v1/health` on `localhost:{port}` — returns JSON with `version`, `memories`, `queue`, `index` fields
 
 **Acceptance Criteria:**
-- [ ] `apps/macos/Kore/Sources/DaemonManager.swift` created with a `DaemonManager` class
+- [ ] `apps/macos/Kore/Sources/ProcessManager.swift` created with a `ProcessManager` class
 - [ ] State machine implemented: `Stopped → Starting → Running → Stopping → Stopped`, with `Error` reachable from `Starting` and `Running`
-- [ ] `startDaemon(clonePath:port:)` spawns `bun run start` via `Process`, writes PID to `$KORE_HOME/.daemon.pid`
+- [ ] `startDaemon(clonePath:port:)` spawns `bun run start` via `Process`, writes PID to `$KORE_HOME/.kore.pid`
 - [ ] `stopDaemon()` sends SIGTERM, waits 5s, then SIGKILL if still alive, deletes PID file
 - [ ] `restartDaemon()` calls stop then start
 - [ ] `daemonStatus()` returns current state enum (`Running`, `Stopped`, `Starting`, `Stopping`, `Error(String)`)
 - [ ] Health polling: uses `Timer` or `Task` that polls `GET /api/v1/health` every 5 seconds while in `Running` state. Three consecutive failures transition to `Error`
 - [ ] Crash recovery: on child process termination with non-zero exit code, auto-restart once after 3s delay. If second attempt fails within 30s, stay in `Error` state
-- [ ] Startup adoption: on `DaemonManager.init()`, check for `$KORE_HOME/.daemon.pid` — if PID file exists and process is alive (`kill(pid, 0)`), adopt it; if process is dead, delete stale PID file
+- [ ] Startup adoption: on `ProcessManager.init()`, check for `$KORE_HOME/.kore.pid` — if PID file exists and process is alive (`kill(pid, 0)`), adopt it; if process is dead, delete stale PID file
 - [ ] Daemon stdout/stderr captured via `Pipe` and written to `$KORE_HOME/logs/daemon.log` (simple append, no rotation in MVP)
 - [ ] Daemon startup errors (e.g. missing modules after `git pull` without `bun install`) are surfaced in the tray panel UI via the `Error(String)` state, showing stderr output so the user can diagnose and fix
 - [ ] All functions registered in `BridgeHandler.swift` for JS bridge access
@@ -1018,7 +1018,7 @@ This story validates that NSPanel + WKWebView can reliably show a panel over ful
 **Description:** As a user, I want the menu bar icon to reflect daemon status and provide a dropdown menu for quick actions so that I can monitor and control Kore without opening a window.
 
 **Context:**
-- Files to read: `apps/macos/Kore/Sources/KoreApp.swift` (from MAC-001), `apps/macos/Kore/Sources/DaemonManager.swift` (from MAC-003), `apps/macos/Kore/Sources/ConfigManager.swift` (from MAC-002)
+- Files to read: `apps/macos/Kore/Sources/KoreApp.swift` (from MAC-001), `apps/macos/Kore/Sources/ProcessManager.swift` (from MAC-003), `apps/macos/Kore/Sources/ConfigManager.swift` (from MAC-002)
 - Extends the minimal tray POC from MAC-001 with dynamic state and daemon integration
 - Icon states: filled circle (running), hollow circle (stopped), exclamation (error)
 
@@ -1031,7 +1031,7 @@ This story validates that NSPanel + WKWebView can reliably show a panel over ful
   - "Settings..." (with `⌘,` accelerator) — opens Settings window
   - "Quit Kore" — triggers clean daemon shutdown then app exit
 - [ ] Left-click still toggles the NSPanel (from MAC-001)
-- [ ] Health poll data from `DaemonManager` updates the menu status text every 5 seconds
+- [ ] Health poll data from `ProcessManager` updates the menu status text every 5 seconds
 - [ ] Daemon API calls include the Bearer token read from `ConfigManager`
 - [ ] Typecheck/lint passes (Swift)
 - [ ] **Documentation:** Update `docs/design/macos-app.md` if any menu bar behavior deviates from the spec

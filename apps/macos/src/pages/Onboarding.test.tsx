@@ -112,7 +112,7 @@ test("General step blocks next when clone path is empty", () => {
 
 // ── Start step tests ────────────────────────────────────────────────
 
-test("Start step calls writeConfig then startDaemon", () => {
+test("Start step calls writeConfig then startServer", () => {
   renderOnboarding();
 
   // Navigate to Start step
@@ -126,12 +126,12 @@ test("Start step calls writeConfig then startDaemon", () => {
   fireEvent.click(screen.getByText("Start Kore"));
   expect(findCall("writeConfig")).toBeTruthy();
 
-  // Simulate config written successfully → should auto-call startDaemon
+  // Simulate config written successfully → should auto-call startServer
   simulate({ type: "writeConfig", success: true });
-  expect(findCall("startDaemon")).toBeTruthy();
+  expect(findCall("startServer")).toBeTruthy();
 });
 
-test("Start step auto-closes when daemon starts", () => {
+test("Start step auto-closes when server starts", () => {
   renderOnboarding();
 
   // Navigate to Start
@@ -143,7 +143,7 @@ test("Start step auto-closes when daemon starts", () => {
 
   fireEvent.click(screen.getByText("Start Kore"));
   simulate({ type: "writeConfig", success: true });
-  simulate({ type: "daemonStatus", status: "running" });
+  simulate({ type: "serverStatus", status: "running" });
 
   expect(findCall("closeOnboarding")).toBeTruthy();
 });

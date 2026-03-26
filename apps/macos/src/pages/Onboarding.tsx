@@ -89,7 +89,7 @@ export function Onboarding() {
   const [claudeDesktopDetected, setClaudeDesktopDetected] = useState<boolean | null>(null);
   const [claudeCodeDetected, setClaudeCodeDetected] = useState<boolean | null>(null);
   const [mcpInstallStatus, setMcpInstallStatus] = useState<Record<string, string>>({});
-  const [daemonStarted, setDaemonStarted] = useState(false);
+  const [serverStarted, setServerStarted] = useState(false);
   const [configWritten, setConfigWritten] = useState(false);
   const configWrittenRef = useRef(false);
   const [startError, setStartError] = useState<string | null>(null);
@@ -142,19 +142,19 @@ export function Onboarding() {
           if (msg.success) {
             setConfigWritten(true);
             configWrittenRef.current = true;
-            // After config is written, start the daemon
-            bridgeCall("startDaemon", { clonePath: config.clonePath ?? "~/dev/kore", port: config.port ?? 3000 });
+            // After config is written, start the server
+            bridgeCall("startServer", { clonePath: config.clonePath ?? "~/dev/kore", port: config.port ?? 3000 });
           } else {
             setStartError(`Config write failed: ${msg.error}`);
           }
           break;
-        case "daemonStatus":
+        case "serverStatus":
           if (msg.status === "running" && configWrittenRef.current) {
-            setDaemonStarted(true);
+            setServerStarted(true);
             // Onboarding complete — close the window automatically
             bridgeCall("closeOnboarding");
           } else if (msg.status === "error") {
-            setStartError(`Daemon error: ${msg.error}`);
+            setStartError(`Server error: ${msg.error}`);
           }
           break;
         case "chooseClonePath":
@@ -276,7 +276,7 @@ export function Onboarding() {
         {currentStep.id === "start" && (
           <StartStep
             configWritten={configWritten}
-            daemonStarted={daemonStarted}
+            serverStarted={serverStarted}
             startError={startError}
             launchAtLogin={launchAtLogin}
             onToggleLaunchAtLogin={(enabled) => bridgeCall("setLaunchAtLogin", { enabled })}
@@ -543,7 +543,7 @@ function McpStep({
   claudeCodeDetected: boolean | null;
   mcpInstallStatus: Record<string, string>;
 }) {
-  const daemonURL = `http://localhost:${config.port ?? 3000}`;
+  const serverURL = `http://localhost:${config.port ?? 3000}`;
   const apiKey = config.apiKey ?? "";
 
   return (
@@ -568,7 +568,7 @@ function McpStep({
         </div>
         <button
           className="btn-secondary"
-          onClick={() => bridgeCall("installMCPConfig", { target: "claude-desktop", daemonURL, apiKey })}
+          onClick={() => bridgeCall("installMCPConfig", { target: "claude-desktop", serverURL, apiKey })}
           disabled={mcpInstallStatus["claude-desktop"] === "installed"}
         >
           {mcpInstallStatus["claude-desktop"] === "installed" ? "Installed" : "Install MCP Config"}
@@ -593,7 +593,7 @@ function McpStep({
         </div>
         <button
           className="btn-secondary"
-          onClick={() => bridgeCall("installMCPConfig", { target: "claude-code", daemonURL, apiKey })}
+          onClick={() => bridgeCall("installMCPConfig", { target: "claude-code", serverURL, apiKey })}
           disabled={mcpInstallStatus["claude-code"] === "installed"}
         >
           {mcpInstallStatus["claude-code"] === "installed" ? "Installed" : "Install MCP Config"}
@@ -608,34 +608,34 @@ function McpStep({
 
 function StartStep({
   configWritten,
-  daemonStarted,
+  serverStarted,
   startError,
   launchAtLogin,
   onToggleLaunchAtLogin,
 }: {
   configWritten: boolean;
-  daemonStarted: boolean;
+  serverStarted: boolean;
   startError: string | null;
   launchAtLogin: boolean;
   onToggleLaunchAtLogin: (enabled: boolean) => void;
 }) {
   return (
     <div className="tab-content">
-      <h2>{daemonStarted ? "Kore is running" : "Ready to start"}</h2>
+      <h2>{serverStarted ? "Kore is running" : "Ready to start"}</h2>
 
       {!configWritten && !startError && (
-        <p>Click "Start Kore" to save your configuration and launch the daemon.</p>
+        <p>Click "Start Kore" to save your configuration and launch the server.</p>
       )}
 
-      {configWritten && !daemonStarted && !startError && (
+      {configWritten && !serverStarted && !startError && (
         <div className="form-group">
-          <span className="connection-status">Starting daemon...</span>
+          <span className="connection-status">Starting server...</span>
         </div>
       )}
 
-      {daemonStarted && (
+      {serverStarted && (
         <div className="form-group">
-          <span className="connection-status running">Daemon is running. You can close this window.</span>
+          <span className="connection-status running">Server is running. You can close this window.</span>
         </div>
       )}
 
