@@ -209,36 +209,38 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(.separator())
 
         // ── Lifecycle controls ──────────────────────────────────────
-        if canStart {
-            let startItem = NSMenuItem(
-                title: "Start Kore",
-                action: #selector(startServer),
-                keyEquivalent: ""
-            )
-            startItem.target = self
-            menu.addItem(startItem)
-            menuStartItem = startItem
-        }
+        // All three items are always in the menu; visibility is toggled
+        // by updateMenuStatusItems() so the menu updates dynamically
+        // while open.
+        let startItem = NSMenuItem(
+            title: "Start Kore",
+            action: #selector(startServer),
+            keyEquivalent: ""
+        )
+        startItem.target = self
+        startItem.isHidden = !canStart
+        menu.addItem(startItem)
+        menuStartItem = startItem
 
-        if isRunning && isManaged {
-            let stopItem = NSMenuItem(
-                title: "Stop Kore",
-                action: #selector(stopServer),
-                keyEquivalent: ""
-            )
-            stopItem.target = self
-            menu.addItem(stopItem)
-            menuStopItem = stopItem
+        let stopItem = NSMenuItem(
+            title: "Stop Kore",
+            action: #selector(stopServer),
+            keyEquivalent: ""
+        )
+        stopItem.target = self
+        stopItem.isHidden = !(isRunning && isManaged)
+        menu.addItem(stopItem)
+        menuStopItem = stopItem
 
-            let restartItem = NSMenuItem(
-                title: "Restart Kore",
-                action: #selector(restartServer),
-                keyEquivalent: ""
-            )
-            restartItem.target = self
-            menu.addItem(restartItem)
-            menuRestartItem = restartItem
-        }
+        let restartItem = NSMenuItem(
+            title: "Restart Kore",
+            action: #selector(restartServer),
+            keyEquivalent: ""
+        )
+        restartItem.target = self
+        restartItem.isHidden = !(isRunning && isManaged)
+        menu.addItem(restartItem)
+        menuRestartItem = restartItem
 
         menu.addItem(.separator())
 
