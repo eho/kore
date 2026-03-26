@@ -1,6 +1,6 @@
 # Kore macOS App
 
-Native Swift + WebView hybrid menu bar app for managing the Kore daemon.
+Native Swift + WebView hybrid menu bar app for managing the Kore server.
 
 The app is a thin native shell (Swift/AppKit) hosting a React/TypeScript UI via WKWebView. The Swift layer handles platform integration (NSStatusItem, NSPanel, entitlements) while React handles all visual rendering.
 
@@ -25,9 +25,9 @@ swift build && .build/debug/Kore
 A Kore icon appears in your menu bar:
 
 - **Left-click** — toggle the WebView panel
-- **Right-click** — context menu with daemon status, Sync Apple Notes, Trigger Consolidation, Settings, and Quit
+- **Right-click** — context menu with server status, Sync Apple Notes, Trigger Consolidation, Settings, and Quit
 
-The tray icon reflects daemon state: filled circle (running), empty circle (stopped), ellipsis (starting/stopping), exclamation (error).
+The tray icon reflects server state: filled circle (running), empty circle (stopped), ellipsis (starting/stopping), exclamation (error).
 
 > **Current scope (MAC-001 through MAC-004):** The Swift layer includes `ConfigManager` (read/write `config.json`, `.env` parsing), `Permissions` (Notes TCC check, Bun/Ollama detection), `ProcessManager` (process lifecycle, health polling, crash recovery), and `ServerAPIClient` (HTTP client for server API). The React UI in the WebView panel is still a placeholder.
 
