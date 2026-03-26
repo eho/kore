@@ -133,6 +133,11 @@ public class BridgeHandler: NSObject, WKScriptMessageHandler {
             let enabled = LoginItem.getLaunchAtLogin()
             sendToJS(["type": "getLaunchAtLogin", "enabled": enabled])
 
+        case "closeOnboarding":
+            DispatchQueue.main.async {
+                self.webView?.window?.close()
+            }
+
         default:
             sendToJS(["type": "error", "message": "Unknown message type: \(type)"])
         }

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 
 // ── Bridge helpers ──────────────────────────────────────────────────
 
@@ -91,6 +91,7 @@ export function Onboarding() {
   const [mcpInstallStatus, setMcpInstallStatus] = useState<Record<string, string>>({});
   const [daemonStarted, setDaemonStarted] = useState(false);
   const [configWritten, setConfigWritten] = useState(false);
+  const configWrittenRef = useRef(false);
   const [startError, setStartError] = useState<string | null>(null);
   const [launchAtLogin, setLaunchAtLogin] = useState(false);
 
@@ -140,6 +141,7 @@ export function Onboarding() {
         case "writeConfig":
           if (msg.success) {
             setConfigWritten(true);
+            configWrittenRef.current = true;
             // After config is written, start the daemon
             bridgeCall("startDaemon", { clonePath: config.clonePath ?? "~/dev/kore", port: config.port ?? 3000 });
           } else {
@@ -147,8 +149,10 @@ export function Onboarding() {
           }
           break;
         case "daemonStatus":
-          if (msg.status === "running") {
+          if (msg.status === "running" && configWrittenRef.current) {
             setDaemonStarted(true);
+            // Onboarding complete — close the window automatically
+            bridgeCall("closeOnboarding");
           } else if (msg.status === "error") {
             setStartError(`Daemon error: ${msg.error}`);
           }
@@ -293,10 +297,10 @@ export function Onboarding() {
           ) : (
             <button
               className="btn-primary onboarding-next"
-              onClick={daemonStarted ? () => window.close() : handleFinish}
-              disabled={configWritten && !daemonStarted}
+              onClick={handleFinish}
+              disabled={configWritten}
             >
-              {daemonStarted ? "Done" : configWritten ? "Starting..." : "Start Kore"}
+              {configWritten ? "Starting..." : "Start Kore"}
             </button>
           )}
         </div>

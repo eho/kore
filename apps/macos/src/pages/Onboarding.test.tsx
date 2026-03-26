@@ -131,7 +131,7 @@ test("Start step calls writeConfig then startDaemon", () => {
   expect(findCall("startDaemon")).toBeTruthy();
 });
 
-test("Start step shows Kore is running after daemon starts", () => {
+test("Start step auto-closes when daemon starts", () => {
   renderOnboarding();
 
   // Navigate to Start
@@ -145,7 +145,7 @@ test("Start step shows Kore is running after daemon starts", () => {
   simulate({ type: "writeConfig", success: true });
   simulate({ type: "daemonStatus", status: "running" });
 
-  expect(screen.getByText("Kore is running")).toBeTruthy();
+  expect(findCall("closeOnboarding")).toBeTruthy();
 });
 
 // ── MCP install ─────────────────────────────────────────────────────
