@@ -187,12 +187,13 @@ public class BridgeHandler: NSObject, WKScriptMessageHandler {
         Task {
             // Probe first — if an orphaned server is already running on this port,
             // adopt it so startServer's guard (state == .stopped) becomes a no-op.
-            await dm.adoptOrphanedProcess()
+            await dm.adoptOrphanedProcess(port: port)
             await dm.probeForRunningServer(port: port)
             await dm.startServer(clonePath: clonePath, port: port)
             let state = await dm.serverStatus()
             let managed = await dm.isManaged()
-            self.sendServerStatus(state, managed: managed)
+            let own = await dm.ownership
+            self.sendServerStatus(state, managed: managed, ownership: own)
         }
     }
 
@@ -205,7 +206,8 @@ public class BridgeHandler: NSObject, WKScriptMessageHandler {
             await dm.stopServer()
             let state = await dm.serverStatus()
             let managed = await dm.isManaged()
-            self.sendServerStatus(state, managed: managed)
+            let own = await dm.ownership
+            self.sendServerStatus(state, managed: managed, ownership: own)
         }
     }
 
@@ -218,7 +220,8 @@ public class BridgeHandler: NSObject, WKScriptMessageHandler {
             await dm.restartServer()
             let state = await dm.serverStatus()
             let managed = await dm.isManaged()
-            self.sendServerStatus(state, managed: managed)
+            let own = await dm.ownership
+            self.sendServerStatus(state, managed: managed, ownership: own)
         }
     }
 
@@ -230,13 +233,19 @@ public class BridgeHandler: NSObject, WKScriptMessageHandler {
         Task {
             let state = await dm.serverStatus()
             let managed = await dm.isManaged()
-            self.sendServerStatus(state, managed: managed)
+            let own = await dm.ownership
+            self.sendServerStatus(state, managed: managed, ownership: own)
         }
     }
 
     /// Pushes the current server state to the JS layer.
-    public func sendServerStatus(_ state: ServerState, managed: Bool = true) {
-        var msg: [String: Any] = ["type": "serverStatus", "status": state.statusKey, "managed": managed]
+    public func sendServerStatus(_ state: ServerState, managed: Bool = true, ownership: ProcessOwnership = .none) {
+        var msg: [String: Any] = [
+            "type": "serverStatus",
+            "status": state.statusKey,
+            "managed": managed,
+            "ownership": ownership.statusKey
+        ]
         if let errMsg = state.errorMessage {
             msg["error"] = errMsg
         }

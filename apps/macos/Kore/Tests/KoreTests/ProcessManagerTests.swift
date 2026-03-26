@@ -127,10 +127,14 @@ final class ProcessManagerTests: XCTestCase {
         try String(ownPID).write(to: pidURL, atomically: true, encoding: .utf8)
 
         mgr._disableHealthPolling = true
+        mgr._testHealthCheck = { _ in true }
         await mgr.adoptOrphanedProcess()
 
         let status = await mgr.serverStatus()
         XCTAssertEqual(status, .running, "Should adopt a live PID as running")
+
+        let own = await mgr.ownership
+        XCTAssertEqual(own, .adopted, "Ownership should be .adopted after PID-file adoption")
     }
 
     // MARK: - Crash Recovery: Single auto-restart
@@ -425,6 +429,173 @@ final class ProcessManagerTests: XCTestCase {
         XCTAssertFalse(ServerState.running.isIdle)
         XCTAssertFalse(ServerState.starting.isIdle)
         XCTAssertFalse(ServerState.stopping.isIdle)
+    }
+
+    // MARK: - Ownership: Spawn sets .spawned; stop terminates and deletes PID
+
+    func testSpawnSetsOwnershipSpawned() async throws {
+        let mgr = makeManager()
+
+        await mgr.startServer(clonePath: tmpDir.path, port: 3000)
+
+        let own = await mgr.ownership
+        XCTAssertEqual(own, .spawned, "Ownership should be .spawned after startServer")
+
+        let pidURL = await mgr.pidFileURL()
+        XCTAssertTrue(FileManager.default.fileExists(atPath: pidURL.path), "PID file should exist")
+
+        await mgr.stopServer()
+
+        let ownAfter = await mgr.ownership
+        XCTAssertEqual(ownAfter, .none, "Ownership should be .none after stop")
+        XCTAssertFalse(
+            FileManager.default.fileExists(atPath: pidURL.path),
+            "PID file should be deleted after stop"
+        )
+    }
+
+    // MARK: - Ownership: Adopt with live PID + healthy endpoint → .adopted; stop sends SIGTERM
+
+    func testAdoptWithHealthyEndpointSetsOwnershipAdopted() async throws {
+        // Spawn a real process so we can safely stop it (don't use the test process PID).
+        let sleepProc = Process()
+        sleepProc.executableURL = URL(fileURLWithPath: "/bin/sleep")
+        sleepProc.arguments = ["60"]
+        try sleepProc.run()
+        let sleepPID = sleepProc.processIdentifier
+
+        let mgr = ProcessManager(koreHome: tmpDir.path)
+        mgr._disableHealthPolling = true
+        mgr._testHealthCheck = { _ in true }
+
+        let pidURL = await mgr.pidFileURL()
+        try FileManager.default.createDirectory(
+            at: pidURL.deletingLastPathComponent(), withIntermediateDirectories: true
+        )
+        try String(sleepPID).write(to: pidURL, atomically: true, encoding: .utf8)
+
+        await mgr.adoptOrphanedProcess()
+
+        let own = await mgr.ownership
+        XCTAssertEqual(own, .adopted)
+        let status = await mgr.serverStatus()
+        XCTAssertEqual(status, .running)
+
+        // Stop should send SIGTERM to the adopted process
+        await mgr.stopServer()
+        let ownAfter = await mgr.ownership
+        XCTAssertEqual(ownAfter, .none)
+        let statusAfter = await mgr.serverStatus()
+        XCTAssertEqual(statusAfter, .stopped)
+
+        // Process should be terminated
+        XCTAssertTrue(kill(sleepPID, 0) != 0, "Adopted process should be terminated after stop")
+    }
+
+    // MARK: - Ownership: Adopt with live PID + failed health → PID file deleted, stays stopped
+
+    func testAdoptWithFailedHealthDeletesPIDFile() async throws {
+        let mgr = ProcessManager(koreHome: tmpDir.path)
+        mgr._disableHealthPolling = true
+        mgr._testHealthCheck = { _ in false }  // Health check fails
+
+        let ownPID = ProcessInfo.processInfo.processIdentifier
+        let pidURL = await mgr.pidFileURL()
+        try FileManager.default.createDirectory(
+            at: pidURL.deletingLastPathComponent(), withIntermediateDirectories: true
+        )
+        try String(ownPID).write(to: pidURL, atomically: true, encoding: .utf8)
+
+        await mgr.adoptOrphanedProcess()
+
+        let own = await mgr.ownership
+        XCTAssertEqual(own, .none, "Ownership should stay .none when health check fails")
+        let status = await mgr.serverStatus()
+        XCTAssertEqual(status, .stopped, "Should stay .stopped when health check fails")
+        XCTAssertFalse(
+            FileManager.default.fileExists(atPath: pidURL.path),
+            "PID file should be deleted as stale (PID reuse safety)"
+        )
+    }
+
+    // MARK: - Ownership: Adopt with dead PID → PID file deleted
+
+    func testAdoptWithDeadPIDDeletesPIDFile() async throws {
+        let mgr = ProcessManager(koreHome: tmpDir.path)
+        mgr._disableHealthPolling = true
+
+        let deadPID: Int32 = 99_000_001
+        guard kill(deadPID, 0) != 0 else { return }
+
+        let pidURL = await mgr.pidFileURL()
+        try FileManager.default.createDirectory(
+            at: pidURL.deletingLastPathComponent(), withIntermediateDirectories: true
+        )
+        try String(deadPID).write(to: pidURL, atomically: true, encoding: .utf8)
+
+        await mgr.adoptOrphanedProcess()
+
+        let own = await mgr.ownership
+        XCTAssertEqual(own, .none, "Ownership should be .none for dead PID")
+        let status = await mgr.serverStatus()
+        XCTAssertEqual(status, .stopped)
+        XCTAssertFalse(
+            FileManager.default.fileExists(atPath: pidURL.path),
+            "PID file should be deleted for dead PID"
+        )
+    }
+
+    // MARK: - Ownership: Probe with healthy endpoint → .observed; stop transitions without signal
+
+    func testProbeWithHealthyEndpointSetsOwnershipObserved() async throws {
+        let mgr = ProcessManager(koreHome: tmpDir.path)
+        mgr._disableHealthPolling = true
+        mgr._testHealthCheck = { _ in true }
+
+        await mgr.probeForRunningServer(port: 4000)
+
+        let own = await mgr.ownership
+        XCTAssertEqual(own, .observed, "Ownership should be .observed after probe detection")
+        let status = await mgr.serverStatus()
+        XCTAssertEqual(status, .running)
+
+        // Stop with .observed should NOT send a signal — just transition to .stopped
+        await mgr.stopServer()
+        let ownAfter = await mgr.ownership
+        XCTAssertEqual(ownAfter, .none)
+        let statusAfter = await mgr.serverStatus()
+        XCTAssertEqual(statusAfter, .stopped)
+    }
+
+    // MARK: - Ownership: terminateSync with .observed leaves process alive
+
+    func testTerminateSyncWithObservedLeavesProcessAlive() async throws {
+        // Spawn a real long-running process, then set ownership to .observed
+        // to verify terminateSync doesn't kill it.
+        let proc = Process()
+        proc.executableURL = URL(fileURLWithPath: "/bin/sleep")
+        proc.arguments = ["60"]
+        try proc.run()
+        let pid = proc.processIdentifier
+
+        let mgr = ProcessManager(koreHome: tmpDir.path)
+        mgr._disableHealthPolling = true
+        mgr._testHealthCheck = { _ in true }
+
+        // Get into .observed state via probe
+        await mgr.probeForRunningServer(port: 4000)
+        let own = await mgr.ownership
+        XCTAssertEqual(own, .observed)
+
+        // terminateSync should skip because ownership is .observed
+        mgr.terminateSync()
+
+        // Process should still be alive
+        XCTAssertTrue(kill(pid, 0) == 0, "Process should still be alive after terminateSync with .observed ownership")
+
+        // Clean up
+        proc.terminate()
+        proc.waitUntilExit()
     }
 }
 

@@ -136,6 +136,36 @@ private final class LogCapture: @unchecked Sendable {
     }
 }
 
+// MARK: - Process Ownership
+
+/// How the app relates to the running server process.
+public enum ProcessOwnership: Equatable, Sendable {
+    /// We spawned this process — we own it, will kill on quit.
+    case spawned
+
+    /// Found via PID file from a previous app session — treat as owned.
+    /// Adoption requires BOTH: (1) kill(pid, 0) confirms process alive,
+    /// AND (2) health endpoint responds with valid Kore status.
+    /// This prevents adopting a random process after PID reuse (e.g., reboot).
+    case adopted
+
+    /// Found via health probe only (no PID file) — monitor, don't kill.
+    case observed
+
+    /// No server detected.
+    case none
+
+    /// Short key for the JS bridge.
+    public var statusKey: String {
+        switch self {
+        case .spawned:  return "spawned"
+        case .adopted:  return "adopted"
+        case .observed: return "observed"
+        case .none:     return "none"
+        }
+    }
+}
+
 // MARK: - Health Info
 
 /// Snapshot of a successful server health check, passed to `onHealthPoll`.
@@ -176,6 +206,9 @@ public actor ProcessManager {
 
     /// The current lifecycle state of the server.
     private(set) public var state: ServerState = .stopped
+
+    /// How the app relates to the current server process.
+    private(set) public var ownership: ProcessOwnership = .none
 
     private var process: Process?
     private var adoptedPID: pid_t?
@@ -235,11 +268,15 @@ public actor ProcessManager {
     // MARK: - Startup Adoption
 
     /// Checks `$KORE_HOME/.kore.pid` for a leftover server process.
-    /// If the process is still alive, adopts it and begins health polling.
-    /// If the PID file is stale (process dead), removes it.
+    /// If the process is still alive AND the health endpoint responds, adopts it
+    /// (ownership = `.adopted`) and begins health polling.
+    /// If the PID file points to a live process but health fails, deletes the PID
+    /// file as stale (PID reuse safety).
+    /// If the PID is dead, removes the PID file.
     /// Call once after `init` (actors cannot run async work in their initializer).
-    public func adoptOrphanedProcess() {
+    public func adoptOrphanedProcess(port: Int? = nil) async {
         let pidURL = pidFileURL()
+        let healthPort = port ?? lastPort
 
         guard
             let pidString = try? String(contentsOf: pidURL, encoding: .utf8),
@@ -249,12 +286,21 @@ public actor ProcessManager {
         }
 
         if kill(pid, 0) == 0 {
-            // Process is alive — adopt it and begin health polling.
-            adoptedPID = pid
-            transition(to: .running)
-            startHealthPolling()
+            // Process is alive — verify via health endpoint before adopting.
+            let healthy = await checkHealthEndpoint(port: healthPort)
+            if healthy {
+                adoptedPID = pid
+                ownership = .adopted
+                transition(to: .running)
+                startHealthPolling()
+                print("[Kore] Ownership: adopted (source: PID file)")
+            } else {
+                // PID alive but not a Kore server — stale PID file (PID reuse).
+                try? FileManager.default.removeItem(at: pidURL)
+                print("[Kore] Stale PID file removed (pid \(pid) not Kore — health check failed)")
+            }
         } else {
-            // Stale PID file — remove it.
+            // Stale PID file — process is dead, remove it.
             try? FileManager.default.removeItem(at: pidURL)
         }
     }
@@ -276,8 +322,10 @@ public actor ProcessManager {
         let healthy = await checkHealthEndpoint(port: port)
         guard state.isIdle else { return }  // recheck after async gap
         if healthy {
+            ownership = .observed
             transition(to: .running)
             startHealthPolling()
+            print("[Kore] External server detected on :\(port) (monitoring only)")
         } else {
             // Server not found yet — start background probing so the icon
             // updates automatically when the server is started later.
@@ -299,9 +347,11 @@ public actor ProcessManager {
         await spawnServer(clonePath: clonePath, port: port, isRestart: false)
     }
 
-    /// Sends SIGTERM to the server (then SIGKILL after 5 seconds if needed),
-    /// cancels health polling, removes the PID file, and transitions to `.stopped`.
-    /// No-op if the server is already stopped.
+    /// Stops the server with ownership-aware behavior:
+    /// - `.spawned`/`.adopted`: sends SIGTERM/SIGKILL, deletes PID file
+    /// - `.observed`: transitions to `.stopped` without sending any signal
+    /// - `.none`: no-op
+    /// Resets `ownership` to `.none` in all cases.
     public func stopServer() async {
         guard state == .running || state == .starting else { return }
 
@@ -309,10 +359,21 @@ public actor ProcessManager {
         healthPollTask = nil
         firstCrashTime = nil
 
-        transition(to: .stopping)
-        await terminateActiveProcess()
-        deletePIDFile()
-        transition(to: .stopped)
+        switch ownership {
+        case .spawned, .adopted:
+            transition(to: .stopping)
+            await terminateActiveProcess()
+            deletePIDFile()
+            ownership = .none
+            transition(to: .stopped)
+
+        case .observed:
+            ownership = .none
+            transition(to: .stopped)
+
+        case .none:
+            break
+        }
     }
 
     /// Stops, then restarts the server with the last-used `clonePath` and `port`.
@@ -333,10 +394,10 @@ public actor ProcessManager {
     /// Returns the port the server is (or was last) listening on.
     public func currentPort() -> Int { lastPort }
 
-    /// Whether the server was started or adopted by this app (has a process handle or PID).
+    /// Whether the server was started or adopted by this app.
     /// When `false`, the server was detected via health probe only — Stop/Restart won't work.
     public func isManaged() -> Bool {
-        process != nil || adoptedPID != nil
+        ownership == .spawned || ownership == .adopted
     }
 
     /// Registers the state-change callback (actor-safe alternative to direct property assignment).
@@ -351,9 +412,16 @@ public actor ProcessManager {
 
     /// Synchronously stops the server. Safe to call from `applicationWillTerminate`
     /// where an async context is unavailable.
+    /// Skips termination when `ownership == .observed` — the external server continues running.
     public nonisolated func terminateSync() {
         let sema = DispatchSemaphore(value: 0)
         Task {
+            let own = await self.ownership
+            if own == .observed {
+                print("[Kore] Quitting — leaving external server running")
+                sema.signal()
+                return
+            }
             await self.stopServer()
             sema.signal()
         }
@@ -435,6 +503,7 @@ public actor ProcessManager {
         stderrPipe = stderr
 
         writePIDFile(pid: proc.processIdentifier)
+        ownership = .spawned
         transition(to: .running)
         startHealthPolling()
     }
@@ -464,7 +533,8 @@ public actor ProcessManager {
         if let firstCrash = firstCrashTime, now.timeIntervalSince(firstCrash) < Self.crashWindowSeconds {
             firstCrashTime = nil
             deletePIDFile()
-            
+            ownership = .none
+
             let stderrStr = logCapture.lastStderr.trimmingCharacters(in: .whitespacesAndNewlines)
             let errSuffix = stderrStr.isEmpty ? "" : "\n\nError output:\n\(stderrStr)"
             
@@ -628,8 +698,10 @@ public actor ProcessManager {
         if healthy {
             reconnectTask?.cancel()
             reconnectTask = nil
+            ownership = .observed
             transition(to: .running)
             startHealthPolling()
+            print("[Kore] External server detected on :\(port) (monitoring only)")
         }
     }
 
