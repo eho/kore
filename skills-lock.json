@@ -4,12 +4,12 @@
     "design-doc": {
       "source": "eho/agent-skills",
       "sourceType": "github",
-      "computedHash": "03f06ab0658a8a212431ae612f31730bbe1734d9291e9683c864b112f7699039"
+      "computedHash": "0fa8dd8fb2c3942ece0967299186d42437558f8f2d388900e58c3e62aaa46716"
     },
     "design-doc-reviewer": {
       "source": "eho/agent-skills",
       "sourceType": "github",
-      "computedHash": "c02e274af447272aadb679e203026443c07ccce258219efd83fc1ca2d83aa6fa"
+      "computedHash": "4b860a1933413de30757c6291d83225e140a139eaeacdc67071401adb7fedb8a"
     },
     "design-to-issues": {
       "source": "eho/agent-skills",
@@ -19,7 +19,7 @@
     "post-implementation-reviewer": {
       "source": "eho/agent-skills",
       "sourceType": "github",
-      "computedHash": "277c3bc7ddf541b2cff3e8affe9faf5204136c12e70c78139033be0c47778491"
+      "computedHash": "6ca0f1e75eed786790a6b4ce0183c441802080302e3ed377e4fede8e808c6856"
     },
     "prd": {
       "source": "eho/agent-skills",
@@ -44,7 +44,7 @@
     "user-story-implementer": {
       "source": "eho/agent-skills",
       "sourceType": "github",
-      "computedHash": "fc1c7fbd74053ffda80082b4b14f3ccf859ba517abda51d789b6ed2739fe10b8"
+      "computedHash": "dbe5f74529b99a2064890f48c55baf4d2c2f83f2e02f370f209742f8656ba5ea"
     },
     "user-story-reviewer": {
       "source": "eho/agent-skills",
