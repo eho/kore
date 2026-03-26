@@ -406,6 +406,28 @@ final class ProcessManagerTests: XCTestCase {
         XCTAssertEqual(infos.first?.port, 4000, "Health info should contain the correct port")
     }
 
+    // MARK: - Callbacks: onOwnershipChange fires
+
+    func testOwnershipChangeCallbackFires() async throws {
+        let mgr = makeManager()
+        let ownerships = LockedValue<[ProcessOwnership]>([])
+
+        await mgr.setOwnershipChangeCallback { ownership in
+            ownerships.mutate { $0.append(ownership) }
+        }
+
+        await mgr.startServer(clonePath: tmpDir.path, port: 3000)
+        await mgr.stopServer()
+
+        // Allow main-queue dispatches to land.
+        try await Task.sleep(nanoseconds: 100_000_000)
+
+        let observed = ownerships.get()
+        // Expected: .spawned (start) → .none (stop)
+        XCTAssertTrue(observed.contains(.spawned), "Should have observed .spawned, got \(observed)")
+        XCTAssertTrue(observed.contains(.none), "Should have observed .none, got \(observed)")
+    }
+
     // MARK: - Port: currentPort reflects last configuration
 
     func testCurrentPortReflectsLastStart() async throws {
