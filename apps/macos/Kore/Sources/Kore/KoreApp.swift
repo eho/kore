@@ -19,6 +19,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     var statusItem: NSStatusItem?
     var panelManager: PanelManager?
     var settingsWindowManager: SettingsWindowManager?
+    var onboardingWindowManager: OnboardingWindowManager?
     var daemonManager: DaemonManager?
 
     private let koreHome: String = ConfigManager.resolveKoreHome()
@@ -36,10 +37,46 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // Seed port from config so the menu shows the right value immediately.
         let config = (try? ConfigManager.readConfig(koreHome: koreHome)) ?? .defaults
         daemonPort = config.port ?? 3000
-        print("[Kore] Starting — home=\(koreHome) port=\(daemonPort)")
+        // No lastLaunchAt means the app has never completed setup — show onboarding.
+        // To re-trigger onboarding, remove the lastLaunchAt field from config.json.
+        let isFirstLaunch = config.lastLaunchAt == nil
+        print("[Kore] Starting — home=\(koreHome) port=\(daemonPort) firstLaunch=\(isFirstLaunch)")
 
         let dm = DaemonManager(koreHome: koreHome)
         daemonManager = dm
+
+        if isFirstLaunch {
+            // Show onboarding instead of starting daemon — daemon will start
+            // when the user completes the setup wizard.
+            setupStatusItem()
+            onboardingWindowManager = OnboardingWindowManager(
+                daemonManager: dm,
+                onComplete: { [weak self] in
+                    self?.onboardingWindowManager = nil
+                    self?.startNormalMode(dm: dm)
+                }
+            )
+            onboardingWindowManager?.showWindow()
+        } else {
+            startNormalMode(dm: dm)
+        }
+    }
+
+    /// Initializes daemon callbacks, probes for a running daemon, and sets up UI managers.
+    /// Called directly on normal launch, or after onboarding completes on first launch.
+    private func startNormalMode(dm: DaemonManager) {
+        // Re-read config in case onboarding just wrote it
+        if var freshConfig = try? ConfigManager.readConfig(koreHome: koreHome) {
+            daemonPort = freshConfig.port ?? 3000
+            // Stamp lastLaunchAt only if already set (normal launch) or freshly written
+            // by onboarding. If the user cancelled onboarding, lastLaunchAt is still nil
+            // and we leave it that way so onboarding shows again next time.
+            if freshConfig.lastLaunchAt != nil {
+                let formatter = ISO8601DateFormatter()
+                freshConfig.lastLaunchAt = formatter.string(from: Date())
+                try? ConfigManager.writeConfig(koreHome: koreHome, config: freshConfig)
+            }
+        }
 
         // Register callbacks, then adopt any orphaned daemon process — ordering matters
         // so no state transitions are missed.
@@ -58,7 +95,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             await dm.probeForRunningDaemon(port: daemonPort)
         }
 
-        setupStatusItem()
+        if statusItem == nil {
+            setupStatusItem()
+        }
         panelManager = PanelManager(daemonManager: dm)
         settingsWindowManager = SettingsWindowManager(daemonManager: dm)
     }

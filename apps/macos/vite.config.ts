@@ -13,6 +13,7 @@ export default defineConfig({
       input: {
         main: resolve(__dirname, "index.html"),
         settings: resolve(__dirname, "settings.html"),
+        onboarding: resolve(__dirname, "onboarding.html"),
       },
     },
   },

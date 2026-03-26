@@ -13,6 +13,7 @@ public struct KoreConfig: Codable {
     public var consolidation: ConsolidationConfig?
     public var embedIntervalMs: Int?
     public var mcpEnabled: Bool?
+    public var lastLaunchAt: String?
 
     public struct LlmConfig: Codable {
         public var provider: String?
@@ -67,7 +68,7 @@ public struct KoreConfig: Codable {
     public init(clonePath: String? = nil, koreHome: String? = nil, port: Int? = nil, apiKey: String? = nil,
                 llm: LlmConfig? = nil, appleNotes: AppleNotesConfig? = nil,
                 consolidation: ConsolidationConfig? = nil, embedIntervalMs: Int? = nil,
-                mcpEnabled: Bool? = nil) {
+                mcpEnabled: Bool? = nil, lastLaunchAt: String? = nil) {
         self.clonePath = clonePath
         self.koreHome = koreHome
         self.port = port
@@ -77,6 +78,7 @@ public struct KoreConfig: Codable {
         self.consolidation = consolidation
         self.embedIntervalMs = embedIntervalMs
         self.mcpEnabled = mcpEnabled
+        self.lastLaunchAt = lastLaunchAt
     }
 
     /// A config populated with default values matching the TypeScript defaults.
@@ -180,7 +182,7 @@ public struct ConfigManager {
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
 
         let encoder = JSONEncoder()
-        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
         let data = try encoder.encode(config)
         try data.write(to: url, options: .atomic)
     }

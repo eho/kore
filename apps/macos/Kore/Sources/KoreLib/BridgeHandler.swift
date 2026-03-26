@@ -123,6 +123,21 @@ public class BridgeHandler: NSObject, WKScriptMessageHandler {
             let detected = FileManager.default.fileExists(atPath: path)
             sendToJS(["type": "checkClaudeCodeConfig", "detected": detected])
 
+        case "installMCPConfig":
+            handleInstallMCPConfig(payload: payload)
+
+        case "setLaunchAtLogin":
+            handleSetLaunchAtLogin(payload: payload)
+
+        case "getLaunchAtLogin":
+            let enabled = LoginItem.getLaunchAtLogin()
+            sendToJS(["type": "getLaunchAtLogin", "enabled": enabled])
+
+        case "closeOnboarding":
+            DispatchQueue.main.async {
+                self.webView?.window?.close()
+            }
+
         default:
             sendToJS(["type": "error", "message": "Unknown message type: \(type)"])
         }
@@ -222,6 +237,36 @@ public class BridgeHandler: NSObject, WKScriptMessageHandler {
             msg["error"] = errMsg
         }
         sendToJS(msg)
+    }
+
+    // MARK: - MCP Config Handlers
+
+    private func handleInstallMCPConfig(payload: [String: Any]) {
+        guard let target = payload["target"] as? String else {
+            sendToJS(["type": "installMCPConfig", "success": false, "error": "Missing 'target' field"])
+            return
+        }
+        let daemonURL = payload["daemonURL"] as? String ?? "http://localhost:\(payload["port"] as? Int ?? 3000)"
+        let apiKey = payload["apiKey"] as? String ?? ""
+
+        do {
+            try MCPConfig.installMCPConfig(target: target, daemonURL: daemonURL, apiKey: apiKey)
+            sendToJS(["type": "installMCPConfig", "success": true, "target": target])
+        } catch {
+            sendToJS(["type": "installMCPConfig", "success": false, "error": error.localizedDescription])
+        }
+    }
+
+    // MARK: - Login Item Handlers
+
+    private func handleSetLaunchAtLogin(payload: [String: Any]) {
+        let enabled = payload["enabled"] as? Bool ?? false
+        do {
+            try LoginItem.setLaunchAtLogin(enabled: enabled)
+            sendToJS(["type": "setLaunchAtLogin", "success": true, "enabled": enabled])
+        } catch {
+            sendToJS(["type": "setLaunchAtLogin", "success": false, "error": error.localizedDescription])
+        }
     }
 
     // MARK: - Swift → JS
