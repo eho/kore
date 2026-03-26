@@ -97,7 +97,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             }
             // Try PID-file adoption first; if that finds nothing, probe the
             // health endpoint so a server started outside the app is detected.
-            await dm.adoptOrphanedProcess()
+            await dm.adoptOrphanedProcess(port: serverPort)
             await dm.probeForRunningServer(port: serverPort)
         }
 
