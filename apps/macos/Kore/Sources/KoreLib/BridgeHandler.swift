@@ -34,6 +34,11 @@ public class BridgeHandler: NSObject, WKScriptMessageHandler {
         case "ping":
             sendToJS(["type": "pong", "ts": Date().timeIntervalSince1970])
 
+        case "resolveKoreHome":
+            let home = ConfigManager.resolveKoreHome()
+            let expanded = (home as NSString).expandingTildeInPath
+            sendToJS(["type": "resolveKoreHome", "koreHome": home, "koreHomeExpanded": expanded])
+
         case "readConfig":
             handleReadConfig(payload: payload)
 
@@ -50,6 +55,30 @@ public class BridgeHandler: NSObject, WKScriptMessageHandler {
                 sendToJS(["type": "openFDASettings", "success": true])
             } catch {
                 sendToJS(["type": "openFDASettings", "success": false, "error": error.localizedDescription])
+            }
+
+        case "revealInFinder":
+            let path = payload["path"] as? String ?? "~/.kore"
+            let expanded = (path as NSString).expandingTildeInPath
+            NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: expanded)
+            sendToJS(["type": "revealInFinder", "success": true])
+
+        case "chooseClonePath":
+            DispatchQueue.main.async {
+                let panel = NSOpenPanel()
+                panel.canChooseFiles = false
+                panel.canChooseDirectories = true
+                panel.allowsMultipleSelection = false
+                panel.message = "Select the Kore clone directory"
+                if panel.runModal() == .OK, let url = panel.url {
+                    let path = url.path
+                    let coreApiPath = url.appendingPathComponent("apps/core-api").path
+                    if FileManager.default.fileExists(atPath: coreApiPath) {
+                        self.sendToJS(["type": "chooseClonePath", "path": path])
+                    } else {
+                        self.sendToJS(["type": "chooseClonePath", "error": "Invalid directory: must contain apps/core-api/"])
+                    }
+                }
             }
 
         case "checkBunInstalled":
@@ -82,6 +111,17 @@ public class BridgeHandler: NSObject, WKScriptMessageHandler {
 
         case "getDaemonStatus":
             handleGetDaemonStatus()
+
+        case "checkClaudeDesktopConfig":
+            let path = NSString("~/Library/Application Support/Claude/claude_desktop_config.json").expandingTildeInPath
+            let detected = FileManager.default.fileExists(atPath: path)
+            sendToJS(["type": "checkClaudeDesktopConfig", "detected": detected])
+
+        case "checkClaudeCodeConfig":
+            // Claude Code stores settings in ~/.claude/settings.json
+            let path = NSString("~/.claude/settings.json").expandingTildeInPath
+            let detected = FileManager.default.fileExists(atPath: path)
+            sendToJS(["type": "checkClaudeCodeConfig", "detected": detected])
 
         default:
             sendToJS(["type": "error", "message": "Unknown message type: \(type)"])
@@ -124,7 +164,7 @@ public class BridgeHandler: NSObject, WKScriptMessageHandler {
 
     private func handleStartDaemon(payload: [String: Any]) {
         guard let dm = daemonManager else {
-            sendToJS(["type": "daemonStatus", "status": "error", "error": "DaemonManager not available."])
+            sendToJS(["type": "daemonStatus", "status": "error", "managed": false, "error": "DaemonManager not available."])
             return
         }
         let clonePath = payload["clonePath"] as? String ?? "~/dev/kore"
@@ -132,48 +172,52 @@ public class BridgeHandler: NSObject, WKScriptMessageHandler {
         Task {
             await dm.startDaemon(clonePath: clonePath, port: port)
             let state = await dm.daemonStatus()
-            self.sendDaemonStatus(state)
+            let managed = await dm.isManaged()
+            self.sendDaemonStatus(state, managed: managed)
         }
     }
 
     private func handleStopDaemon() {
         guard let dm = daemonManager else {
-            sendToJS(["type": "daemonStatus", "status": "error", "error": "DaemonManager not available."])
+            sendToJS(["type": "daemonStatus", "status": "error", "managed": false, "error": "DaemonManager not available."])
             return
         }
         Task {
             await dm.stopDaemon()
             let state = await dm.daemonStatus()
-            self.sendDaemonStatus(state)
+            let managed = await dm.isManaged()
+            self.sendDaemonStatus(state, managed: managed)
         }
     }
 
     private func handleRestartDaemon() {
         guard let dm = daemonManager else {
-            sendToJS(["type": "daemonStatus", "status": "error", "error": "DaemonManager not available."])
+            sendToJS(["type": "daemonStatus", "status": "error", "managed": false, "error": "DaemonManager not available."])
             return
         }
         Task {
             await dm.restartDaemon()
             let state = await dm.daemonStatus()
-            self.sendDaemonStatus(state)
+            let managed = await dm.isManaged()
+            self.sendDaemonStatus(state, managed: managed)
         }
     }
 
     private func handleGetDaemonStatus() {
         guard let dm = daemonManager else {
-            sendToJS(["type": "daemonStatus", "status": "stopped"])
+            sendToJS(["type": "daemonStatus", "status": "stopped", "managed": false])
             return
         }
         Task {
             let state = await dm.daemonStatus()
-            self.sendDaemonStatus(state)
+            let managed = await dm.isManaged()
+            self.sendDaemonStatus(state, managed: managed)
         }
     }
 
     /// Pushes the current daemon state to the JS layer.
-    public func sendDaemonStatus(_ state: DaemonState) {
-        var msg: [String: Any] = ["type": "daemonStatus", "status": state.statusKey]
+    public func sendDaemonStatus(_ state: DaemonState, managed: Bool = true) {
+        var msg: [String: Any] = ["type": "daemonStatus", "status": state.statusKey, "managed": managed]
         if let errMsg = state.errorMessage {
             msg["error"] = errMsg
         }

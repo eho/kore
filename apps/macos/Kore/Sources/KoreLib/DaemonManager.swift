@@ -333,6 +333,12 @@ public actor DaemonManager {
     /// Returns the port the daemon is (or was last) listening on.
     public func currentPort() -> Int { lastPort }
 
+    /// Whether the daemon was started or adopted by this app (has a process handle or PID).
+    /// When `false`, the daemon was detected via health probe only — Stop/Restart won't work.
+    public func isManaged() -> Bool {
+        process != nil || adoptedPID != nil
+    }
+
     /// Registers the state-change callback (actor-safe alternative to direct property assignment).
     public func setStateChangeCallback(_ callback: (@Sendable (DaemonState) -> Void)?) {
         onStateChange = callback

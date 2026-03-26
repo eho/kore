@@ -7,7 +7,9 @@
     "test": "bun test apps packages",
     "test:e2e": "bun test ./e2e/run.e2e.ts",
     "typecheck": "bunx tsc --noEmit --project tsconfig.json",
-    "build:bin": "bun run --cwd apps/core-api build:bin && bun run --cwd apps/cli build:bin"
+    "build:bin": "bun run --cwd apps/core-api build:bin && bun run --cwd apps/cli build:bin",
+    "macos:dev": "bun run --cwd apps/macos build && swift run --package-path apps/macos/Kore Kore",
+    "macos:build": "bun run --cwd apps/macos build && swift build --package-path apps/macos/Kore"
   },
   "workspaces": [
     "./packages/*",
