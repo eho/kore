@@ -15,7 +15,7 @@
 
 - Eliminate terminal-based setup for non-technical users — onboarding should require zero command-line interaction
 - Make Apple Notes permissions a one-click flow instead of a multi-step System Settings hunt
-- Keep the daemon running invisibly as a menu bar app so users never manage a terminal tab
+- Keep the server running invisibly as a menu bar app so users never manage a terminal tab
 - Provide a GUI settings surface that covers all common configuration without editing files
 - Learn Swift/AppKit + WKWebView bridging + macOS entitlements as a secondary personal goal
 
@@ -25,14 +25,14 @@
 |--------|--------|----------------|
 | Time to first successful Apple Notes sync | < 3 minutes from first launch | Manual timing during onboarding |
 | Memory footprint of app shell (idle) | < 30 MB RSS | Activity Monitor spot checks |
-| Daemon uptime after initial start | > 99.5% (no unexplained crashes per week) | Health poll failure rate in logs |
+| Server uptime after initial start | > 99.5% (no unexplained crashes per week) | Health poll failure rate in logs |
 | Onboarding completion rate | 100% of attempts (personal use) | No abandoned onboarding flows |
-| Cold start to daemon healthy | < 5 seconds | Timestamp delta: app launch → first healthy poll |
+| Cold start to server healthy | < 5 seconds | Timestamp delta: app launch → first healthy poll |
 | Panel visible over fullscreen apps | 100% of the time | Manual testing on fullscreen + multi-monitor |
 
 ### Non-Goals
 
-- **Not a rewrite of Kore's core** — the app wraps the existing Bun daemon, it does not replace it
+- **Not a rewrite of Kore's core** — the app wraps the existing Bun server, it does not replace it
 - **Not a custom LLM chat UI** — Kore's interaction model is MCP-based (Claude Desktop / Claude Code), not a standalone chat window
 - **Not an Ollama manager** — the app checks Ollama connectivity but does not start, stop, or update Ollama
 - **Not a Mac App Store app** — sandboxing is too constrained for a process manager that needs Full Disk Access and child process spawning
@@ -41,7 +41,7 @@
 ### Design Principles
 
 1. **Silent by default** — the app should be invisible during normal operation. Menu bar icon + notifications only. No persistent windows.
-2. **Daemon-first** — every feature must work without the GUI. The app is a convenience layer, not a requirement. CLI and MCP remain first-class.
+2. **Server-first** — every feature must work without the GUI. The app is a convenience layer, not a requirement. CLI and MCP remain first-class.
 3. **No magic** — configuration is readable JSON, logs are accessible, and the app never hides what it's doing. Power users can always drop to the CLI.
 4. **Graceful degradation** — if Ollama is offline, Apple Notes access is denied, or the LLM API key is missing, the app continues running with reduced functionality and clear status indicators.
 
@@ -49,7 +49,7 @@
 
 ## Vision Alignment
 
-This design directly advances the vision's "background engine" architecture. The vision (`docs/vision/vision.md`) emphasizes passive ingestion, agentic retrieval via MCP, and proactive nudges — all without a complex user-facing UI. The macOS app serves exactly this role: a silent menu bar process manager that keeps the Kore backend running so that the Pull Channel (MCP via Claude Desktop / Claude Code) and Push Channel (notifications, future location-based nudges) work reliably. By intentionally deferring a chat UI and focusing on daemon management + Apple Notes permissions, the app supports the vision's "Passive Ingestion" and "Agentic Retrieval" pillars without introducing competing interaction models. The future Dashboard and Quick Search features align with the vision's intent to make memories browseable, but the MVP correctly prioritizes the invisible infrastructure over UI polish.
+This design directly advances the vision's "background engine" architecture. The vision (`docs/vision/vision.md`) emphasizes passive ingestion, agentic retrieval via MCP, and proactive nudges — all without a complex user-facing UI. The macOS app serves exactly this role: a silent menu bar process manager that keeps the Kore backend running so that the Pull Channel (MCP via Claude Desktop / Claude Code) and Push Channel (notifications, future location-based nudges) work reliably. By intentionally deferring a chat UI and focusing on server management + Apple Notes permissions, the app supports the vision's "Passive Ingestion" and "Agentic Retrieval" pillars without introducing competing interaction models. The future Dashboard and Quick Search features align with the vision's intent to make memories browseable, but the MVP correctly prioritizes the invisible infrastructure over UI polish.
 
 ---
 
@@ -61,7 +61,7 @@ A native macOS app changes all of this:
 
 1. **Onboarding becomes a wizard**, not a README
 2. **Apple Notes permission is a native dialog** ("Allow Kore to access your files") instead of "open System Settings, navigate to Privacy & Security, find Full Disk Access, scroll to find your terminal, toggle it on"
-3. **The daemon runs invisibly** as a menu bar app, not a terminal tab that the user must remember to keep open
+3. **The server runs invisibly** as a menu bar app, not a terminal tab that the user must remember to keep open
 4. **Discovery** — the app lives in `/Applications`, not `~/dev/kore`
 
 ---
@@ -104,7 +104,7 @@ The Swift shell handles platform integration. The React UI handles all visual re
 - `NSWindow` — settings window
 - `WKWebView` hosting — loads the React bundle from the app bundle
 - JS bridge — `WKScriptMessageHandler` for Swift→JS and `window.webkit.messageHandlers` for JS→Swift
-- `Process` — daemon child process management (start, stop, SIGTERM/SIGKILL)
+- `Process` — server child process management (start, stop, SIGTERM/SIGKILL)
 - `FileManager` — config.json I/O, PID file, log capture
 - `SMAppService` — launch at login
 - Entitlements and Info.plist — Apple Notes permissions, security-scoped bookmarks
@@ -119,9 +119,9 @@ The Swift shell handles platform integration. The React UI handles all visual re
 
 ---
 
-## Core Concept: The App as a Daemon Manager
+## Core Concept: The App as a Server Manager
 
-The macOS app is **not a replacement for Kore's architecture** — it is a **host and controller** for the existing Bun daemon.
+The macOS app is **not a replacement for Kore's architecture** — it is a **host and controller** for the existing Bun server.
 
 ```
 ┌─────────────────────────────────────────────────┐
@@ -149,14 +149,14 @@ The macOS app is **not a replacement for Kore's architecture** — it is a **hos
 │                    │ Child process                │
 │                    │ (bun run start at clone)     │
 │         ┌──────────▼───────────┐                  │
-│         │   Bun Daemon         │                  │
+│         │   Kore Server        │                  │
 │         │  localhost:3000      │                  │
 │         │  (existing core-api) │                  │
 │         └──────────────────────┘                  │
 └───────────────────────────────────────────────────┘
 ```
 
-The Swift layer manages the Bun daemon as a child process (`Process`). The Bun daemon runs exactly as it does today — same REST API, same SQLite, same markdown files. The UI talks to the daemon via `localhost:3000` using the existing API.
+The Swift layer manages the Bun server as a child process (`Process`). The Bun server runs exactly as it does today — same REST API, same SQLite, same markdown files. The UI talks to the server via `localhost:3000` using the existing API.
 
 This means:
 - The MCP server still works unchanged
@@ -164,11 +164,11 @@ This means:
 - All existing tests still apply
 - We're not rewriting Kore — we're wrapping it
 
-**MVP simplification:** In Phase 1, the diagram is even simpler — the "Bun Daemon" box is just `bun run start` executed at the local clone path. No bundled binary, no `Resources/` extraction.
+**MVP simplification:** In Phase 1, the diagram is even simpler — the "Kore Server" box is just `bun run start` executed at the local clone path. No bundled binary, no `Resources/` extraction.
 
 ---
 
-## Daemon Lifecycle & Edge Cases
+## Server Lifecycle & Edge Cases
 
 The Swift process manager (`ProcessManager`) is responsible for the full lifecycle of the Bun child process. This section defines behavior for every failure mode.
 
@@ -201,22 +201,22 @@ The resolved Bun path is used for all `Process` invocations (`ProcessManager`, `
 | **Port already in use** | `bun run start` exits immediately with `EADDRINUSE` | Transition to `Error` state. Menu bar icon shows `!`. Settings shows: "Port 3000 is in use by another process. Change the port in Settings or stop the other process." No auto-retry. |
 | **Bun not found** | `which bun` fails or spawn returns error | Transition to `Error` state. Settings shows: "Bun is not installed. Install it from bun.sh." |
 | **Clone path invalid** | Configured path doesn't contain `apps/core-api/` | Transition to `Error` state. Settings shows: "Kore clone not found at {path}. Update the clone path in Settings." |
-| **Daemon crashes (OOM, panic, uncaught exception)** | Child process exits with non-zero code | Transition to `Error` state. Log the exit code and last 50 lines of stderr. **Auto-restart:** retry once after a 3-second delay. If the second attempt also fails within 30 seconds, stay in `Error` state and notify the user. No infinite restart loops. |
-| **Daemon killed externally** (Activity Monitor, `kill`) | Child process exits with signal (SIGTERM/SIGKILL) | Same as crash — single auto-restart attempt. If killed again within 30 seconds, stay in `Error` and surface: "Daemon was terminated externally." |
-| **Health poll failures (daemon hangs)** | 3 consecutive failed health polls (15 seconds) | Transition to `Error` state. Attempt graceful stop (SIGTERM), wait 5 seconds, then SIGKILL. Then auto-restart once. |
+| **Server crashes (OOM, panic, uncaught exception)** | Child process exits with non-zero code | Transition to `Error` state. Log the exit code and last 50 lines of stderr. **Auto-restart:** retry once after a 3-second delay. If the second attempt also fails within 30 seconds, stay in `Error` state and notify the user. No infinite restart loops. |
+| **Server killed externally** (Activity Monitor, `kill`) | Child process exits with signal (SIGTERM/SIGKILL) | Same as crash — single auto-restart attempt. If killed again within 30 seconds, stay in `Error` and surface: "Server was terminated externally." |
+| **Health poll failures (server hangs)** | 3 consecutive failed health polls (15 seconds) | Transition to `Error` state. Attempt graceful stop (SIGTERM), wait 5 seconds, then SIGKILL. Then auto-restart once. |
 | **App quit (normal)** | User clicks "Quit Kore" or Cmd+Q | Send SIGTERM to child process, wait up to 5 seconds for clean exit, then SIGKILL if still alive. App exits only after child is confirmed dead. |
 | **App crash** | App process terminates unexpectedly | **Zombie prevention:** On startup, the Swift layer checks for a PID file at `$KORE_HOME/.kore.pid`. If the PID file exists and the process is still running, adopt it (store the PID, begin health polling). If the process is dead, delete the stale PID file and start fresh. |
-| **Config change requiring restart** | User changes port, clone path, or LLM provider in Settings | Settings UI shows "Restart required" badge on the daemon status. User clicks "Restart" explicitly — no silent auto-restart on config change. |
+| **Config change requiring restart** | User changes port, clone path, or LLM provider in Settings | Settings UI shows "Restart required" badge on the server status. User clicks "Restart" explicitly — no silent auto-restart on config change. |
 
 ### PID File
 
 The Swift layer writes `$KORE_HOME/.kore.pid` containing the child process PID immediately after a successful spawn. The file is deleted on clean shutdown. This enables:
 - Zombie detection on app startup (see above)
-- External tooling to check if the daemon is running
+- External tooling to check if the server is running
 
 ### Logging
 
-Daemon stdout and stderr are captured by the Swift layer and written to `$KORE_HOME/logs/daemon.log` (rotated, max 10 MB, last 3 files kept). The "View Logs" button in Advanced settings opens this file.
+Server stdout and stderr are captured by the Swift layer and written to `$KORE_HOME/logs/server.log` (rotated, max 10 MB, last 3 files kept). The "View Logs" button in Advanced settings opens this file.
 
 ---
 
@@ -224,7 +224,7 @@ Daemon stdout and stderr are captured by the Swift layer and written to `$KORE_H
 
 ### Why `bun build --compile` won't work
 
-The Kore daemon depends on QMD, which uses `node-llama-cpp` (native GGUF bindings), `better-sqlite3`, and `sqlite-vec` — all native modules with platform-specific prebuilt binaries. `bun build --compile` cannot bundle these native addons into a single executable. The README already documents this limitation.
+The Kore server depends on QMD, which uses `node-llama-cpp` (native GGUF bindings), `better-sqlite3`, and `sqlite-vec` — all native modules with platform-specific prebuilt binaries. `bun build --compile` cannot bundle these native addons into a single executable. The README already documents this limitation.
 
 ### Phased approach to bundling
 
@@ -233,7 +233,7 @@ The Kore daemon depends on QMD, which uses `node-llama-cpp` (native GGUF binding
 - Kore is cloned locally (e.g., `~/dev/kore`)
 - `node_modules` are already installed via `bun install`
 
-The app spawns the daemon by running `bun run start` at the configured clone path. This is the simplest possible approach and avoids all native module packaging issues.
+The app spawns the server by running `bun run start` at the configured clone path. This is the simplest possible approach and avoids all native module packaging issues.
 
 **Future (self-contained app):** The app bundles three things in `Resources/`:
 1. **Bun binary** — macOS universal binary
@@ -242,19 +242,19 @@ The app spawns the daemon by running `bun run start` at the configured clone pat
 
 On first launch, the Swift layer copies these to `~/.kore/app/` and runs `bun run start` from there. This makes the download larger (~200MB+ with native modules) but avoids a first-run `bun install` step.
 
-The daemon and the app are tightly coupled — updating the daemon means updating the whole app. Sparkle (the standard macOS update framework) handles this as a single unit in later phases.
+The server and the app are tightly coupled — updating the server means updating the whole app. Sparkle (the standard macOS update framework) handles this as a single unit in later phases.
 
 ### CLI availability
 
-**Phase 1 (MVP):** The CLI is already available from the local clone — no installation needed. The user runs `kore` via their existing setup (e.g., `bun run --cwd ~/dev/kore cli` or a symlink). Both the app and CLI operate on the same clone, same `.env`, same daemon. No conflict.
+**Phase 1 (MVP):** The CLI is already available from the local clone — no installation needed. The user runs `kore` via their existing setup (e.g., `bun run --cwd ~/dev/kore cli` or a symlink). Both the app and CLI operate on the same clone, same `.env`, same server. No conflict.
 
 **Future (self-contained app):** The Kore source lives inside `Resources/kore/` in the app bundle — not on `$PATH`. The app offers an "Install CLI" button in Settings (like VS Code's "Install 'code' command in PATH") that symlinks the `kore` binary to `/usr/local/bin/`. This is explicit and reversible.
 
-**Config resolution for the CLI:** In the self-contained app, there is no `.env` file (the app bundle is immutable). Both the daemon and CLI read `$KORE_HOME/config.json` as the primary config source. The `config.ts` change made in Phase 1 is load-bearing for this — it ensures both the daemon and CLI resolve config from the same JSON file.
+**Config resolution for the CLI:** In the self-contained app, there is no `.env` file (the app bundle is immutable). Both the server and CLI read `$KORE_HOME/config.json` as the primary config source. The `config.ts` change made in Phase 1 is load-bearing for this — it ensures both the server and CLI resolve config from the same JSON file.
 
 **Precedence in self-contained mode:**
 1. Env vars (explicit)
-2. `$KORE_HOME/config.json` (written by the app, read by daemon and CLI)
+2. `$KORE_HOME/config.json` (written by the app, read by server and CLI)
 3. No `.env` — it's not in the bundle
 
 ---
@@ -263,7 +263,7 @@ The daemon and the app are tightly coupled — updating the daemon means updatin
 
 ### Decision: `config.json` in `$KORE_HOME`
 
-The daemon currently reads all configuration from environment variables (auto-loaded from `.env` by Bun). The macOS app introduces a new `$KORE_HOME/config.json` file as the primary config surface for GUI users.
+The server currently reads all configuration from environment variables (auto-loaded from `.env` by Bun). The macOS app introduces a new `$KORE_HOME/config.json` file as the primary config surface for GUI users.
 
 **Precedence order (highest wins):**
 1. Environment variables (explicit `VAR=value bun run start`)
@@ -332,7 +332,7 @@ macOS can now show a proper consent dialog the first time access is attempted. M
 1. On first launch, detects whether Apple Notes sync is enabled
 2. If enabled, attempts to open the Notes database path
 3. If that fails (TCC denial), shows a native in-app sheet: "Kore needs access to your Notes database. Click below to open System Settings." + a deep link button: `x-apple.systempreferences:com.apple.preference.security?Privacy_AllDiskAccess`
-4. After the user grants access, the Bun daemon (a child process of the app) **inherits the app's TCC grants automatically** — no extra steps
+4. After the user grants access, the Bun server (a child process of the app) **inherits the app's TCC grants automatically** — no extra steps
 
 **Even better:** The app can request the `com.apple.security.files.user-selected.read-write` entitlement and use `NSOpenPanel` to let the user pick the Notes folder once. macOS stores a security-scoped bookmark, and the app can open the folder on every subsequent launch without re-prompting. This avoids Full Disk Access entirely — just a one-time folder picker.
 
@@ -345,8 +345,8 @@ macOS can now show a proper consent dialog the first time access is attempted. M
 The primary persistent UI surface. Always visible in the menu bar when Kore is running.
 
 **Menu bar icon states:**
-- `●` (filled) — daemon running, last sync OK
-- `◌` (hollow) — daemon stopped
+- `●` (filled) — server running, last sync OK
+- `◌` (hollow) — server stopped
 - `⟳` (spinning) — sync or consolidation in progress
 - `!` (exclamation) — error state (permission denied, Ollama offline, etc.)
 
@@ -355,7 +355,7 @@ The primary persistent UI surface. Always visible in the menu bar when Kore is r
 Kore                          ●
 ───────────────────────────────
   Last sync: 2 minutes ago
-  Daemon: running on :3000
+  Kore: running on :3000
 ───────────────────────────────
   Sync Apple Notes Now
   Trigger Consolidation
@@ -425,7 +425,7 @@ The onboarding flow is minimal but functional. On first launch (detected by abse
 
 **Step 6 — Start**
 - Write `config.json`
-- Start daemon
+- Start server
 - Show "Kore is running" confirmation
 
 This reuses the Settings window UI — no separate wizard component. The "guided mode" is just a stepper overlay that highlights each tab in sequence.
@@ -441,9 +441,9 @@ All settings are read from and written to `$KORE_HOME/config.json`.
 **General**
 - Kore clone path (file picker, validated — must contain `apps/core-api/`)
 - `$KORE_HOME` directory (show path, button to reveal in Finder)
-- Daemon port (default 3000)
+- Server port (default 3000)
 - Launch at login (toggle, backed by `SMAppService`)
-- Daemon status indicator (running / stopped / error) with Start / Stop / Restart buttons
+- Server status indicator (running / stopped / error) with Start / Stop / Restart buttons
 
 **LLM**
 - Provider selector (Ollama / Gemini)
@@ -525,7 +525,7 @@ Use `UNUserNotificationCenter` for all of these.
 
 ## Packaging Details
 
-### App Structure (MVP — no bundled daemon)
+### App Structure (MVP — no bundled server)
 ```
 Kore.app/
   Contents/
@@ -539,7 +539,7 @@ Kore.app/
     Info.plist                # Bundle ID, entitlements, usage descriptions
 ```
 
-The MVP app is lightweight — just the Swift binary, the React UI bundle, and icon. The Bun daemon runs from the user's local Kore clone. No Bun binary or source code is bundled.
+The MVP app is lightweight — just the Swift binary, the React UI bundle, and icon. The Bun server runs from the user's local Kore clone. No Bun binary or source code is bundled.
 
 ### App Structure (Future — self-contained)
 ```
@@ -566,7 +566,7 @@ Kore.app/
 <key>com.apple.security.files.bookmarks.app-scope</key>
 <true/>
 
-<!-- For running child processes (Bun daemon) -->
+<!-- For running child processes (Bun server) -->
 <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
 <true/>
 ```
@@ -613,7 +613,7 @@ apps/
     tsconfig.json
 ```
 
-The React UI calls the existing Kore API at `localhost:3000` — same endpoints, no new API surface needed (initially). The JS bridge is used only for things the web UI can't do natively: launching the daemon, reading/writing `config.json`, checking permissions.
+The React UI calls the existing Kore API at `localhost:3000` — same endpoints, no new API surface needed (initially). The JS bridge is used only for things the web UI can't do natively: launching the server, reading/writing `config.json`, checking permissions.
 
 ### Required change to core-api
 
@@ -676,11 +676,11 @@ func userContentController(_ controller: WKUserContentController,
 The following Swift functions are callable from the React UI:
 
 ```swift
-// Daemon lifecycle
-func startDaemon(clonePath: String, port: Int) async throws
-func stopDaemon() async throws
-func restartDaemon() async throws
-func daemonStatus() -> DaemonStatus  // .running / .stopped / .error(String)
+// Server lifecycle
+func startServer(clonePath: String, port: Int) async throws
+func stopServer() async throws
+func restartServer() async throws
+func serverStatus() -> ServerStatus  // .running / .stopped / .error(String)
 
 // Config
 func readConfig(koreHome: String) throws -> KoreConfig
@@ -706,7 +706,7 @@ func getLaunchAtLogin() -> Bool
 
 ## Testing Strategy
 
-The existing Bun daemon tests (`bun test`) continue to cover all core-api logic unchanged. This section covers testing the **new** Swift layer and React UI.
+The existing Bun server tests (`bun test`) continue to cover all core-api logic unchanged. This section covers testing the **new** Swift layer and React UI.
 
 ### Swift Unit Tests (`swift test` / Xcode XCTest)
 
@@ -719,7 +719,7 @@ The Swift layer is tested with XCTest:
 | `Permissions` | Mock TCC query responses for granted/denied/unknown states. Verify correct `PermissionStatus` enum returned. |
 | `BridgeHandler` | Verify message parsing, method routing, and JSON response formatting. |
 
-**Note:** Daemon spawn tests use a trivial mock process (e.g., `sleep 60` or a small Bun script that listens on a port) rather than the full Kore daemon, to keep tests fast and isolated.
+**Note:** Server spawn tests use a trivial mock process (e.g., `sleep 60` or a small Bun script that listens on a port) rather than the full Kore server, to keep tests fast and isolated.
 
 ### React UI Tests (`bun test`)
 
@@ -728,8 +728,8 @@ The React UI in `apps/macos/src/` is tested with `bun test` and a lightweight co
 | Area | Test scenarios |
 |------|---------------|
 | Settings tabs | Each tab renders without error. Form inputs update local state. Save button calls `bridgeCall('writeConfig')` with correct payload. |
-| Onboarding flow | Stepper advances through all steps. Required fields block progression. Final step calls `bridgeCall('writeConfig')` then `bridgeCall('startDaemon')`. |
-| Daemon status display | UI reflects `Running` / `Stopped` / `Error` states correctly. Error state shows the error message. Start/Stop/Restart buttons call correct bridge methods. |
+| Onboarding flow | Stepper advances through all steps. Required fields block progression. Final step calls `bridgeCall('writeConfig')` then `bridgeCall('startServer')`. |
+| Server status display | UI reflects `Running` / `Stopped` / `Error` states correctly. Error state shows the error message. Start/Stop/Restart buttons call correct bridge methods. |
 
 **JS bridge mocking:** Tests mock `window.webkit.messageHandlers` to simulate Swift responses without running the full app.
 
@@ -739,11 +739,11 @@ These scenarios require a running macOS environment and are tracked as a checkli
 
 - [ ] **Fresh install:** Delete `$KORE_HOME/config.json`, launch app, verify onboarding flow triggers
 - [ ] **Port conflict:** Start another process on port 3000, launch Kore, verify error message and no crash
-- [ ] **Daemon crash recovery:** Start daemon, `kill -9` the Bun process, verify app detects the crash and auto-restarts once
-- [ ] **Double crash (no restart loop):** Kill the daemon twice within 30 seconds, verify app stays in Error state
+- [ ] **Server crash recovery:** Start server, `kill -9` the Bun process, verify app detects the crash and auto-restarts once
+- [ ] **Double crash (no restart loop):** Kill the server twice within 30 seconds, verify app stays in Error state
 - [ ] **TCC denial:** Revoke Full Disk Access, trigger Apple Notes sync, verify graceful error message
 - [ ] **TCC grant:** Grant access via folder picker, verify sync succeeds on next cycle
-- [ ] **App crash → zombie prevention:** Force-kill the app process, relaunch, verify app adopts the orphaned daemon via PID file
+- [ ] **App crash → zombie prevention:** Force-kill the app process, relaunch, verify app adopts the orphaned server via PID file
 - [ ] **Config change restart:** Change port in Settings, verify "Restart required" badge appears, restart works
 - [ ] **Bun not installed:** Rename Bun binary, launch app, verify clear error message
 - [ ] **Ollama offline:** Disable Ollama, verify app shows connection error but continues running
@@ -768,9 +768,9 @@ These scenarios require a running macOS environment and are tracked as a checkli
 | WKWebView JS bridge is harder to debug than Tauri's `invoke()` | Medium | Low — standard WebKit APIs, well-documented | Build a thin `bridgeCall()` wrapper in TypeScript that mirrors the `invoke()` API for easy migration of existing UI code. |
 | Security-scoped bookmarks don't work through NSOpenPanel for the Notes folder | Medium | Medium — would require Full Disk Access instead of folder picker | Test early in Phase 1. Fallback: use the FDA deep link flow, which is already designed. |
 | First QMD model download (~500MB) surprises users with no progress feedback | High | Low — annoying UX but not a blocker | Show a notification when the first embedding operation starts. Investigate whether `node-llama-cpp` exposes download progress events. |
-| Bun daemon child process leaks resources or doesn't respond to SIGTERM cleanly | Low | Medium — orphaned processes consuming CPU/memory | PID file mechanism + SIGKILL fallback after 5s. Logging captures stderr for diagnosis. |
+| Server child process leaks resources or doesn't respond to SIGTERM cleanly | Low | Medium — orphaned processes consuming CPU/memory | PID file mechanism + SIGKILL fallback after 5s. Logging captures stderr for diagnosis. |
 | macOS Gatekeeper warnings scare users (unsigned MVP app) | High (for non-developer users) | Medium — users may not know to right-click → Open | Document the bypass clearly. Phase 4 adds Apple notarization. For MVP, target is developer users who understand Gatekeeper. |
-| Native module compatibility breaks across macOS versions | Low | High — daemon won't start | Pin to tested macOS versions in docs. Native modules (`better-sqlite3`, `sqlite-vec`) have broad macOS support. |
+| Native module compatibility breaks across macOS versions | Low | High — server won't start | Pin to tested macOS versions in docs. Native modules (`better-sqlite3`, `sqlite-vec`) have broad macOS support. |
 
 ---
 
@@ -778,7 +778,7 @@ These scenarios require a running macOS environment and are tracked as a checkli
 
 ### Phase 1 — MVP (Menu Bar + Settings)
 
-Get a working `.app` that manages the daemon lifecycle and provides a Settings UI. Assumes Bun is pre-installed and Kore is cloned locally.
+Get a working `.app` that manages the server lifecycle and provides a Settings UI. Assumes Bun is pre-installed and Kore is cloned locally.
 
 **Scaffold & infrastructure:**
 - [ ] Swift project scaffold in `apps/macos/` with Xcode project or Swift Package
@@ -791,10 +791,10 @@ Get a working `.app` that manages the daemon lifecycle and provides a Settings U
 **Menu bar:**
 - [ ] Menu bar icon with status states (running / stopped / error)
 - [ ] Dropdown: status info, Sync Now, Consolidate Now, Settings, Quit
-- [ ] Daemon health polling (periodic `GET /api/v1/health` to localhost)
+- [ ] Server health polling (periodic `GET /api/v1/health` to localhost)
 
 **Settings window (React/TypeScript):**
-- [ ] General tab: clone path, KORE_HOME, port, launch at login, daemon controls
+- [ ] General tab: clone path, KORE_HOME, port, launch at login, server controls
 - [ ] LLM tab: provider toggle (Gemini/Ollama), API key, connection test
 - [ ] Apple Notes tab: enable/disable, permission flow, sync interval, folder lists
 - [ ] MCP tab: auto-write Claude Desktop and Claude Code config
@@ -815,7 +815,7 @@ Get a working `.app` that manages the daemon lifecycle and provides a Settings U
 - Bun installed on user's machine
 - Kore cloned locally with `bun install` already run
 
-**Done when:** The app starts, manages the daemon in the background, persists config to `config.json`, handles Apple Notes permissions properly, and auto-configures MCP. User never needs to open a terminal for day-to-day use. Panel appears correctly over fullscreen apps and on multi-monitor setups.
+**Done when:** The app starts, manages the server in the background, persists config to `config.json`, handles Apple Notes permissions properly, and auto-configures MCP. User never needs to open a terminal for day-to-day use. Panel appears correctly over fullscreen apps and on multi-monitor setups.
 
 ### Phase 2 — Dashboard & Notifications
 
@@ -863,23 +863,23 @@ These questions were open during the brainstorm phase and are now resolved:
 
 | # | Question | Decision | Rationale |
 |---|----------|----------|-----------|
-| 1 | **Bun daemon compilation** — can `bun build --compile` handle QMD's native modules? | **No.** `node-llama-cpp`, `better-sqlite3`, and `sqlite-vec` cannot be bundled. | README already documents this limitation. MVP uses `bun run start` at clone path. |
+| 1 | **Bun server compilation** — can `bun build --compile` handle QMD's native modules? | **No.** `node-llama-cpp`, `better-sqlite3`, and `sqlite-vec` cannot be bundled. | README already documents this limitation. MVP uses `bun run start` at clone path. |
 | 2 | **QMD model downloads** — how are GGUF models bundled? | **They aren't.** QMD downloads models on first use to `~/.cache/qmd/`. The app lets this happen naturally. | QMD handles this transparently via `node-llama-cpp`. No app involvement needed. |
 | 3 | **Ollama management** — should the app start Ollama? | **No.** Check and prompt only. | Simpler. Ollama has its own lifecycle. The app just verifies connectivity. |
-| 4 | **Config format** — how does the app write daemon config? | **`$KORE_HOME/config.json`** — new JSON file, env vars override. | Clean JSON for the app to read/write. Backwards-compatible — `.env` still works for CLI users. |
+| 4 | **Config format** — how does the app write server config? | **`$KORE_HOME/config.json`** — new JSON file, env vars override. | Clean JSON for the app to read/write. Backwards-compatible — `.env` still works for CLI users. |
 | 5 | **MCP server paths** — how do paths change with bundling? | **MVP:** Paths point to local clone. **Future:** Paths point to bundled Bun + source in `Resources/`. | The "Install MCP Config" button writes the correct paths for the current mode. |
-| 6 | **Update flow** — daemon vs app updates | **Tightly coupled.** Updating the daemon = updating the app. | The daemon IS the Kore source. `git pull` for MVP; Sparkle auto-updater for the self-contained app. |
+| 6 | **Update flow** — server vs app updates | **Tightly coupled.** Updating the server = updating the app. | The server IS the Kore source. `git pull` for MVP; Sparkle auto-updater for the self-contained app. |
 | 7 | **Multiple Claude clients** | **Yes.** Settings has install buttons for both Claude Desktop and Claude Code. | Both use the same MCP config format with different file paths. |
-| 8 | **Daemon upgrades in Phase 1** | **Manual.** User runs `git pull && bun install` at the clone path. The app does not manage source updates. | Phase 1 assumes a developer user who cloned the repo. The app can surface a "New version available" notice by checking the remote git tag, but updating is the user's responsibility. Self-contained mode (Phase 3) bundles updates via Sparkle. |
-| 9 | **Config change → daemon restart** | **Explicit restart required.** Settings shows a "Restart required" badge; user clicks Restart. | Silent auto-restarts on config change are surprising and could interrupt in-flight operations (sync, consolidation). Explicit is safer. |
-| 10 | **Zombie process prevention** | **PID file + startup adoption.** Swift writes `$KORE_HOME/.kore.pid` on spawn, checks it on startup, and adopts or cleans up. App sends SIGTERM then SIGKILL on quit. | See "Daemon Lifecycle & Edge Cases" section for full details. |
+| 8 | **Server upgrades in Phase 1** | **Manual.** User runs `git pull && bun install` at the clone path. The app does not manage source updates. | Phase 1 assumes a developer user who cloned the repo. The app can surface a "New version available" notice by checking the remote git tag, but updating is the user's responsibility. Self-contained mode (Phase 3) bundles updates via Sparkle. |
+| 9 | **Config change → server restart** | **Explicit restart required.** Settings shows a "Restart required" badge; user clicks Restart. | Silent auto-restarts on config change are surprising and could interrupt in-flight operations (sync, consolidation). Explicit is safer. |
+| 10 | **Zombie process prevention** | **PID file + startup adoption.** Swift writes `$KORE_HOME/.kore.pid` on spawn, checks it on startup, and adopts or cleans up. App sends SIGTERM then SIGKILL on quit. | See "Server Lifecycle & Edge Cases" section for full details. |
 | 11 | **App framework** — Tauri v2 vs native vs hybrid? | **Swift + WebView hybrid.** Tauri v2 was prototyped in MAC-001 but has structural limitations: panels cannot appear over fullscreen apps (NSWindow vs NSPanel), multi-monitor positioning is buggy, and workarounds are fragile. | Every polished macOS menu bar utility uses native Swift/AppKit. The hybrid approach gives native NSPanel behavior while keeping the UI in TypeScript/React via WKWebView. See "Technology Decision" section. |
 
 ## Remaining Open Questions
 
 1. **Security-scoped bookmarks via NSOpenPanel**: Can `NSOpenPanel` return a security-scoped bookmark for the Apple Notes folder, allowing persistent access without Full Disk Access? This determines whether we can avoid FDA entirely.
 
-2. **First-run QMD download UX**: The first `embed()` call triggers a ~500MB model download. The preferred approach is: the daemon exposes an SSE endpoint that streams download progress, and the app subscribes and shows a non-intrusive progress bar in the tray panel. Two pre-conditions need verification before committing to this: (a) does `node-llama-cpp` expose an `onDownloadProgress` callback that the daemon can hook into? (b) is adding an SSE endpoint to the daemon in scope for MVP, or should we fall back to a simpler "Downloading model, please wait…" notice with a spinner? The daemon currently has no SSE infrastructure.
+2. **First-run QMD download UX**: The first `embed()` call triggers a ~500MB model download. The preferred approach is: the server exposes an SSE endpoint that streams download progress, and the app subscribes and shows a non-intrusive progress bar in the tray panel. Two pre-conditions need verification before committing to this: (a) does `node-llama-cpp` expose an `onDownloadProgress` callback that the daemon can hook into? (b) is adding an SSE endpoint to the server in scope for MVP, or should we fall back to a simpler "Downloading model, please wait…" notice with a spinner? The server currently has no SSE infrastructure.
 
 3. **Swift Package Manager vs Xcode project**: Should the Swift shell use SPM (`Package.swift`) for simplicity, or a full Xcode project (`.xcodeproj`) for better IDE support, entitlements management, and build settings? SPM is simpler but may require manual setup for entitlements and Info.plist. A decision should be made in MAC-001.
 
@@ -891,7 +891,7 @@ These questions were open during the brainstorm phase and are now resolved:
 An implementing agent must read these files to understand the existing system before making changes:
 
 - `apps/core-api/src/config.ts` — current config resolution logic (uses `resolveKoreHome()` from `@kore/qmd-client`), path helpers for data/db directories
-- `apps/core-api/src/index.ts` — daemon entry point showing full startup lifecycle: QMD init → queue/index → plugins → consolidation loop → HTTP listen
+- `apps/core-api/src/index.ts` — server entry point showing full startup lifecycle: QMD init → queue/index → plugins → consolidation loop → HTTP listen
 - `apps/core-api/src/app.ts` — HTTP app factory, route composition, Bearer auth setup
 - `apps/core-api/src/operations/health.ts` — health endpoint response schema (version, memories, queue, index, sync status)
 - `packages/qmd-client/src/index.ts` — `resolveKoreHome()` implementation (checks `$KORE_HOME`, defaults to `~/.kore`)
@@ -949,7 +949,7 @@ This story validates that NSPanel + WKWebView can reliably show a panel over ful
 
 ### MAC-002: Config System (TypeScript + Swift)
 
-**Description:** As a developer, I want `config.json` loading in the core API and Swift functions for reading/writing config and checking permissions, so that both the daemon and the GUI share the same configuration data contract.
+**Description:** As a developer, I want `config.json` loading in the core API and Swift functions for reading/writing config and checking permissions, so that both the server and the GUI share the same configuration data contract.
 
 **Context:**
 - Files to read: `apps/core-api/src/config.ts`, `packages/qmd-client/src/index.ts` (for `resolveKoreHome()`), `apps/macos/Kore/Sources/KoreApp.swift` (from MAC-001)
@@ -985,27 +985,27 @@ This story validates that NSPanel + WKWebView can reliably show a panel over ful
 
 ---
 
-### MAC-003: Swift Daemon Process Manager
+### MAC-003: Swift Server Process Manager
 
-**Description:** As a developer, I want a Swift module (`ProcessManager`) that manages the Bun daemon as a child process with start/stop/restart, PID file tracking, health polling, and crash recovery so that the app can reliably control the daemon lifecycle.
+**Description:** As a developer, I want a Swift module (`ProcessManager`) that manages the Bun server as a child process with start/stop/restart, PID file tracking, health polling, and crash recovery so that the app can reliably control the server lifecycle.
 
 **Context:**
 - Files to read: `apps/macos/Kore/Sources/KoreApp.swift` (from MAC-001), `apps/macos/Kore/Sources/ConfigManager.swift` (from MAC-002), `apps/core-api/src/operations/health.ts` (health endpoint response schema)
-- The daemon is started via `bun run start` at the configured clone path
+- The server is started via `bun run start` at the configured clone path
 - Health endpoint: `GET /api/v1/health` on `localhost:{port}` — returns JSON with `version`, `memories`, `queue`, `index` fields
 
 **Acceptance Criteria:**
 - [ ] `apps/macos/Kore/Sources/ProcessManager.swift` created with a `ProcessManager` class
 - [ ] State machine implemented: `Stopped → Starting → Running → Stopping → Stopped`, with `Error` reachable from `Starting` and `Running`
-- [ ] `startDaemon(clonePath:port:)` spawns `bun run start` via `Process`, writes PID to `$KORE_HOME/.kore.pid`
-- [ ] `stopDaemon()` sends SIGTERM, waits 5s, then SIGKILL if still alive, deletes PID file
-- [ ] `restartDaemon()` calls stop then start
-- [ ] `daemonStatus()` returns current state enum (`Running`, `Stopped`, `Starting`, `Stopping`, `Error(String)`)
+- [ ] `startServer(clonePath:port:)` spawns `bun run start` via `Process`, writes PID to `$KORE_HOME/.kore.pid`
+- [ ] `stopServer()` sends SIGTERM, waits 5s, then SIGKILL if still alive, deletes PID file
+- [ ] `restartServer()` calls stop then start
+- [ ] `serverStatus()` returns current state enum (`Running`, `Stopped`, `Starting`, `Stopping`, `Error(String)`)
 - [ ] Health polling: uses `Timer` or `Task` that polls `GET /api/v1/health` every 5 seconds while in `Running` state. Three consecutive failures transition to `Error`
 - [ ] Crash recovery: on child process termination with non-zero exit code, auto-restart once after 3s delay. If second attempt fails within 30s, stay in `Error` state
 - [ ] Startup adoption: on `ProcessManager.init()`, check for `$KORE_HOME/.kore.pid` — if PID file exists and process is alive (`kill(pid, 0)`), adopt it; if process is dead, delete stale PID file
-- [ ] Daemon stdout/stderr captured via `Pipe` and written to `$KORE_HOME/logs/daemon.log` (simple append, no rotation in MVP)
-- [ ] Daemon startup errors (e.g. missing modules after `git pull` without `bun install`) are surfaced in the tray panel UI via the `Error(String)` state, showing stderr output so the user can diagnose and fix
+- [ ] Server stdout/stderr captured via `Pipe` and written to `$KORE_HOME/logs/server.log` (simple append, no rotation in MVP)
+- [ ] Server startup errors (e.g. missing modules after `git pull` without `bun install`) are surfaced in the tray panel UI via the `Error(String)` state, showing stderr output so the user can diagnose and fix
 - [ ] All functions registered in `BridgeHandler.swift` for JS bridge access
 - [ ] Typecheck/lint passes (Swift)
 - [ ] Write unit tests covering: start writes PID file, stop cleans up PID file, crash triggers single auto-restart, double crash within 30s does not restart, stale PID file on startup is cleaned up
@@ -1015,24 +1015,24 @@ This story validates that NSPanel + WKWebView can reliably show a panel over ful
 
 ### MAC-004: Full System Tray with Status and Dropdown
 
-**Description:** As a user, I want the menu bar icon to reflect daemon status and provide a dropdown menu for quick actions so that I can monitor and control Kore without opening a window.
+**Description:** As a user, I want the menu bar icon to reflect server status and provide a dropdown menu for quick actions so that I can monitor and control Kore without opening a window.
 
 **Context:**
 - Files to read: `apps/macos/Kore/Sources/KoreApp.swift` (from MAC-001), `apps/macos/Kore/Sources/ProcessManager.swift` (from MAC-003), `apps/macos/Kore/Sources/ConfigManager.swift` (from MAC-002)
-- Extends the minimal tray POC from MAC-001 with dynamic state and daemon integration
+- Extends the minimal tray POC from MAC-001 with dynamic state and server integration
 - Icon states: filled circle (running), hollow circle (stopped), exclamation (error)
 
 **Acceptance Criteria:**
-- [ ] Tray icon updates to reflect daemon state: filled (running), hollow (stopped), exclamation (error)
+- [ ] Tray icon updates to reflect server state: filled (running), hollow (stopped), exclamation (error)
 - [ ] `NSMenu` attached to `NSStatusItem` shows on right-click with:
-  - Status line: "Last sync: {time}" and "Daemon: {status} on :{port}" (from health poll data)
+  - Status line: "Last sync: {time}" and "Kore: {status} on :{port}" (from health poll data)
   - "Sync Apple Notes Now" — calls `POST /api/v1/remember` or equivalent sync trigger
   - "Trigger Consolidation" — calls `POST /api/v1/consolidate`
   - "Settings..." (with `⌘,` accelerator) — opens Settings window
-  - "Quit Kore" — triggers clean daemon shutdown then app exit
+  - "Quit Kore" — triggers clean server shutdown then app exit
 - [ ] Left-click still toggles the NSPanel (from MAC-001)
 - [ ] Health poll data from `ProcessManager` updates the menu status text every 5 seconds
-- [ ] Daemon API calls include the Bearer token read from `ConfigManager`
+- [ ] Server API calls include the Bearer token read from `ConfigManager`
 - [ ] Typecheck/lint passes (Swift)
 - [ ] **Documentation:** Update `docs/design/macos-app.md` if any menu bar behavior deviates from the spec
 
@@ -1056,7 +1056,7 @@ This story validates that NSPanel + WKWebView can reliably show a panel over ful
   - KORE_HOME directory display with "Reveal in Finder" button
   - Port input (number, default 3000)
   - Launch at login toggle (calls `bridgeCall('setLaunchAtLogin')` — implemented in MAC-006)
-  - Daemon status indicator (Running / Stopped / Error with message) + Start / Stop / Restart buttons calling bridge methods
+  - Server status indicator (Running / Stopped / Error with message) + Start / Stop / Restart buttons calling bridge methods
   - "Restart required" badge when port or clone path changes
 - [ ] **LLM tab:**
   - Provider radio: Ollama / Gemini
@@ -1069,7 +1069,7 @@ This story validates that NSPanel + WKWebView can reliably show a panel over ful
   - "Grant Access" button that calls `bridgeCall('openFDASettings')`
   - Folder allowlist and blocklist text inputs (comma-separated)
   - Sync interval slider (5–60 min, default 15)
-  - "Sync Now" button (calls daemon API)
+  - "Sync Now" button (calls server API)
   - Last sync timestamp display
 - [ ] **MCP tab:**
   - Claude Desktop config status (detected / not detected — check file existence)
@@ -1110,16 +1110,16 @@ This story validates that NSPanel + WKWebView can reliably show a panel over ful
 
 *React — Onboarding (`apps/macos/src/pages/Onboarding.tsx`):*
 - [ ] Stepper wrapper around Settings tab content
-- [ ] On app launch, Swift checks for `config.json` — if absent, opens onboarding window instead of starting daemon
+- [ ] On app launch, Swift checks for `config.json` — if absent, opens onboarding window instead of starting server
 - [ ] **Step 1 — Welcome:** Brief explanation of Kore + "Let's configure your setup" button
 - [ ] **Step 2 — General:** Clone path (auto-detected from `~/dev/kore`), KORE_HOME, Bun check via `bridgeCall('checkBunInstalled')` with inline status
 - [ ] **Step 3 — LLM:** Provider selection (Ollama / Gemini) with connection test
 - [ ] **Step 4 — Apple Notes:** Enable/disable toggle, permission grant flow if enabled
 - [ ] **Step 5 — MCP:** Optional auto-config for Claude Desktop and Claude Code via `bridgeCall('installMCPConfig')`
-- [ ] **Step 6 — Start:** Writes `config.json` via `bridgeCall('writeConfig')`, starts daemon via `bridgeCall('startDaemon')`, shows "Kore is running" confirmation
+- [ ] **Step 6 — Start:** Writes `config.json` via `bridgeCall('writeConfig')`, starts server via `bridgeCall('startServer')`, shows "Kore is running" confirmation
 - [ ] Required fields (clone path, KORE_HOME) block step progression; stepper allows going back
 - [ ] After completion, app transitions to normal menu bar mode
-- [ ] Component tests: stepper advances, required fields block progression, final step calls writeConfig then startDaemon
+- [ ] Component tests: stepper advances, required fields block progression, final step calls writeConfig then startServer
 - [ ] Typecheck/lint passes (Swift + TypeScript)
 - [ ] **Documentation:** Update root `README.md` MCP setup section to mention the app's "Install MCP Config" button as an alternative to manual setup
 
@@ -1129,7 +1129,7 @@ This story validates that NSPanel + WKWebView can reliably show a panel over ful
 
 - **Track 6: macOS App** replaces Track 5.5 (Onboarding) and partially replaces Track 2.3 (Web Dashboard) and Track 2.2 (Raycast Extension) — the Quick Search window covers the Raycast use case, and the Dashboard covers the Web Dashboard use case, both in a native-feeling package.
 - **Track 3 (Push Channel)** becomes easier to build once the app exists — native notifications are already wired up, and the app can eventually host a location permission request for geofencing nudges.
-- **Track 1.1 (Browser Extension)** remains independent — the browser extension talks to the daemon API regardless of whether the app exists.
+- **Track 1.1 (Browser Extension)** remains independent — the browser extension talks to the server API regardless of whether the app exists.
 - **Phase 2:** Dashboard window (Memories, Insights, Sync Status tabs), native macOS notifications via `UNUserNotificationCenter`, advanced settings (log viewer, reset, export).
 - **Phase 3:** Quick Search global hotkey window (`⌘⌥K`), self-contained app bundling (Bun + source + node_modules in Resources/), Keychain integration for API keys.
 - **Phase 4:** Apple Developer notarization, DMG installer, Sparkle auto-updater, graph view for memory relationships.
