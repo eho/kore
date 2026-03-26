@@ -293,8 +293,8 @@ export function Onboarding() {
           ) : (
             <button
               className="btn-primary onboarding-next"
-              onClick={handleFinish}
-              disabled={configWritten}
+              onClick={daemonStarted ? () => window.close() : handleFinish}
+              disabled={configWritten && !daemonStarted}
             >
               {daemonStarted ? "Done" : configWritten ? "Starting..." : "Start Kore"}
             </button>
