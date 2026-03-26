@@ -89,6 +89,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 // Already dispatched to main queue by DaemonManager.
                 self?.handleHealthPoll(info)
             }
+            // Sync tray immediately with whatever state the daemon is already in
+            // (e.g. already adopted/running from the onboarding path).
+            let currentState = await dm.daemonStatus()
+            DispatchQueue.main.async { [weak self] in
+                self?.handleDaemonStateChange(currentState)
+            }
             // Try PID-file adoption first; if that finds nothing, probe the
             // health endpoint so a daemon started outside the app is detected.
             await dm.adoptOrphanedProcess()
