@@ -1,6 +1,11 @@
 {
   "version": 1,
   "skills": {
+    "blog-writer": {
+      "source": "eho/agent-skills",
+      "sourceType": "github",
+      "computedHash": "fe2b1b63e283dfcbebde4ecbe300e078b7f80caef99b42c9ba1a61ec90757b61"
+    },
     "design-doc": {
       "source": "eho/agent-skills",
       "sourceType": "github",
