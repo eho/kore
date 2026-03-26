@@ -26,12 +26,18 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     // State tracking — main-thread only
     private var currentState: ServerState = .stopped
+    private var currentOwnership: ProcessOwnership = .none
     private var lastSyncTime: Date?
     private var serverPort: Int = 3000
 
     // Retained menu items for in-place text updates
     private var menuServerStatusItem: NSMenuItem?
     private var menuSyncTimeItem: NSMenuItem?
+    private var menuStartItem: NSMenuItem?
+    private var menuStopItem: NSMenuItem?
+    private var menuRestartItem: NSMenuItem?
+    private var menuSyncNotesItem: NSMenuItem?
+    private var menuConsolidateItem: NSMenuItem?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Seed port from config so the menu shows the right value immediately.
@@ -89,16 +95,39 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 // Already dispatched to main queue by ProcessManager.
                 self?.handleHealthPoll(info)
             }
+            await dm.setOwnershipChangeCallback { [weak self] ownership in
+                // Already dispatched to main queue by ProcessManager.
+                self?.handleOwnershipChange(ownership)
+            }
             // Sync tray immediately with whatever state the server is already in
             // (e.g. already adopted/running from the onboarding path).
             let currentState = await dm.serverStatus()
+            let currentOwnership = await dm.ownership
             DispatchQueue.main.async { [weak self] in
+                self?.handleOwnershipChange(currentOwnership)
                 self?.handleServerStateChange(currentState)
             }
             // Try PID-file adoption first; if that finds nothing, probe the
             // health endpoint so a server started outside the app is detected.
             await dm.adoptOrphanedProcess(port: serverPort)
             await dm.probeForRunningServer(port: serverPort)
+
+            // Auto-start: if still stopped after adoption/probe and the app has
+            // been set up before (lastLaunchAt is set), start the server automatically.
+            let stateAfterProbe = await dm.serverStatus()
+            if stateAfterProbe == .stopped {
+                let home = koreHome
+                let config = (try? ConfigManager.readConfig(koreHome: home)) ?? .defaults
+                if config.lastLaunchAt != nil {
+                    guard let clonePath = config.clonePath, !clonePath.isEmpty else {
+                        print("[Kore] Skipping auto-start — no clone path configured")
+                        return
+                    }
+                    let port = config.port ?? 3000
+                    print("[Kore] Auto-starting server at \(clonePath) on :\(port)")
+                    await dm.startServer(clonePath: clonePath, port: port)
+                }
+            }
         }
 
         if statusItem == nil {
@@ -120,6 +149,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         print("[Kore] Server state → \(state.statusKey)\(state.errorMessage.map { ": \($0.prefix(80))" } ?? "")")
         updateTrayIcon(for: state)
         // Update any open menu's status row if available.
+        updateMenuStatusItems()
+    }
+
+    private func handleOwnershipChange(_ ownership: ProcessOwnership) {
+        currentOwnership = ownership
         updateMenuStatusItems()
     }
 
@@ -157,6 +191,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private func buildMenu() -> NSMenu {
         let menu = NSMenu()
 
+        let isRunning = currentState == .running
+        let isManaged = currentOwnership == .spawned || currentOwnership == .adopted
+        let canStart = currentState == .stopped || currentState.errorMessage != nil
+
         // ── Status section ──────────────────────────────────────────
         let statusItem2 = NSMenuItem(title: serverStatusLine(), action: nil, keyEquivalent: "")
         statusItem2.isEnabled = false
@@ -170,22 +208,58 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         menu.addItem(.separator())
 
+        // ── Lifecycle controls ──────────────────────────────────────
+        if canStart {
+            let startItem = NSMenuItem(
+                title: "Start Kore",
+                action: #selector(startServer),
+                keyEquivalent: ""
+            )
+            startItem.target = self
+            menu.addItem(startItem)
+            menuStartItem = startItem
+        }
+
+        if isRunning && isManaged {
+            let stopItem = NSMenuItem(
+                title: "Stop Kore",
+                action: #selector(stopServer),
+                keyEquivalent: ""
+            )
+            stopItem.target = self
+            menu.addItem(stopItem)
+            menuStopItem = stopItem
+
+            let restartItem = NSMenuItem(
+                title: "Restart Kore",
+                action: #selector(restartServer),
+                keyEquivalent: ""
+            )
+            restartItem.target = self
+            menu.addItem(restartItem)
+            menuRestartItem = restartItem
+        }
+
+        menu.addItem(.separator())
+
         // ── Actions ─────────────────────────────────────────────────
         let syncNotesItem = NSMenuItem(
             title: "Sync Apple Notes Now",
-            action: #selector(syncAppleNotes),
+            action: isRunning ? #selector(syncAppleNotes) : nil,
             keyEquivalent: ""
         )
         syncNotesItem.target = self
         menu.addItem(syncNotesItem)
+        menuSyncNotesItem = syncNotesItem
 
         let consolidateItem = NSMenuItem(
             title: "Trigger Consolidation",
-            action: #selector(triggerConsolidation),
+            action: isRunning ? #selector(triggerConsolidation) : nil,
             keyEquivalent: ""
         )
         consolidateItem.target = self
         menu.addItem(consolidateItem)
+        menuConsolidateItem = consolidateItem
 
         menu.addItem(.separator())
 
@@ -213,15 +287,20 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func serverStatusLine() -> String {
-        let label: String
         switch currentState {
-        case .running:           label = "running"
-        case .stopped:           label = "stopped"
-        case .starting:          label = "starting"
-        case .stopping:          label = "stopping"
-        case .error(let msg):    label = "error: \(msg.prefix(40))"
+        case .running where currentOwnership == .observed:
+            return "Kore: running on :\(serverPort) (external)"
+        case .running:
+            return "Kore: running on :\(serverPort)"
+        case .starting:
+            return "Kore: starting on :\(serverPort)"
+        case .stopping:
+            return "Kore: stopping"
+        case .error(let msg):
+            return "Kore: error — \(msg.prefix(40))"
+        case .stopped:
+            return "Kore: not running"
         }
-        return "Kore: \(label) on :\(serverPort)"
     }
 
     private func lastSyncLine() -> String {
@@ -233,10 +312,22 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         return "Last sync: \(formatter.localizedString(for: date, relativeTo: Date()))"
     }
 
-    /// Refreshes the text of the two status rows while the menu is open.
+    /// Refreshes status rows and lifecycle item visibility while the menu is open.
     private func updateMenuStatusItems() {
         menuServerStatusItem?.title = serverStatusLine()
         menuSyncTimeItem?.title = lastSyncLine()
+
+        let isRunning = currentState == .running
+        let isManaged = currentOwnership == .spawned || currentOwnership == .adopted
+        let canStart = currentState == .stopped || currentState.errorMessage != nil
+
+        menuStartItem?.isHidden = !canStart
+        menuStopItem?.isHidden = !(isRunning && isManaged)
+        menuRestartItem?.isHidden = !(isRunning && isManaged)
+
+        // Disable sync/consolidation when server is not running
+        menuSyncNotesItem?.action = isRunning ? #selector(syncAppleNotes) : nil
+        menuConsolidateItem?.action = isRunning ? #selector(triggerConsolidation) : nil
     }
 
     @objc private func handleStatusItemClick(_ sender: NSStatusBarButton) {
@@ -257,6 +348,37 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             // Clear retained menu item refs so they don't outlive the menu.
             self?.menuServerStatusItem = nil
             self?.menuSyncTimeItem = nil
+            self?.menuStartItem = nil
+            self?.menuStopItem = nil
+            self?.menuRestartItem = nil
+            self?.menuSyncNotesItem = nil
+            self?.menuConsolidateItem = nil
+        }
+    }
+
+    // MARK: - Lifecycle Actions
+
+    @objc private func startServer() {
+        let config = (try? ConfigManager.readConfig(koreHome: koreHome)) ?? .defaults
+        guard let clonePath = config.clonePath, !clonePath.isEmpty else {
+            print("[Kore] Cannot start — no clone path configured. Open Settings to set it.")
+            return
+        }
+        let port = config.port ?? 3000
+        Task {
+            await processManager?.startServer(clonePath: clonePath, port: port)
+        }
+    }
+
+    @objc private func stopServer() {
+        Task {
+            await processManager?.stopServer()
+        }
+    }
+
+    @objc private func restartServer() {
+        Task {
+            await processManager?.restartServer()
         }
     }
 

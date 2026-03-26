@@ -237,6 +237,9 @@ public actor ProcessManager {
     /// Called on each successful health check, dispatched to the main queue.
     public var onHealthPoll: (@Sendable (ServerHealthInfo) -> Void)?
 
+    /// Called when `ownership` changes, dispatched to the main queue.
+    public var onOwnershipChange: (@Sendable (ProcessOwnership) -> Void)?
+
     /// Internal: overrides the real process spawn for unit tests.
     /// The closure receives `(clonePath, port)` and returns a configured-but-not-yet-run `Process`.
     /// Set this before calling `startServer`. Safe because it is only written before actor
@@ -290,7 +293,7 @@ public actor ProcessManager {
             let healthy = await checkHealthEndpoint(port: healthPort)
             if healthy {
                 adoptedPID = pid
-                ownership = .adopted
+                updateOwnership(.adopted)
                 transition(to: .running)
                 startHealthPolling()
                 print("[Kore] Ownership: adopted (source: PID file)")
@@ -322,7 +325,7 @@ public actor ProcessManager {
         let healthy = await checkHealthEndpoint(port: port)
         guard state.isIdle else { return }  // recheck after async gap
         if healthy {
-            ownership = .observed
+            updateOwnership(.observed)
             transition(to: .running)
             startHealthPolling()
             print("[Kore] External server detected on :\(port) (monitoring only)")
@@ -364,11 +367,11 @@ public actor ProcessManager {
             transition(to: .stopping)
             await terminateActiveProcess()
             deletePIDFile()
-            ownership = .none
+            updateOwnership(.none)
             transition(to: .stopped)
 
         case .observed:
-            ownership = .none
+            updateOwnership(.none)
             transition(to: .stopped)
 
         case .none:
@@ -408,6 +411,11 @@ public actor ProcessManager {
     /// Registers the health-poll callback (actor-safe alternative to direct property assignment).
     public func setHealthPollCallback(_ callback: (@Sendable (ServerHealthInfo) -> Void)?) {
         onHealthPoll = callback
+    }
+
+    /// Registers the ownership-change callback (actor-safe alternative to direct property assignment).
+    public func setOwnershipChangeCallback(_ callback: (@Sendable (ProcessOwnership) -> Void)?) {
+        onOwnershipChange = callback
     }
 
     /// Synchronously stops the server. Safe to call from `applicationWillTerminate`
@@ -503,7 +511,7 @@ public actor ProcessManager {
         stderrPipe = stderr
 
         writePIDFile(pid: proc.processIdentifier)
-        ownership = .spawned
+        updateOwnership(.spawned)
         transition(to: .running)
         startHealthPolling()
     }
@@ -533,7 +541,7 @@ public actor ProcessManager {
         if let firstCrash = firstCrashTime, now.timeIntervalSince(firstCrash) < Self.crashWindowSeconds {
             firstCrashTime = nil
             deletePIDFile()
-            ownership = .none
+            updateOwnership(.none)
 
             let stderrStr = logCapture.lastStderr.trimmingCharacters(in: .whitespacesAndNewlines)
             let errSuffix = stderrStr.isEmpty ? "" : "\n\nError output:\n\(stderrStr)"
@@ -698,10 +706,20 @@ public actor ProcessManager {
         if healthy {
             reconnectTask?.cancel()
             reconnectTask = nil
-            ownership = .observed
+            updateOwnership(.observed)
             transition(to: .running)
             startHealthPolling()
             print("[Kore] External server detected on :\(port) (monitoring only)")
+        }
+    }
+
+    // MARK: - Private: Ownership Transitions
+
+    private func updateOwnership(_ newOwnership: ProcessOwnership) {
+        ownership = newOwnership
+        let callback = onOwnershipChange
+        DispatchQueue.main.async {
+            callback?(newOwnership)
         }
     }
 

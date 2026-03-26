@@ -352,10 +352,11 @@ The primary persistent UI surface. Always visible in the menu bar when Kore is r
 
 **Dropdown menu (MVP):**
 ```
-Kore                          ●
+Kore: running on :3000
+Last sync: 2 minutes ago
 ───────────────────────────────
-  Last sync: 2 minutes ago
-  Kore: running on :3000
+  Stop Kore
+  Restart Kore
 ───────────────────────────────
   Sync Apple Notes Now
   Trigger Consolidation
@@ -363,6 +364,15 @@ Kore                          ●
   Settings...                 ⌘,
   Quit Kore
 ```
+
+**Menu item visibility rules (LCM-003):**
+- "Start Kore" — shown when state is `.stopped` or `.error`
+- "Stop Kore" / "Restart Kore" — shown when state is `.running` AND ownership is `.spawned` or `.adopted`; **hidden** (not just disabled) when ownership is `.observed`
+- "Sync Apple Notes Now" / "Trigger Consolidation" — disabled (grayed out) when server is not running
+- Status line shows `Kore: running on :3000 (external)` when ownership is `.observed`, `Kore: not running` when stopped
+
+**Auto-start behavior (LCM-003):**
+On app launch (after adoption and probe), if the server is still `.stopped` and `lastLaunchAt` is set in config, the app auto-starts the server using `clonePath` and `port` from `config.json`. Auto-start is skipped if `clonePath` is missing or empty (logs: `[Kore] Skipping auto-start — no clone path configured`). Failures surface as tray errors; the user can fix settings and click "Start Kore".
 
 **Dropdown menu (future — with Dashboard):**
 ```
