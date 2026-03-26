@@ -34,13 +34,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var menuSyncTimeItem: NSMenuItem?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        // Check if this is a first launch (no config.json exists)
-        let configPath = (koreHome as NSString).expandingTildeInPath + "/config.json"
-        let isFirstLaunch = !FileManager.default.fileExists(atPath: configPath)
-
         // Seed port from config so the menu shows the right value immediately.
         let config = (try? ConfigManager.readConfig(koreHome: koreHome)) ?? .defaults
         daemonPort = config.port ?? 3000
+        // No lastLaunchAt means the app has never completed setup — show onboarding.
+        // To re-trigger onboarding, remove the lastLaunchAt field from config.json.
+        let isFirstLaunch = config.lastLaunchAt == nil
         print("[Kore] Starting — home=\(koreHome) port=\(daemonPort) firstLaunch=\(isFirstLaunch)")
 
         let dm = DaemonManager(koreHome: koreHome)
@@ -66,9 +65,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     /// Initializes daemon callbacks, probes for a running daemon, and sets up UI managers.
     /// Called directly on normal launch, or after onboarding completes on first launch.
     private func startNormalMode(dm: DaemonManager) {
-        // Re-read config in case onboarding just wrote it
-        if let freshConfig = try? ConfigManager.readConfig(koreHome: koreHome) {
+        // Re-read config in case onboarding just wrote it, and stamp lastLaunchAt
+        if var freshConfig = try? ConfigManager.readConfig(koreHome: koreHome) {
             daemonPort = freshConfig.port ?? 3000
+            let formatter = ISO8601DateFormatter()
+            freshConfig.lastLaunchAt = formatter.string(from: Date())
+            try? ConfigManager.writeConfig(koreHome: koreHome, config: freshConfig)
         }
 
         // Register callbacks, then adopt any orphaned daemon process — ordering matters

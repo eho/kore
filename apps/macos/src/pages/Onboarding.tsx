@@ -45,6 +45,7 @@ interface KoreConfig {
   consolidation?: { intervalMs?: number; cooldownDays?: number; maxAttempts?: number };
   embedIntervalMs?: number;
   mcpEnabled?: boolean;
+  lastLaunchAt?: string;
 }
 
 const DEFAULTS: KoreConfig = {
@@ -222,8 +223,8 @@ export function Onboarding() {
   }
 
   function handleFinish() {
-    // Write config, then start daemon (chained via bridge callback)
-    bridgeCall("writeConfig", { config, koreHome });
+    // Stamp lastLaunchAt so subsequent launches skip onboarding
+    bridgeCall("writeConfig", { config: { ...config, lastLaunchAt: new Date().toISOString() }, koreHome });
   }
 
   const currentStep = STEPS[step];

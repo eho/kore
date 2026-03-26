@@ -1,5 +1,5 @@
-import { test, expect, beforeEach, mock } from "bun:test";
-import { render, screen, fireEvent, act } from "@testing-library/react";
+import { test, expect, beforeEach, afterEach, mock } from "bun:test";
+import { render, screen, fireEvent, act, cleanup } from "@testing-library/react";
 import { Onboarding } from "./Onboarding";
 
 // ── Mock bridge ─────────────────────────────────────────────────────
@@ -29,6 +29,10 @@ beforeEach(() => {
       bridge: { postMessage },
     },
   };
+});
+
+afterEach(() => {
+  cleanup();
 });
 
 function renderOnboarding() {
