@@ -3,8 +3,9 @@
 **Status:** Revised (tech stack migration)
 **Created:** 2026-03-23
 **Updated:** 2026-03-25
-**Revised 2026-03-24:** Addressed review feedback — added daemon lifecycle edge cases, testing strategy, success metrics, non-goals, design principles, vision alignment, risks table, and user stories.
+**Revised 2026-03-24:** Addressed review feedback — added server lifecycle edge cases, testing strategy, success metrics, non-goals, design principles, vision alignment, risks table, and user stories.
 **Revised 2026-03-25:** Migrated tech stack from Tauri v2 to Swift + WebView hybrid after MAC-001 POC revealed structural Tauri limitations (fullscreen overlay, multi-monitor positioning). See "Technology Decision" section for details.
+**Revised 2026-03-27:** Updated to reflect LCM-001–LCM-004 implementation: DaemonManager renamed to ProcessManager, ownership model (spawned/adopted/observed) documented, Start/Stop/Restart tray controls added, CLI PID file contract documented, and all user-facing "daemon" language replaced with "server"/"Kore".
 **Tech stack:** Swift/AppKit shell + React/TypeScript UI (via WKWebView)
 **Target user:** Primarily personal use, but designed for others to install
 **Secondary goal:** Learn proper macOS app development with Swift/AppKit (NSPanel, entitlements, WKWebView bridging, app structure)
@@ -248,6 +249,16 @@ The server and the app are tightly coupled — updating the server means updatin
 
 **Phase 1 (MVP):** The CLI is already available from the local clone — no installation needed. The user runs `kore` via their existing setup (e.g., `bun run --cwd ~/dev/kore cli` or a symlink). Both the app and CLI operate on the same clone, same `.env`, same server. No conflict.
 
+**CLI commands that share the PID file contract with the macOS app:**
+
+| Command | Description |
+|---------|-------------|
+| `kore start` | Start the Kore server; writes `$KORE_HOME/.kore.pid`. No-ops if already running. |
+| `kore stop` | Stop the server via PID file. `--force` discovers the process via `lsof` and stops it without a PID file. |
+| `kore health` | Show server status including PID and port. Exits `1` if unreachable. |
+
+Both the macOS app and the CLI read and write the same `$KORE_HOME/.kore.pid` file. Whoever starts the server owns the PID file; `kore stop` and the app's Stop button both respect it.
+
 **Future (self-contained app):** The Kore source lives inside `Resources/kore/` in the app bundle — not on `$PATH`. The app offers an "Install CLI" button in Settings (like VS Code's "Install 'code' command in PATH") that symlinks the `kore` binary to `/usr/local/bin/`. This is explicit and reversible.
 
 **Config resolution for the CLI:** In the self-contained app, there is no `.env` file (the app bundle is immutable). Both the server and CLI read `$KORE_HOME/config.json` as the primary config source. The `config.ts` change made in Phase 1 is load-bearing for this — it ensures both the server and CLI resolve config from the same JSON file.
@@ -350,7 +361,7 @@ The primary persistent UI surface. Always visible in the menu bar when Kore is r
 - `⟳` (spinning) — sync or consolidation in progress
 - `!` (exclamation) — error state (permission denied, Ollama offline, etc.)
 
-**Dropdown menu (MVP):**
+**Dropdown menu (MVP — when running):**
 ```
 Kore: running on :3000
 Last sync: 2 minutes ago
@@ -360,6 +371,19 @@ Last sync: 2 minutes ago
 ───────────────────────────────
   Sync Apple Notes Now
   Trigger Consolidation
+───────────────────────────────
+  Settings...                 ⌘,
+  Quit Kore
+```
+
+**Dropdown menu (MVP — when stopped or error):**
+```
+Kore: not running
+───────────────────────────────
+  Start Kore
+───────────────────────────────
+  Sync Apple Notes Now          (disabled)
+  Trigger Consolidation         (disabled)
 ───────────────────────────────
   Settings...                 ⌘,
   Quit Kore
@@ -705,7 +729,7 @@ func checkBunInstalled() throws -> String  // Returns bun version or throws
 func checkOllamaRunning(url: String) async throws -> Bool
 
 // MCP config
-func installMCPConfig(target: String, daemonURL: String, apiKey: String) throws
+func installMCPConfig(target: String, serverURL: String, apiKey: String) throws
 
 // Launch at login
 func setLaunchAtLogin(enabled: Bool) throws
@@ -889,7 +913,7 @@ These questions were open during the brainstorm phase and are now resolved:
 
 1. **Security-scoped bookmarks via NSOpenPanel**: Can `NSOpenPanel` return a security-scoped bookmark for the Apple Notes folder, allowing persistent access without Full Disk Access? This determines whether we can avoid FDA entirely.
 
-2. **First-run QMD download UX**: The first `embed()` call triggers a ~500MB model download. The preferred approach is: the server exposes an SSE endpoint that streams download progress, and the app subscribes and shows a non-intrusive progress bar in the tray panel. Two pre-conditions need verification before committing to this: (a) does `node-llama-cpp` expose an `onDownloadProgress` callback that the daemon can hook into? (b) is adding an SSE endpoint to the server in scope for MVP, or should we fall back to a simpler "Downloading model, please wait…" notice with a spinner? The server currently has no SSE infrastructure.
+2. **First-run QMD download UX**: The first `embed()` call triggers a ~500MB model download. The preferred approach is: the server exposes an SSE endpoint that streams download progress, and the app subscribes and shows a non-intrusive progress bar in the tray panel. Two pre-conditions need verification before committing to this: (a) does `node-llama-cpp` expose an `onDownloadProgress` callback that the server can hook into? (b) is adding an SSE endpoint to the server in scope for MVP, or should we fall back to a simpler "Downloading model, please wait…" notice with a spinner? The server currently has no SSE infrastructure.
 
 3. **Swift Package Manager vs Xcode project**: Should the Swift shell use SPM (`Package.swift`) for simplicity, or a full Xcode project (`.xcodeproj`) for better IDE support, entitlements management, and build settings? SPM is simpler but may require manual setup for entitlements and Info.plist. A decision should be made in MAC-001.
 
@@ -1107,7 +1131,7 @@ This story validates that NSPanel + WKWebView can reliably show a panel over ful
 **Acceptance Criteria:**
 
 *Swift — MCP config writer (`apps/macos/Kore/Sources/MCPConfig.swift`):*
-- [ ] `installMCPConfig(target: String, daemonURL: String, apiKey: String) throws` implemented
+- [ ] `installMCPConfig(target: String, serverURL: String, apiKey: String) throws` implemented
 - [ ] For `target = "claude-desktop"`: reads/creates `claude_desktop_config.json`, adds/updates the `kore` MCP server entry with correct `command`, `args`, and `env` fields pointing to the clone path
 - [ ] For `target = "claude-code"`: reads/creates the appropriate config file and adds the Kore MCP server entry
 - [ ] Existing entries in the config files are preserved — only the `kore` key is added/updated
