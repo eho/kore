@@ -76,7 +76,7 @@ describe("kore stop", () => {
 
     try {
       const result = runStop(19863);
-      expect(result.stderr.toString()).toContain("no PID file was found");
+      expect(result.stderr.toString()).toContain("started externally");
       expect(result.stderr.toString()).toContain("--force");
       expect(result.exitCode).toBe(1);
     } finally {

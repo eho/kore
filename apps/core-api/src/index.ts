@@ -113,6 +113,8 @@ if (process.env.KORE_APPLE_NOTES_ENABLED === "true") {
   const { default: appleNotesPlugin } = await import("@kore/plugin-apple-notes");
   plugins.push(appleNotesPlugin);
   console.log("Apple Notes plugin loaded (KORE_APPLE_NOTES_ENABLED=true)");
+} else {
+  console.log("Apple Notes plugin not loaded (KORE_APPLE_NOTES_ENABLED is not set)");
 }
 
 // Create plugin registry from the same database instance as QueueRepository

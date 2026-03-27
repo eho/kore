@@ -216,7 +216,18 @@ export async function search(
       return await s.search({ query, ...options });
     } catch (err) {
       console.warn("Hybrid search failed, falling back to BM25:", err instanceof Error ? err.message : err);
-      return s.searchLex(query, { limit: options?.limit, collection: options?.collection }) as any as HybridQueryResult[];
+      const lexResults = await s.searchLex(query, { limit: options?.limit, collection: options?.collection });
+      return lexResults.map((r) => ({
+        file: r.filepath,
+        displayPath: r.displayPath,
+        title: r.title,
+        body: r.body ?? "",
+        bestChunk: r.body ?? "",
+        bestChunkPos: 0,
+        score: r.score,
+        context: r.context,
+        docid: r.docid,
+      }) satisfies HybridQueryResult);
     }
   });
 }

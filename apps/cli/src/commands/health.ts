@@ -88,14 +88,17 @@ export async function healthCommand(opts: { json: boolean }): Promise<void> {
 
   const lines: string[] = [];
 
-  // Prepend process info when available
+  // Always show running status when server is reachable
   if (pid !== null && port !== null) {
     lines.push(`Kore is running on :${port} (pid ${pid})`);
-    lines.push("");
   } else if (pid !== null) {
     lines.push(`Kore is running (pid ${pid})`);
-    lines.push("");
+  } else if (port !== null) {
+    lines.push(`Kore is running on :${port}`);
+  } else {
+    lines.push("Kore is running.");
   }
+  lines.push("");
 
   lines.push(
     `Version:      ${version}`,

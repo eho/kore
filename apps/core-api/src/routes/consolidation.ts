@@ -36,9 +36,10 @@ export function createConsolidationRoutes(deps: ConsolidationDeps) {
       }
 
       const dryRun = typedBody?.dry_run ?? (query.dry_run === "true");
+      const runAsync = query.async === "true";
 
-      try {
-        return await consolidateOp({ dry_run: dryRun }, {
+      const runConsolidation = () =>
+        consolidateOp({ dry_run: dryRun }, {
           dataPath,
           qmdSearch: searchFn!,
           consolidationTracker,
@@ -46,6 +47,20 @@ export function createConsolidationRoutes(deps: ConsolidationDeps) {
           eventDispatcher,
           consolidationLoopHandle,
         });
+
+      if (runAsync) {
+        // Fire-and-forget: return immediately so long-running LLM calls don't
+        // cause the client to time out or drop the connection.
+        set.status = 202;
+        runConsolidation().catch((err) => {
+          const message = err instanceof Error ? err.message : String(err);
+          console.error("[consolidation] async POST /api/v1/consolidate failed:", message);
+        });
+        return { status: "started" };
+      }
+
+      try {
+        return await runConsolidation();
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         console.error("[consolidation] POST /api/v1/consolidate failed:", message);

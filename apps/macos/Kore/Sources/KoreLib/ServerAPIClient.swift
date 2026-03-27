@@ -31,14 +31,16 @@ public struct ServerAPIClient: Sendable {
 
     /// Triggers an Apple Notes sync cycle.
     /// Calls `POST /api/v1/plugins/apple-notes/sync`.
+    /// Uses a longer timeout since sync may scan many notes.
     public func syncAppleNotes() async -> APIResult {
-        await post(path: "/api/v1/plugins/apple-notes/sync")
+        await post(path: "/api/v1/plugins/apple-notes/sync", timeout: 120)
     }
 
     /// Triggers a consolidation cycle.
-    /// Calls `POST /api/v1/consolidate`.
+    /// Calls `POST /api/v1/consolidate?async=true` and returns immediately —
+    /// the server runs the LLM synthesis in the background.
     public func triggerConsolidation() async -> APIResult {
-        await post(path: "/api/v1/consolidate")
+        await post(path: "/api/v1/consolidate?async=true")
     }
 
     /// Checks whether the server health endpoint responds with 2xx.
@@ -50,8 +52,8 @@ public struct ServerAPIClient: Sendable {
     // MARK: - Transport
 
     /// Sends a POST request with an empty JSON body.
-    public func post(path: String, body: [String: Any]? = nil) async -> APIResult {
-        await request(method: "POST", path: path, body: body)
+    public func post(path: String, body: [String: Any]? = nil, timeout: TimeInterval = 10) async -> APIResult {
+        await request(method: "POST", path: path, body: body, timeout: timeout)
     }
 
     /// Sends an HTTP request to `http://localhost:{port}{path}`.

@@ -106,8 +106,8 @@ export async function stopCommand(opts: { force: boolean }): Promise<void> {
   if (!opts.force) {
     const port = extractPort();
     process.stderr.write(
-      `Warning: Kore is responding on :${port} but no PID file was found.\n` +
-      `Use --force to discover the process via lsof and stop it.\n`
+      `Kore is running on :${port} but was started externally.\n` +
+      `Run \`kore stop --force\` to stop it.\n`
     );
     process.exit(1);
   }

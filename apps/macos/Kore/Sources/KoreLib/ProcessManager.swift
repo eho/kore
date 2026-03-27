@@ -477,6 +477,28 @@ public actor ProcessManager {
 
         var env = ProcessInfo.processInfo.environment
         env["PORT"] = String(port)
+        env["KORE_HOME"] = (koreHome as NSString).expandingTildeInPath
+
+        // Translate config.json settings into env vars for the server process.
+        let config = (try? ConfigManager.readConfig(koreHome: koreHome)) ?? .defaults
+        if let apiKey = config.apiKey, !apiKey.isEmpty {
+            env["KORE_API_KEY"] = apiKey
+        }
+        if let llm = config.llm {
+            if let provider = llm.provider { env["LLM_PROVIDER"] = provider }
+            if let geminiKey = llm.geminiApiKey, !geminiKey.isEmpty { env["GEMINI_API_KEY"] = geminiKey }
+            if let geminiModel = llm.geminiModel { env["GEMINI_MODEL"] = geminiModel }
+            if let ollamaUrl = llm.ollamaBaseUrl { env["OLLAMA_BASE_URL"] = ollamaUrl }
+            if let ollamaModel = llm.ollamaModel { env["OLLAMA_MODEL"] = ollamaModel }
+        }
+        if let an = config.appleNotes, an.enabled == true {
+            env["KORE_APPLE_NOTES_ENABLED"] = "true"
+            if let interval = an.syncIntervalMs { env["KORE_AN_SYNC_INTERVAL_MS"] = String(interval) }
+            if let handwriting = an.includeHandwriting { env["KORE_AN_INCLUDE_HANDWRITING"] = handwriting ? "true" : "false" }
+            if let allowlist = an.folderAllowlist, !allowlist.isEmpty { env["KORE_AN_FOLDER_ALLOWLIST"] = allowlist.joined(separator: ",") }
+            if let blocklist = an.folderBlocklist, !blocklist.isEmpty { env["KORE_AN_FOLDER_BLOCKLIST"] = blocklist.joined(separator: ",") }
+            if let dbDir = an.dbDirOverride, !dbDir.isEmpty { env["KORE_AN_DB_DIR"] = dbDir }
+        }
         proc.environment = env
 
         attachAndRun(proc, port: port, isRestart: isRestart)
