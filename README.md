@@ -204,7 +204,7 @@ curl -X POST http://localhost:3000/api/v1/remember \
 
 Kore exposes its memory via MCP so any compatible agent (Claude Desktop, Claude Code, etc.) can recall and save memories directly in conversation.
 
-Kore uses a **stdio proxy** pattern — you register the `kore mcp` command with your agent, and it spawns the proxy automatically at session start. The proxy connects to the running daemon at `localhost:3000`.
+Kore uses a **stdio proxy** pattern — you register the `kore mcp` command with your agent, and it spawns the proxy automatically at session start. The proxy connects to the running Kore server at `localhost:3000`.
 
 > **macOS app shortcut:** If you're using the Kore macOS app, you can skip manual config editing — go to **Settings > MCP** and click **Install MCP Config** to auto-configure Claude Desktop and/or Claude Code. The first-run onboarding wizard also offers this step.
 

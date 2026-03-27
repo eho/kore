@@ -44,6 +44,24 @@ KORE_API_KEY=your-secret-key-here
 
 ## Commands
 
+### `kore start`
+
+Start the Kore server as a background process. The PID is written to `$KORE_HOME/.kore.pid` so `kore stop` and `kore health` can find it.
+
+```sh
+kore start
+```
+
+Example output:
+
+```
+Kore started (pid 12345)
+```
+
+If Kore is already running (PID file alive or health endpoint responds), prints a message and exits with code `0` — no duplicate process is started.
+
+---
+
 ### `kore stop`
 
 Stop the running Kore server.
